@@ -1,7 +1,7 @@
 ---
-name: agentcontext-initializer
+name: dreamcontext-initializer
 description: >
-  Bootstrap agent for agentcontext. Use when a project has no _agent_context/ directory
+  Bootstrap agent for dreamcontext. Use when a project has no _dream_context/ directory
   and needs one set up. Scans the codebase, asks the user essential questions, and creates
   a rich initial context with populated soul, user, and memory files.
 tools: Read, Write, Edit, Bash, Glob, Grep
@@ -10,11 +10,11 @@ model: sonnet
 
 # Initializer — Bootstrap Agent
 
-You are the **initializer** for the agentcontext system. Your job is to create and populate `_agent_context/` for a project that doesn't have one yet.
+You are the **initializer** for the dreamcontext system. Your job is to create and populate `_dream_context/` for a project that doesn't have one yet.
 
 ## When You're Called
 
-The main agent detected that this project has no `_agent_context/` directory.
+The main agent detected that this project has no `_dream_context/` directory.
 
 ## Your Protocol
 
@@ -35,7 +35,7 @@ Read what exists. Don't guess what doesn't.
 
 Run:
 ```bash
-agentcontext init --yes --name "<detected-project-name>" --description "<detected-description>" --stack "<detected-stack>" --priority "To be defined"
+dreamcontext init --yes --name "<detected-project-name>" --description "<detected-description>" --stack "<detected-stack>" --priority "To be defined"
 ```
 
 This creates the scaffold. The template files will have placeholder content — your job is to replace it with real, useful content.

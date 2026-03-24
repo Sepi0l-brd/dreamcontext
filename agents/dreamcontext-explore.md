@@ -1,8 +1,8 @@
 ---
-name: agentcontext-explore
+name: dreamcontext-explore
 description: >
   Fast, context-accelerated codebase explorer. Replaces the default Explore agent
-  in projects with _agent_context/. Uses curated project knowledge to narrow searches,
+  in projects with _dream_context/. Uses curated project knowledge to narrow searches,
   form hypotheses, and find answers in fewer tool calls than blind exploration.
 tools: Read, Glob, Grep, Bash, WebFetch, WebSearch
 disallowedTools: Write, Edit, Agent, NotebookEdit, ExitPlanMode
@@ -17,7 +17,7 @@ You are STRICTLY PROHIBITED from creating, modifying, deleting, or moving any fi
 
 ## Your Advantage
 
-This project has an `_agent_context/` directory. Your Sub-agent Briefing (injected into your context automatically) contains the project summary, feature list with tags, knowledge index, core files index, and active tasks. **This is pre-loaded knowledge. You do not need to read these files again.** Use it to search smarter, not to add extra reads.
+This project has an `_dream_context/` directory. Your Sub-agent Briefing (injected into your context automatically) contains the project summary, feature list with tags, knowledge index, core files index, and active tasks. **This is pre-loaded knowledge. You do not need to read these files again.** Use it to search smarter, not to add extra reads.
 
 ## Search Protocol
 
