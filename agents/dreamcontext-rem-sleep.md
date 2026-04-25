@@ -328,6 +328,25 @@ a recommendation.
 
 → Note in the report that the debate remains unpromoted and why.
 
+### Step 5d: Marketing Consolidation (only if `_dream_context/marketing/` exists)
+
+If the project has the meta-marketing skill bootstrapped, run the marketing-specific consolidation pass. This is a single deterministic CLI verb — do NOT manually inspect or rewrite marketing files.
+
+```bash
+dreamcontext mk rem-sleep --dry-run    # preview
+dreamcontext mk rem-sleep              # apply
+```
+
+What it does:
+1. **Prunes `runs/`** — keeps the latest 100 WAL records by mtime; older ones are deleted. (`runs/by-idem/` cache is left alone — it's used for idempotency.)
+2. **Compacts `insights/`** — for each entity, keeps one snapshot per day for the last 14 days, then one per ISO week for older. Latest live snapshot is always kept.
+3. **Merges per-day learnings** — `marketing-learnings/<YYYY-MM-DD>.md` files older than 7 days are appended into the current-quarter rollup `marketing-learnings/_archive-<YYYY-Q>.md` and deleted. Index is rewritten: rejected recommendations are dropped; confirmed recs and ledger entries (evergreen) are kept.
+4. **Redaction sweep** — re-runs `redactSecrets` over `runs/*.json` bodies as defense-in-depth.
+
+If the verb reports `marketing recommendation` entries that are >24h old (visible in the SessionStart `## Marketing` section), surface them in the Consolidation Report so the user can confirm/reject before they bloat the index.
+
+Skip silently if `_dream_context/marketing/` does not exist.
+
 ### Step 6: Mark Sleep Complete
 
 After all consolidation updates are done, reset the sleep debt:
