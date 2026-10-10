@@ -5,6 +5,7 @@ import { useConfig, useUpdateConfig, type PlatformId } from '../hooks/useConfig'
 import { SleepSettings } from '../components/settings/SleepSettings';
 import { ConnectionsManager } from '../components/settings/ConnectionsManager';
 import { EmbeddingModelCard } from '../components/settings/EmbeddingModelCard';
+import { CloudRecallCard } from '../components/settings/CloudRecallCard';
 import { TaskOverrideEditor } from '../components/settings/TaskOverrideEditor';
 import { SETTINGS_ICONS } from '../components/settings/SettingsIcons';
 import { MaturityTag, type MaturityLevel } from '../components/common/MaturityTag';
@@ -607,7 +608,12 @@ export function SettingsPage({ focus }: SettingsPageProps) {
               // mode you can pick but should think about first.
               badge={experimental ? <MaturityTag label={t('settings.recall.experimental')} /> : undefined}
             >
-              {mode === 'hybrid' && recallMode === 'hybrid' && <EmbeddingModelCard />}
+              {mode === 'hybrid' && recallMode === 'hybrid' && (
+                <>
+                  <EmbeddingModelCard />
+                  <CloudRecallCard />
+                </>
+              )}
             </SettingChoice>
           ))}
         </div>

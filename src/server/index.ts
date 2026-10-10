@@ -209,6 +209,7 @@ import { handlePackInstall, handlePackUninstall } from './routes/packs-install.j
 import { handleVersionCheckGet } from './routes/version-check.js';
 import { handleTaxonomyGet } from './routes/taxonomy.js';
 import { handleRecallGet, handleRecallHaikuGet } from './routes/recall.js';
+import { recallCloudRoutes } from './routes/recall-cloud.js';
 import {
   handleBrainAuthDeviceStart,
   handleBrainAuthDevicePoll,
@@ -376,6 +377,15 @@ export function buildRouter(): Router {
   // The /haiku variant adds intent-aware, LLM-filtered recall for Ask mode.
   router.get('/api/recall/haiku', handleRecallHaikuGet);
   router.get('/api/recall', handleRecallGet);
+  // Opt-in cloud recall tiers (Settings): status, key, consent, index. Every handler guards itself
+  // (loopback Host, same-origin Origin, loopback socket, never in the hands-free cloud).
+  router.get('/api/recall/cloud/status', recallCloudRoutes.status);
+  router.post('/api/recall/cloud/key', recallCloudRoutes.setKey);
+  router.post('/api/recall/cloud/key/copy-voice', recallCloudRoutes.copyVoiceKey);
+  router.post('/api/recall/cloud/enable', recallCloudRoutes.enable);
+  router.post('/api/recall/cloud/disable', recallCloudRoutes.disable);
+  router.post('/api/recall/cloud/index', recallCloudRoutes.startIndex);
+  router.get('/api/recall/cloud/index/status', recallCloudRoutes.indexStatus);
 
   // Brain cloud-sync — GitHub sign-in (app-global) + per-vault brain repo ops.
   // The `/auth` and `/team` prefixes are vault-agnostic (see VAULT_AGNOSTIC_PREFIXES);

@@ -92,6 +92,8 @@ function corpusFor(contextRoot: string, types: CorpusType[], minLevel: number | 
  * keystroke never triggers a download or a cold index — those are explicit
  * (Settings card / `embed refresh`). The response `mode` reports which ran, so
  * the UI can label it accurately and drop the (now-redundant) Intelligent toggle.
+ * `tier` is always 'local': this route never sends anything off the machine, whatever
+ * cloud tier the vault has consented to (that is for the prompt hook and the CLI).
  */
 export async function handleRecallGet(
   req: IncomingMessage,
@@ -104,9 +106,11 @@ export async function handleRecallGet(
 
   const useHybrid = hybridReady(contextRoot, resolveRecallMode(contextRoot));
   const mode = useHybrid ? 'hybrid' : 'bm25';
+  // A label for the response only. hybridSearch below gets no tier, so it can never go off-machine.
+  const tier = 'local' as const;
 
   if (!query) {
-    sendJson(res, 200, { query: '', mode, hits: [], tookMs: 0 });
+    sendJson(res, 200, { query: '', mode, tier, hits: [], tookMs: 0 });
     return;
   }
 
@@ -124,7 +128,7 @@ export async function handleRecallGet(
       : bm25Search(query, corpus, topK);
     const tookMs = Date.now() - started;
 
-    sendJson(res, 200, { query, mode, tookMs, hits: hits.map(serializeHit) });
+    sendJson(res, 200, { query, mode, tier, tookMs, hits: hits.map(serializeHit) });
   } catch (err) {
     sendError(res, 500, 'recall_failed', err instanceof Error ? err.message : 'Recall failed');
   }

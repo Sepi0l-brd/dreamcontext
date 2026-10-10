@@ -1,0 +1,97 @@
+/* Cloud recall card (under the Hybrid recall option). The card shell, buttons, progress bar and
+   status colours are the embedding card's own classes (SettingsPage.css); only what is new lives here. */
+
+.cloud-recall {
+  gap: var(--space-3);
+}
+
+.cloud-recall-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.cloud-recall-facts dt {
+  color: var(--color-text-tertiary);
+}
+
+.cloud-recall-facts dd {
+  margin: 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cloud-recall-key {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cloud-recall-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cloud-recall-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cloud-recall-key-input {
+  flex: 1 1 var(--space-20);
+  min-width: 0;
+  width: auto;
+}
+
+.cloud-recall-tiers,
+.cloud-recall-index {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cloud-recall-tier-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cloud-recall-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.cloud-recall-disclosure-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.cloud-recall-disclosure-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: calc(var(--space-20) * 3);
+  overflow-y: auto;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.cloud-recall .embed-model-btn:focus-visible,
+.cloud-recall .cloud-recall-key-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
