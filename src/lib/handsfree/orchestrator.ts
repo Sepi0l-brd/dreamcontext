@@ -2632,6 +2632,13 @@ export async function status(env: HandsfreeEnv, o: { probe?: boolean } = {}): Pr
   if (o.probe !== false && cfg?.codespace) {
     try { info = await env.provider.get(cfg.codespace.name); } catch (err) { warnings.push(`GitHub: ${(err as Error).message}`); }
     if (info) await reconcileUptime(env, info);
+    // AC22: keep the deletion date GitHub just reported, so the day-20 warning survives a later
+    // status that cannot reach GitHub (or does not ask it); before, only a start stored it.
+    if (info && info.name === cfg.codespace.name && info.retentionExpiresAt !== cfg.codespace.retentionExpiresAt) {
+      const r = info.retentionExpiresAt;
+      const name = info.name;
+      await updateConfig(env.home, (c) => (c.codespace?.name === name ? { ...c, codespace: { ...c.codespace, retentionExpiresAt: r } } : c), nowOf(env));
+    }
   }
   const rw = retentionWarning(info ?? cfg?.codespace ?? null, cfg?.lastTrip, nowOf(env));
   if (rw) warnings.push(rw);
