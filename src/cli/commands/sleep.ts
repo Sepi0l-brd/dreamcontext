@@ -38,7 +38,7 @@ import { resolveBrainSyncToken, resolveBrainSyncEnabled } from '../../lib/git-sy
 import { isPerProjectToken } from '../../lib/git-sync/token-fallback.js';
 import { renderBrainSyncResult } from './brain.js';
 import { buildCorpus } from '../../lib/recall.js';
-import { refreshEmbeddings, embeddingCacheExists } from '../../lib/embeddings/store.js';
+import { refreshEmbeddings, embeddingCacheUsable } from '../../lib/embeddings/store.js';
 import { loadProjectVocabulary, auditCorpus } from '../../lib/taxonomy.js';
 import {
   readSleepFlags,
@@ -946,7 +946,7 @@ export function registerSleepCommand(program: Command): void {
       // enabled hybrid recall must never cold-start a 113 MB model download from
       // `sleep done`. Best-effort by the same discipline as the syncs above.
       try {
-        if (embeddingCacheExists(root)) {
+        if (embeddingCacheUsable(root)) {
           // waitForLock: a concurrent writer (the server's index build, a hook) holds the
           // vault's cache lock for milliseconds — wait it out (bounded), never clobber it.
           const res = await refreshEmbeddings(root, buildCorpus(root), undefined, { force: true, waitForLock: true });

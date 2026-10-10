@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { ensureContextRoot } from '../../lib/context-path.js';
 import { header, info, success, warn, error } from '../../lib/format.js';
 import { buildCorpus, type CorpusType } from '../../lib/recall.js';
-import { refreshEmbeddings, embeddingCacheExists, EmbeddingLockBusyError } from '../../lib/embeddings/store.js';
+import { refreshEmbeddings, embeddingCacheUsable, EmbeddingLockBusyError } from '../../lib/embeddings/store.js';
 import { EMBED_MODEL, embeddingsAvailable } from '../../lib/embeddings/embedder.js';
 import {
   dedupCandidate,
@@ -68,7 +68,7 @@ export function registerEmbedCommand(program: Command): void {
     .option('--if-present', 'Exit quietly unless an embedding cache already exists (safe for cron/sleep: never triggers a first-time model download)')
     .action(async (opts: { force?: boolean; ifPresent?: boolean }) => {
       const root = ensureContextRoot();
-      if (opts.ifPresent && !embeddingCacheExists(root)) {
+      if (opts.ifPresent && !embeddingCacheUsable(root)) {
         info('No embedding cache in this vault — nothing to refresh (enable hybrid recall first).');
         return;
       }
@@ -136,7 +136,7 @@ export function registerEmbedCommand(program: Command): void {
     }) => {
       const root = ensureContextRoot();
 
-      if (opts.ifPresent && !embeddingCacheExists(root)) {
+      if (opts.ifPresent && !embeddingCacheUsable(root)) {
         if (opts.json) {
           console.log(JSON.stringify({ verdict: 'unknown', reason: 'no-embedding-cache' }));
         } else {

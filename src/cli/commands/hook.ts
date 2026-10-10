@@ -40,7 +40,8 @@ import { listStaleRecs } from '../../lib/marketing/snapshot.js';
 import { isMarketingEnvPath } from '../../lib/marketing/path-guards.js';
 import { DEVELOP_LEAD_DENY_REASON, developLeadWriteDenied } from '../../lib/develop-lead-guard.js';
 import { chatTabTitleNudge, chatTabTitleStopBlock } from '../../lib/chat-tab-title-nudge.js';
-import { buildCorpus, bm25Search, loadSkillDocs, type RecallHit } from '../../lib/recall.js';
+import { bm25Search, loadSkillDocs, type RecallHit } from '../../lib/recall.js';
+import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import {
   loadPatternsReporting, matchPatterns, selectForInjection, syncPatternShimsIfStale,
 } from '../../lib/patterns.js';
@@ -2496,7 +2497,7 @@ export function registerHookCommand(program: Command): void {
                   if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku: 0 docs selected');
                 } else if (result === null) {
                   if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku failed, falling back to BM25');
-                  const corpus = buildCorpus(root);
+                  const corpus = buildCorpusCached(root);
                   hits = bm25Search(prompt, corpus, 3);
                 }
               } else if (hybridReady(root, recallMode)) {
@@ -2507,11 +2508,11 @@ export function registerHookCommand(program: Command): void {
                 // to embed the query is still paid on the first hybrid recall in
                 // each short-lived hook process — inherent to hybrid mode.) Raw
                 // `.score` is untouched, so the >= 2.0 gate below is unchanged.
-                const corpus = buildCorpus(root);
+                const corpus = buildCorpusCached(root);
                 hits = await hybridSearch(prompt, corpus, root, 3);
                 mode = 'Hybrid';
               } else {
-                const corpus = buildCorpus(root);
+                const corpus = buildCorpusCached(root);
                 hits = bm25Search(prompt, corpus, 3);
               }
 

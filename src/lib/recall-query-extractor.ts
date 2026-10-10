@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { buildCorpus, bm25Search, docKey, type CorpusDoc, type RecallHit } from './recall.js';
+import { bm25Search, docKey, type CorpusDoc, type RecallHit } from './recall.js';
+import { buildCorpusCached } from './recall-corpus-cache.js';
 import { claudeAwarePath } from './claude-path.js';
 
 export type ClaudeExecutor = (prompt: string, systemPrompt: string) => string;
@@ -76,7 +77,7 @@ export function haikuRecall(
   opts?: { executor?: ClaudeExecutor },
 ): HaikuRecallResult {
   try {
-    const corpus = buildCorpus(contextRoot);
+    const corpus = buildCorpusCached(contextRoot);
     if (corpus.length === 0) return null;
 
     // B6: instead of an arbitrary positional 8000-char slice of the WHOLE

@@ -15,6 +15,7 @@ import {
   type RecallHit,
 } from '../../lib/recall.js';
 import { hybridSearch, hybridReady } from '../../lib/embeddings/hybrid.js';
+import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import { resolveRecallMode } from './sleep.js';
 import {
   crossVaultRecall,
@@ -252,7 +253,7 @@ export function registerMemoryCommand(program: Command): void {
           return;
         }
 
-        const corpus = buildCorpus(root, {
+        const corpus = buildCorpusCached(root, {
           ...(types ? { types } : {}),
           ...(minLevel ? { minLevel } : {}),
         });
