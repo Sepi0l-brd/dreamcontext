@@ -541,3 +541,111 @@ describe('embeddingCacheCoversType (task-corpus warmth gate)', () => {
     expect(embeddingCacheCoversType(root, 'task', 0)).toBe(false);
   });
 });
+
+describe('refreshEmbeddings maxInlineEmbed (the hook never pays for a cold build)', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'dc-inline-')); mkdirSync(join(root, 'knowledge'), { recursive: true }); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  const docs = (n: number): CorpusDoc[] => Array.from({ length: n }, (_, i) => {
+    const path = join(root, 'knowledge', `d${i}.md`);
+    writeFileSync(path, `distinct body number ${i}`);
+    return makeDoc({ slug: `d${i}`, path, body: `distinct body number ${i}` });
+  });
+
+  it('embeds at most the cap, reports the rest as deferred, and a later uncapped refresh fills them', async () => {
+    const corpus = docs(5);
+    const embed = vi.fn(fakeEmbed);
+    const first = await refreshEmbeddings(root, corpus, embed, { maxInlineEmbed: 2 });
+    expect(first!.stats).toMatchObject({ embedded: 2, deferred: 3 });
+    expect(embed.mock.calls[0][0]).toHaveLength(2);
+    const second = await refreshEmbeddings(root, corpus, embed);
+    expect(second!.stats).toMatchObject({ embedded: 3, reused: 2 });
+    expect(second!.stats.deferred).toBeUndefined();
+    expect(second!.index.chunks).toHaveLength(5);
+  });
+
+  it('a cap of 0 embeds nothing and never calls the embedder', async () => {
+    const embed = vi.fn(fakeEmbed);
+    const res = await refreshEmbeddings(root, docs(2), embed, { maxInlineEmbed: 0 });
+    expect(embed).not.toHaveBeenCalled();
+    expect(res!.stats).toMatchObject({ embedded: 0, deferred: 2 });
+  });
+
+  it('an unset cap is unchanged behaviour', async () => {
+    const res = await refreshEmbeddings(root, docs(3), fakeEmbed);
+    expect(res!.stats).toMatchObject({ embedded: 3 });
+    expect(res!.stats.deferred).toBeUndefined();
+  });
+});
+
+describe('the cache snapshot is memoised by mtime but never goes stale', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'dc-memo-')); mkdirSync(join(root, 'knowledge'), { recursive: true }); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('sees a refresh made after an earlier read, and does not mutate what an earlier read returned', async () => {
+    const path = join(root, 'knowledge', 'a.md');
+    writeFileSync(path, 'first body');
+    await refreshEmbeddings(root, [makeDoc({ slug: 'a', path, body: 'first body' })], fakeEmbed);
+    expect(embeddingCacheChunkCount(root)).toBe(1);
+    expect(embeddingCacheChunkCount(root)).toBe(1); // memo hit
+    const path2 = join(root, 'knowledge', 'b.md');
+    writeFileSync(path2, 'second body');
+    await refreshEmbeddings(root, [makeDoc({ slug: 'b', path: path2, body: 'second body' })], fakeEmbed, { additive: true });
+    expect(embeddingCacheChunkCount(root)).toBe(2);
+    expect(embeddingCacheUsable(root)).toBe(true);
+  });
+});
+
+describe('fusion v3 helpers', () => {
+  const doc = (slug: string, type: CorpusDoc['type'] = 'knowledge'): CorpusDoc =>
+    makeDoc({ slug, path: `/x/${slug}.md`, type, body: `${slug} body` });
+  const hit = (d: CorpusDoc, score: number, rankScore: number) => ({ doc: d, score, rankScore, snippet: '' });
+  const a = doc('a'), b = doc('b'), c = doc('c');
+  const byKey = new Map([a, b, c].map((d) => [`${d.type}/${d.slug}`, d]));
+  const base = {
+    rawCutoff: 18, rrfK: 60, rrfBm25Weight: 0.6, relativeLambda: 0.1, pinMargin: 1.35, aggregation: 'max' as const,
+    secondWeight: 0, priorGamma: 0, changelogFactor: 0.85, denseGate: null, langWeights: null, rerank: null,
+  };
+
+  it('fuseCandidates matches the legacy adaptive switch: a decisive BM25 top-1 is pinned below the cutoff', async () => {
+    const { fuseCandidates } = await import('../../src/lib/embeddings/hybrid.js');
+    const bm25 = [hit(a, 5, 10), hit(b, 3, 5)];
+    const dense = [{ docKey: 'knowledge/b', sim: 0.9 }, { docKey: 'knowledge/a', sim: 0.1 }, { docKey: 'knowledge/c', sim: 0.05 }];
+    const dense40 = { ...base, rrfBm25Weight: 0.4 }; // dense-leaning, so the pin is what decides
+    const out = fuseCandidates(bm25, dense, dense40, { byKey, now: new Date() });
+    expect(out[0].key).toBe('knowledge/a'); // margin 2.0 ≥ 1.35 → pinned
+    expect(fuseCandidates(bm25, dense, { ...dense40, pinMargin: 0 }, { byKey, now: new Date() })[0].key).toBe('knowledge/b');
+    expect(out.map((e) => e.key)).toContain('knowledge/c');
+  });
+
+  it('fuseCandidates drops keys whose doc is not in the corpus', async () => {
+    const { fuseCandidates } = await import('../../src/lib/embeddings/hybrid.js');
+    const out = fuseCandidates([hit(a, 5, 5)], [{ docKey: 'knowledge/ghost', sim: 0.99 }], base, { byKey, now: new Date() });
+    expect(out.map((e) => e.key)).toEqual(['knowledge/a']);
+  });
+
+  it('shouldSkipDense: sure, lead, and no gate', async () => {
+    const { shouldSkipDense } = await import('../../src/lib/embeddings/hybrid.js');
+    const gate = { rawSure: 24, rawLead: 12, leadRatio: 1.25 };
+    expect(shouldSkipDense([hit(a, 30, 30)], gate)).toBe(true);
+    expect(shouldSkipDense([hit(a, 13, 13), hit(b, 5, 5)], gate)).toBe(true);
+    expect(shouldSkipDense([hit(a, 13, 6), hit(b, 5, 5)], gate)).toBe(false);
+    expect(shouldSkipDense([hit(a, 30, 30)], null)).toBe(false);
+  });
+
+  it('denseRankAgg: max+second lifts a doc with two relevant chunks over a single lucky one', async () => {
+    const { denseRankAgg } = await import('../../src/lib/embeddings/hybrid.js');
+    const v = (x: number) => new Float32Array([x, Math.sqrt(1 - x * x), 0, 0]);
+    const index = { dims: 4, chunks: [
+      { docKey: 'knowledge/a', seq: 0, hash: 'h1', vector: v(0.9) },
+      { docKey: 'knowledge/b', seq: 0, hash: 'h2', vector: v(0.92) },
+      { docKey: 'knowledge/b', seq: 1, hash: 'h3', vector: v(0.1) },
+      { docKey: 'knowledge/a', seq: 1, hash: 'h4', vector: v(0.85) },
+    ] };
+    const q = new Float32Array([1, 0, 0, 0]);
+    expect(denseRankAgg(q, index, 5, 'max', 0)[0].docKey).toBe('knowledge/b');
+    expect(denseRankAgg(q, index, 5, 'max+second', 0.5)[0].docKey).toBe('knowledge/a');
+  });
+});

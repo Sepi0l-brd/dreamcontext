@@ -39,6 +39,9 @@ import { isPerProjectToken } from '../../lib/git-sync/token-fallback.js';
 import { renderBrainSyncResult } from './brain.js';
 import { buildCorpus } from '../../lib/recall.js';
 import { refreshEmbeddings, embeddingCacheUsable } from '../../lib/embeddings/store.js';
+import { recallCloudStatus } from '../../lib/recall-cloud-config.js';
+import { spawnCloudIndexRefresh } from '../../lib/recall-cloud-index-spawn.js';
+import { registerRecallCloudCommands } from './recall-cloud.js';
 import { loadProjectVocabulary, auditCorpus } from '../../lib/taxonomy.js';
 import {
   readSleepFlags,
@@ -960,6 +963,15 @@ export function registerSleepCommand(program: Command): void {
         warn(`Embedding refresh: skipped — ${(err as Error).message ?? err}`);
       }
 
+      // Cloud index refresh: only for a vault that consented to a cloud tier, detached and never
+      // awaited (the child enforces throttle, churn guard and the rolling spend cap itself).
+      try {
+        const spawned = spawnCloudIndexRefresh(root, 'sleep');
+        if (spawned.spawned) info(chalk.dim('Cloud recall index refresh started in the background.'));
+      } catch (err) {
+        warn(`Cloud index refresh: skipped — ${(err as Error).message ?? err}`);
+      }
+
       // AC5 — post-sleep durability, LAST so it's the final thing the user
       // sees. When brain sync is OFF, warn LOUDLY about uncommitted
       // `_dream_context/**` output with a ready-to-run command — user decision
@@ -1280,6 +1292,12 @@ export function registerRecallCommand(program: Command): void {
       };
       console.log(header('Memory Recall'));
       console.log(`  Mode: ${labels[mode]}`);
+      if (mode === 'hybrid') {
+        const cloud = recallCloudStatus(root);
+        const flag = cloud.consentSurface === 'dashboard' ? ' — granted from the dashboard' : '';
+        const stale = cloud.consent === 're-consent-required' ? ' — re-consent required' : '';
+        console.log(`  Tier: ${cloud.tier}${flag}${stale} (see \`dreamcontext recall cloud status\`)`);
+      }
     });
 
   recall
@@ -1325,4 +1343,12 @@ export function registerRecallCommand(program: Command): void {
       writeSleepState(root, state);
       success('Recall mode set to hybrid — BM25 + dense RRF fusion (experimental; falls back to BM25 if the embedding model is unavailable)');
     });
+
+  registerRecallCloudCommands(recall, {
+    setHybrid: (root) => {
+      const state = readSleepState(root);
+      state.recall_mode = 'hybrid';
+      writeSleepState(root, state);
+    },
+  });
 }

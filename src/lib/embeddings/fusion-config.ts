@@ -20,8 +20,12 @@ export interface FusionParams {
   changelogFactor: number;
   denseGate: DenseGate | null;
   langWeights: Partial<Record<'tr' | 'mixed', { rrfBm25Weight: number }>> | null;
-  /** Rerank runs iff this is non-null AND a consented (or eval) model exists; the merge is `applyRerank`. */
-  rerank: { candidates: number; blendAlpha: number } | null;
+  /**
+   * Rerank runs iff this is non-null AND a consented (or eval) model exists; the merge is `applyRerank`.
+   * `pool` picks the candidates: 'fused-top' (default) = the first N of the fused list; 'bm25-dense-union'
+   * = BM25 top N/2 ∪ dense top N/2, ordered by fused score (G1 option (a)).
+   */
+  rerank: { candidates: number; blendAlpha: number; pool?: 'fused-top' | 'bm25-dense-union' } | null;
 }
 
 /**

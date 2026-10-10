@@ -1,4 +1,6 @@
 import { Command } from 'commander';
+import { recallCloudStatus } from '../../lib/recall-cloud-config.js';
+import { cloudIndexReady } from '../../lib/embeddings/vector-store.js';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import chalk from 'chalk';
@@ -713,6 +715,32 @@ export function checkObjectives(root: string): CheckResult[] {
  * the lab entries) and points the user at the fix (`lab credentials set`
  * re-runs the gitignore-first ordering).
  */
+/**
+ * Cloud recall tier: where the vault stands (local by default), and anything an owner should look at —
+ * a grant made from the dashboard, a stale consent, a missing key, a tripped churn guard, an unbuilt index.
+ */
+export function checkRecallTier(root: string, home?: string): CheckResult[] {
+  const name = 'Recall tier';
+  const st = recallCloudStatus(root, home);
+  const fix = 'dreamcontext recall cloud status';
+  if (st.consent === 'none') return [{ name, status: 'ok', message: 'local (cloud recall is not enabled for this vault)' }];
+  const problems: string[] = [];
+  if (st.consent === 're-consent-required') problems.push('consent is stale (the disclosure changed): run `dreamcontext recall cloud enable <tier>` again');
+  if (!st.key) problems.push('consented, but no recall key is set, so recall runs on the local tier');
+  if (st.consentSurface === 'dashboard') problems.push('consent was granted from the dashboard: confirm that was you (~/.dreamcontext/recall-cloud-audit.log)');
+  if (st.churnGuard) problems.push('the churn guard paused automatic index builds: run `dreamcontext recall cloud index` yourself');
+  if (st.consent === 'valid' && !cloudIndexReady(root, 'voyage-4')) problems.push('the cloud index is not built yet: run `dreamcontext recall cloud index`');
+  if (problems.length === 0) return [{ name, status: 'ok', message: `${st.tier} (consent via ${st.consentSurface}, key ${st.keySource})` }];
+  return [{
+    name,
+    status: 'warn',
+    message: `${st.tier}: ${problems.join('; ')}`,
+    code: 'doctor/recall-tier',
+    evidence: { tier: st.tier, consent: st.consent, surface: st.consentSurface, key: st.key, churnGuard: st.churnGuard },
+    supportedFixes: [fix],
+  }];
+}
+
 export function checkLab(root: string): CheckResult[] {
   const results: CheckResult[] = [];
   const insights = listInsights(root);
@@ -1551,6 +1579,7 @@ export function registerDoctorCommand(program: Command): void {
         ...checkTaskFeatureLinks(root),
         ...checkSharedTaskContainer(root),
         ...checkLab(root),
+        ...checkRecallTier(root),
         ...checkTheses(root),
 
         // Snapshot health. Core files FIRST so the snapshot-size message's

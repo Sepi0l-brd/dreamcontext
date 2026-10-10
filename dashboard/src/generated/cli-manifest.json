@@ -2471,6 +2471,65 @@
       "group": true
     },
     {
+      "path": "recall cloud",
+      "desc": "Opt-in cloud recall tiers (cloud-index, cloud): consent, key, index",
+      "args": [],
+      "group": true
+    },
+    {
+      "path": "recall cloud disable",
+      "desc": "Revoke consent for this vault; recall falls back to the local tier",
+      "args": []
+    },
+    {
+      "path": "recall cloud enable",
+      "desc": "Show what leaves this machine, then (at a terminal) enable the tier for this vault and set recall mode to hybrid",
+      "args": [
+        "<tier>"
+      ],
+      "valueFlags": [
+        "--rerank",
+        "--max-usd"
+      ]
+    },
+    {
+      "path": "recall cloud index",
+      "desc": "Build or refresh this vault's cloud index",
+      "args": [],
+      "valueFlags": [
+        "--max-usd"
+      ]
+    },
+    {
+      "path": "recall cloud key",
+      "desc": "Manage the recall API key (stored 0600; never printed)",
+      "args": [],
+      "group": true
+    },
+    {
+      "path": "recall cloud key clear",
+      "desc": "Remove the stored recall key",
+      "args": []
+    },
+    {
+      "path": "recall cloud key copy-voice",
+      "desc": "Copy the Voice OpenRouter key into cloud recall (at a terminal, after a confirm)",
+      "args": []
+    },
+    {
+      "path": "recall cloud key set",
+      "desc": "Store the key from a hidden prompt, or from an environment variable",
+      "args": [],
+      "valueFlags": [
+        "--from-env"
+      ]
+    },
+    {
+      "path": "recall cloud status",
+      "desc": "Show the tier, consent, key source, spend and index coverage (never the key)",
+      "args": []
+    },
+    {
       "path": "recall hybrid",
       "desc": "EXPERIMENTAL: BM25 + local dense embeddings fused via RRF (no LLM call)",
       "args": []

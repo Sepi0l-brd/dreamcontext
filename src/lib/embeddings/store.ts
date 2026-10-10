@@ -59,6 +59,8 @@ export interface RefreshStats {
   embedded: number; // chunks newly embedded this refresh
   reused: number;   // chunks served from cache
   evicted: number;  // stale vectors dropped
+  /** Chunks left un-embedded because `maxInlineEmbed` capped this refresh (absent when nothing was capped). */
+  deferred?: number;
 }
 
 function encodeVector(v: Float32Array): string {
@@ -74,7 +76,34 @@ function cachePath(contextRoot: string): string {
   return join(contextRoot, CACHE_DIR, CACHE_FILE);
 }
 
-function loadCache(contextRoot: string): CacheFile {
+// The per-prompt hook is a fresh process, but the server and a long `embed refresh` call this many
+// times against one unchanged multi-MB file. A READ-ONLY snapshot is memoised by (mtime, size);
+// anything that mutates the result must ask for `fresh` (the locked reload in refreshEmbeddings).
+const snapshotMemo = new Map<string, { mtimeMs: number; size: number; cache: CacheFile }>();
+const SNAPSHOT_MEMO_MAX = 4;
+
+function loadCache(contextRoot: string, o: { fresh?: boolean } = {}): CacheFile {
+  const path = cachePath(contextRoot);
+  if (!o.fresh) {
+    try {
+      const st = statSync(path);
+      const hit = snapshotMemo.get(path);
+      if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.cache;
+      const cache = parseCache(contextRoot);
+      snapshotMemo.set(path, { mtimeMs: st.mtimeMs, size: st.size, cache });
+      if (snapshotMemo.size > SNAPSHOT_MEMO_MAX) {
+        const oldest = snapshotMemo.keys().next().value;
+        if (oldest !== undefined) snapshotMemo.delete(oldest);
+      }
+      return cache;
+    } catch {
+      snapshotMemo.delete(path);
+    }
+  }
+  return parseCache(contextRoot);
+}
+
+function parseCache(contextRoot: string): CacheFile {
   const empty: CacheFile = { version: CACHE_VERSION, model: EMBED_MODEL, docs: {}, vectors: {} };
   const path = cachePath(contextRoot);
   if (!existsSync(path)) return empty;
@@ -101,6 +130,7 @@ function saveCache(contextRoot: string, cache: CacheFile): void {
   const tmp = cachePath(contextRoot) + '.tmp';
   writeFileSync(tmp, JSON.stringify(cache));
   renameSync(tmp, cachePath(contextRoot));
+  snapshotMemo.delete(cachePath(contextRoot));
 }
 
 function statOf(path: string): { mtimeMs: number; sizeBytes: number } {
@@ -326,6 +356,12 @@ export interface RefreshOptions {
    * are not persisted (a later prompt recomputes them) and it searches what it loaded.
    */
   waitForLock?: boolean;
+  /**
+   * Cap on chunks embedded by THIS refresh. The per-prompt hook passes a small number so a prompt
+   * can never pay for a cold build; the rest stay un-embedded (their docs simply have no vector yet)
+   * and a later, uncapped refresh fills them. Undefined = no cap.
+   */
+  maxInlineEmbed?: number;
   /** Bounded-spin budget for `waitForLock`. Default {@link EMBED_LOCK_WAIT_MS}; tests shorten it. */
   lockWaitMs?: number;
 }
@@ -443,15 +479,21 @@ export async function refreshEmbeddings(
   // 3. Embed only the missing chunks — OUTSIDE the lock, so a multi-minute first
   //    build never holds it.
   let embeddedCount = 0;
+  let deferredCount = 0;
   const added: Record<string, string> = {};
   if (missing.length > 0) {
-    const texts = missing.map((h) => chunkTextByHash.get(h) ?? '');
-    const vectors = await embed(texts, opts.onProgress);
-    if (vectors === null) return null; // model unavailable → BM25-only fallback
-    for (let i = 0; i < missing.length; i++) {
-      added[missing[i]] = encodeVector(vectors[i]);
+    const cap = opts.maxInlineEmbed;
+    const todo = cap !== undefined && missing.length > cap ? missing.slice(0, Math.max(0, cap)) : missing;
+    deferredCount = missing.length - todo.length;
+    if (todo.length > 0) {
+      const texts = todo.map((h) => chunkTextByHash.get(h) ?? '');
+      const vectors = await embed(texts, opts.onProgress);
+      if (vectors === null) return null; // model unavailable → BM25-only fallback
+      for (let i = 0; i < todo.length; i++) {
+        added[todo[i]] = encodeVector(vectors[i]);
+      }
+      embeddedCount = todo.length;
     }
-    embeddedCount = missing.length;
   }
 
   // 4. Reconcile.
@@ -519,7 +561,7 @@ export async function refreshEmbeddings(
       evicted = 0;
     } else {
       try {
-        const fresh = loadCache(contextRoot);
+        const fresh = loadCache(contextRoot, { fresh: true });
         ({ changed, evicted } = apply(fresh));
         if (changed) saveCache(contextRoot, fresh);
         final = fresh;
@@ -549,6 +591,11 @@ export async function refreshEmbeddings(
   const distinctHashes = new Set(chunks.map((c) => c.hash)).size;
   return {
     index: { chunks, dims },
-    stats: { embedded: embeddedCount, reused: Math.max(0, distinctHashes - embeddedCount), evicted },
+    stats: {
+      embedded: embeddedCount,
+      reused: Math.max(0, distinctHashes - embeddedCount),
+      evicted,
+      ...(deferredCount > 0 ? { deferred: deferredCount } : {}),
+    },
   };
 }
