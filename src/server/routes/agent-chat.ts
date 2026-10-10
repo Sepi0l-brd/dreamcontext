@@ -45,14 +45,14 @@ import { clearSessionEdits, recordSessionEdit } from '../../lib/session-edits.js
 import { forgetSessionFacts, readSessionFacts } from '../../lib/session-facts.js';
 import { claudeAwarePath } from '../../lib/claude-path.js';
 import { claudeAuthWatcher } from '../../lib/claude-auth-watch.js';
-import { awaitClaudeAccountIdle, CLOUD_AUTH_MAX_WAIT_MS } from '../../lib/claude-auth.js';
+import { awaitClaudeAccountIdle, claudeAuthStatus, CLOUD_AUTH_MAX_WAIT_MS } from '../../lib/claude-auth.js';
 import {
-  accountEnvFor, autoSwitchEnabled, isRealHomeConfigDir, listClaudeAccounts, resolveConfigDir,
+  accountEnvFor, autoSwitchEnabled, isRealHomeConfigDir, listClaudeAccounts, resolveConfigDir, sandboxDirFor,
   switchStrategyFor, switchWeightsFor,
 } from '../../lib/claude-accounts.js';
 import { ensureSandbox, ensureSharedMcpConfig } from '../../lib/claude-account-sandbox.js';
-import { probeAccountForDecision } from '../../lib/claude-usage-probe.js';
-import { readUsageLimits, usageReadingIsCurrent } from '../../lib/claude-usage.js';
+import { probeAccountForDecision, type ProbeOutcome } from '../../lib/claude-usage-probe.js';
+import { readUsageLimits, usageReadingIsCurrent, type UsageLimitsResponse } from '../../lib/claude-usage.js';
 import {
   SWITCH_THRESHOLD_PERCENT, chooseAccount, shouldProbe, shouldSwitchAway, type AccountReading,
 } from '../../lib/claude-account-switch.js';
@@ -814,6 +814,36 @@ export async function awaitCloudChatAccount(account: string, maxWaitMs: number =
   await awaitClaudeAccountIdle(dir, maxWaitMs);
 }
 
+/**
+ * The credential dir an account's turns run on, for the switch decision. On the laptop it is the
+ * register's own `configDir` (account #0 = the real HOME); on the hands-free cloud EVERY account,
+ * the laptop's #0 included, runs on its own sandbox (D13, `resolveConfigDir`), and the real
+ * ~/.claude there holds no login.
+ */
+function accountDecisionDir(acc: { id: string; configDir: string | null }): string {
+  return isCloud() ? sandboxDirFor(acc.id) : (acc.configDir ?? homedir());
+}
+
+/**
+ * One account's reading for the switch decision. The laptop probes (`probeAccountForDecision`).
+ * The cloud cannot: that probe seeds the sandbox as the server, and dcserver may not write into
+ * dcuser's 0700 sandbox, so every candidate read as `unknown` and nothing was ever eligible. The
+ * cloud asks what its account list asks (D13): the sandbox's own `claude auth status --json`,
+ * then its cached usage read as dcuser. Signed in with no current numbers is
+ * `healthy-unmeasured` (a last-resort target), never "unreadable".
+ */
+async function readAccountForDecision(dir: string): Promise<ProbeOutcome> {
+  if (!isCloud()) return probeAccountForDecision(dir);
+  const auth = await claudeAuthStatus(dir);
+  if (auth.loggedIn === false) return { status: 'needs-relogin', reason: 'This account is signed out on the cloud.' };
+  if (auth.loggedIn !== true) return { status: 'unknown', reason: auth.error ?? 'The sign-in check did not answer.' };
+  try {
+    const reading = await runWorkerOp<UsageLimitsResponse>({ op: 'read', params: { kind: 'usage-limits', configDir: dir }, timeoutMs: 30_000 });
+    if (reading.limits.length > 0 && usageReadingIsCurrent(reading)) return { status: 'ok', limits: reading };
+  } catch { /* no reading: still signed in */ }
+  return { status: 'healthy-unmeasured', reason: 'Signed in on the cloud; no current usage numbers.' };
+}
+
 // ─── Chat session (child_process ↔ WebSocket bridge) ──────────────────────────────────
 
 interface ChatSpawnOpts {
@@ -1019,7 +1049,7 @@ export function startChatSession(
   // Recorded beside `spawnAuthEpoch` so the live panel can be labelled with the account it is
   // really billing, and so the chooser knows which account NOT to move away from on a tie.
   const activeAccountId = spawnAccount
-    || listClaudeAccounts().find((a) => (a.configDir ?? homedir()) === accountConfigDir)?.id
+    || listClaudeAccounts().find((a) => accountDecisionDir(a) === accountConfigDir)?.id
     || '';
 
   // Resume-target selection — mirrors agent-terminal.ts's startPtySession exactly:
@@ -2329,9 +2359,9 @@ export function startChatSession(
     const accounts = listClaudeAccounts();
     // Read every candidate. The active account's reading is passed in rather than re-probed.
     const readings = await Promise.all(accounts.map(async (acc): Promise<AccountReading> => {
-      const dir = acc.configDir ?? homedir();
+      const dir = accountDecisionDir(acc);
       if (dir === accountConfigDir) return { ...activeReading, id: acc.id };
-      const outcome = await probeAccountForDecision(dir);
+      const outcome = await readAccountForDecision(dir);
       return outcome.status === 'ok'
         ? { id: acc.id, limits: outcome.limits }
         : { id: acc.id, problem: outcome.status };
@@ -2564,7 +2594,7 @@ export function startChatSession(
 
     // Past the probe threshold: refresh the ACTIVE account for real before acting on a
     // possibly stale cache.
-    const activeProbe = await probeAccountForDecision(accountConfigDir);
+    const activeProbe = await readAccountForDecision(accountConfigDir);
     if (!alive) return true;                       // the session went away mid-probe
     if (activeProbe.status === 'ok') active = activeProbe.limits;
     if (activeProbe.status !== 'needs-relogin' && !shouldSwitchAway(active)) return false;
