@@ -141,12 +141,74 @@ Writes a CHANGELOG entry (`type=note`, `scope=quick`); the sleep cycle reconcile
 |---|---|---|
 | `haiku` (**default**) | A small cloud model picks 0–3 relevant docs per prompt (smarter than keywords; BM25 fallback) | `dreamcontext recall on` |
 | `raw` | BM25 keyword scoring only — no LLM call | `dreamcontext recall raw` |
-| `hybrid` (**experimental**) | BM25 + local dense embeddings fused (multilingual, no LLM call; falls back to BM25 if the model is unavailable) | `dreamcontext recall hybrid` |
+| `hybrid` (**experimental**) | BM25 + dense embeddings fused (multilingual, no LLM call; falls back to BM25 if the model is unavailable). Local tier by default; cloud tiers are opt-in, see **Recall tiers** below | `dreamcontext recall hybrid` |
 | `off` | No recall injection at all | `dreamcontext recall off` |
 | — | Inspect current mode | `dreamcontext recall status` |
 
 - **Auto-injection (ON by default):** the UserPromptSubmit hook surfaces top hits on every non-trivial prompt. Opt out with `DREAMCONTEXT_MEMORY_HOOK=0`; override mode per-session with `DREAMCONTEXT_RECALL_MODE`.
 - **Federation:** plain `recall` automatically spans eligible readable peers; hits are namespaced `<vault>::<type>/<slug>`. Scope with `--vault`/`--connected`/`--all-vaults` (see [integrations.md](integrations.md)).
+
+### Recall tiers (hybrid mode: local, cloud-index, cloud)
+
+`hybrid` runs on one of three tiers. The tier is a per-machine, per-vault setting kept **outside the vault** (`~/.dreamcontext/recall-cloud.json`, 0600); `recall_mode` keeps its values. The default is **local**, and nothing leaves the machine unless a person turns a cloud tier on for that vault.
+
+| Tier | Docs | Query | Rerank | What leaves the machine | Cost |
+|---|---|---|---|---|---|
+| **local** (default, offline) | multilingual-e5-small, local | e5-small, local | none | nothing | $0 |
+| **cloud-index** (opt-in) | `voyage-4` via OpenRouter | `voyage-4-nano`, local (422 MB model) | none | eligible chunk text, **at index time only**; **nothing at query time** | one-time index (about $0.16 for a vault this size, capped); $0 per query |
+| **cloud** (opt-in) | `voyage-4` via OpenRouter | `voyage-4` via OpenRouter | the consented Voyage reranker over a candidate pool | the above, plus each prompt (secret-scanned; first 512 characters) and the rerank text of the candidate docs | index as above; embed about $0.001 per 1,000 queries; rerank-2.5-lite about $0.18, rerank-2.5 about $0.45 per 1,000 |
+
+Why Voyage-4 for both cloud tiers: the `voyage-4` family shares one embedding space, so the cloud index can be queried by the small local `voyage-4-nano` with no network at query time (cloud-index), or by `voyage-4` itself (cloud). The cloud tier's rerank pool is the union of the BM25 top candidates and the dense top candidates, so a Turkish doc the BM25-weighted fusion buries still reaches the reranker. Numbers per tier land in `eval/RESULTS.md`; this section states behaviour, not results.
+
+**Enabling is a human act.** `dreamcontext recall cloud enable <cloud-index|cloud>` prints the disclosure below, asks for confirmation at a terminal, records consent for this vault, sets `recall_mode=hybrid` (and says so) and builds the index. `disable` revokes consent and keeps `hybrid` on the local tier; `disable --purge` also deletes the cloud index files. Verbs and flags: [cli-reference.md](cli-reference.md) § Recall cloud.
+
+> **AGENTS NEVER ENABLE CLOUD RECALL.** Do not run `recall cloud enable`, `key copy-voice`, or write `~/.dreamcontext/recall-cloud.json` for the user, and do not suggest a workaround when the CLI refuses. If cloud recall would help, tell the user what it does and costs and let them run it. Reading `recall cloud status` is fine (it never prints the key).
+
+**What the consent guarantee is, and is not.**
+- A TTY-less agent cannot enable cloud recall through the CLI: `enable` and `key copy-voice` require a terminal on stdin and stdout, are refused when a spawn marker is set (a spawned agent session), and have no `--yes`.
+- Where the dashboard exposes these actions (Settings), its HTTP routes are guarded (loopback Host, Origin equal to Host, refused when the server runs in the cloud) and the config file is 0600. That stops browsers and accidents. It does **not** stop a malicious process running as the same OS user, which could write the config directly.
+- Detection, not prevention, covers that gap: every consent grant, revoke and key change (never the key) is appended to `~/.dreamcontext/recall-cloud-audit.log` (0600), and `recall cloud status` and `doctor` flag any grant made from the dashboard surface (`surface: dashboard`) so the user can confirm it was them.
+- Consent is per vault (real path plus `.embeddings/.vault-id`) and bound to the disclosure version and the eligible-type list. If either changes, or the vault id marker is missing, the tier falls back to **local** and `status` reads "re-consent required".
+
+**Disclosure (what the user is shown before consenting).**
+- Processor chain: OpenRouter, then Voyage AI (by MongoDB).
+- Every request carries `provider: {data_collection: "deny"}`. That is **OpenRouter's routing filter** (route only to endpoints that do not collect data), not a guarantee from Voyage.
+- It is **not zero-data-retention**: Voyage may retain inputs under its own policy.
+- Secret filtering (private keys, API tokens, GitHub/AWS/Slack tokens, JWTs, `password=`-style assignments) is **best-effort**: a matching chunk is dropped whole, never rewritten, but a pattern list cannot catch everything.
+- The eligible-type list with counts by type, the withheld counts by rule, the cost estimate and the caps (per build, rolling 24 h for automatic builds, cloud queries per day) and the rerank model.
+- For cloud-index only: content leaves at index time, there is no query-time egress, and it is expected to be slower than 1.5 s.
+
+**Eligible types (the only corpus types whose text may be sent).** A literal allow-list; a new corpus type is withheld until someone decides it, and the consent hash changes with the list.
+
+| Type | Sent | Why |
+|---|---|---|
+| knowledge | yes | curated prose; the main recall target |
+| feature | yes | product docs |
+| task | yes | working docs; the largest share of real recall targets |
+| objective | yes | short PO outcomes |
+| thesis | yes | curated claims |
+| whiteboard | yes | curated board text, no live data |
+| core | yes | curated soul, style, tech and flow |
+| memory | yes | `2.memory.md` sections only; bookmarks are capture |
+| changelog | no | pointers, already excluded from the dense channel |
+| insight | no | manifests carry source endpoints and identifiers |
+| automation | no | machine-private by product rule |
+| skill | no | not vault content |
+
+Also never sent, whatever the type: docs outside the consented vault root (or reached through a symlink), captured session digests, peer-vault docs, docs with frontmatter `cloud: false`, any doc containing a PEM block, and any chunk or candidate that trips another secret pattern. People constitutions are never in the corpus. Put `cloud: false` in a doc's frontmatter to keep it out of the cloud tiers.
+
+**Fallbacks (every one lands on a working recall).**
+- `cloud`: API failure or timeout (query 1.5 s, rerank 1.8 s, whole cloud stage 3.5 s) falls back to local e5 hybrid when ready, else BM25. A circuit breaker pauses cloud calls for 5 minutes after a failure (until the key changes after an auth failure), so an offline machine pays the timeout once.
+- `cloud-index`: local nano query if the model is already on disk, else e5, else BM25. It never uses the network at query time.
+- Revoked consent, missing key, a changed disclosure version or eligible list, or a spent daily query cap: **local**.
+- A spawned agent session never makes a query-time cloud call (it downgrades `cloud` to local).
+- The hook never embeds docs and never builds the index.
+
+**Index refresh** happens only at `sleep done` (a detached `recall cloud index --auto`) and by an explicit `dreamcontext recall cloud index`. Automatic builds are limited: one build per vault at a time, a per-build USD cap, a rolling 24 h cap, a 30-minute throttle, and a churn guard (three consecutive builds that mostly re-embedded the same content pause automatic builds until a person runs `recall cloud index` at a terminal).
+
+**Injection depth (K=5).** The hook injects the top **5** hits. Ranks 1-3 print as before; ranks 4-5 print as one line each: `[type] relPath - title`. The hook gate (`some(score >= 2.0)` on the raw BM25 score) is unchanged, but it now covers five printed hits, so a prompt injects slightly more often than at K=3. `hit.score` always stays the raw BM25 score (0 for a dense-only hit): fusion, priors and rerank change only the ordering.
+
+**Peers.** Hybrid and cloud tiers **never run over connected peers' corpora**: federated recall stays BM25 over the peers, and a peer's docs are never sent to the cloud (only this vault's eligible docs, with this vault's consent).
 
 ### What recall is and isn't
 - BM25 is keyword/stemming-based, not semantic — "ML practitioner" won't match "data scientist" (haiku mode mitigates this).
