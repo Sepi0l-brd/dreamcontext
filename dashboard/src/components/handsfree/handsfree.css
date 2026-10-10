@@ -43,8 +43,11 @@
 .hf-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .hf-btn--sm { min-height: 24px; padding: 0 var(--space-2); font-size: var(--font-size-xs); }
 .hf-btn--primary { background: var(--color-accent-strong); border-color: var(--color-accent-strong); color: var(--color-accent-text); }
-.hf-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
+/* Hover keeps the filled background: the base `.hf-btn:hover` (more specific than a modifier)
+   would otherwise paint the light hover fill under white text and blank the label. */
+.hf-btn--primary:hover:not(:disabled) { background: var(--color-accent-strong); border-color: var(--color-accent-strong); filter: brightness(1.08); }
 .hf-btn--danger { background: var(--color-error); border-color: var(--color-error); color: var(--color-accent-text); }
+.hf-btn--danger:hover:not(:disabled) { background: var(--color-error); border-color: var(--color-error); filter: brightness(1.08); }
 .hf-btn--danger-quiet { color: var(--color-error-ink); }
 .hf-icon-btn {
   border: none;

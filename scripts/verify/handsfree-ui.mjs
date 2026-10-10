@@ -26,7 +26,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,8 @@ const SHOTS = join(REPO, 'tmp', 'develop', TASK, 'w3-G-shots');
 const SCRATCH = join(tmpdir(), 'dreamcontext-verify-handsfree-ui');
 const HOME = join(SCRATCH, 'home');
 const PROJ = join(HOME, 'projects', 'proj');
+/** A second registered project: NOT in the trip (r14/r16: it gets no banner, only the chip). */
+const OTHER = join(HOME, 'projects', 'other');
 const HF = join(HOME, '.dreamcontext', 'handsfree');
 const TRIP = 't-20261004-0a1b2c3d';
 const URL_CLOUD = 'https://fake-hf-1-8080.app.github.dev';
@@ -86,7 +88,9 @@ function seed(kind) {
   if (kind === 'home') { writeJson(join(HF, 'config.json'), config()); return; }
   const dir = join(HF, 'trips', TRIP);
   mkdirSync(dir, { recursive: true });
-  const roots = [{ rootId: 'r-proj', path: PROJ }];
+  // A real trip locks REALPATHS (`beginGoing`, trip-state.ts): on macOS the scratch dir under
+  // /var/folders is /private/var/folders, and the per-project `here.inTrip` matches on that.
+  const roots = [{ rootId: 'r-proj', path: realpathSync.native(PROJ) }];
   if (kind === 'away') {
     writeJson(join(HF, 'config.json'), config({ lastTrip: { tripId: TRIP, status: 'away', at: '2026-10-04T08:00:00.000Z' } }));
     writeJson(join(HF, 'state.json'), { version: 1, phase: 'away', tripId: TRIP, roots, updatedAt: new Date().toISOString() });
@@ -113,8 +117,13 @@ function setupScratch() {
   mkdirSync(join(PROJ, '_dream_context', 'core'), { recursive: true });
   mkdirSync(join(PROJ, '_dream_context', 'state'), { recursive: true });
   writeFileSync(join(PROJ, '_dream_context', 'core', '0.soul.md'), '# proj\n\nA scratch vault for the hands-free UI check.\n');
-  const add = spawnSync(process.execPath, [join(REPO, 'dist', 'index.js'), 'vaults', 'add', 'proj', PROJ], { env: { ...process.env, HOME }, encoding: 'utf-8' });
-  if (add.status !== 0) throw new Error(`vaults add failed: ${add.stderr || add.stdout}`);
+  mkdirSync(join(OTHER, '_dream_context', 'core'), { recursive: true });
+  mkdirSync(join(OTHER, '_dream_context', 'state'), { recursive: true });
+  writeFileSync(join(OTHER, '_dream_context', 'core', '0.soul.md'), '# other\n\nA project that stays home.\n');
+  for (const [name, path] of [['proj', PROJ], ['other', OTHER]]) {
+    const add = spawnSync(process.execPath, [join(REPO, 'dist', 'index.js'), 'vaults', 'add', name, path], { env: { ...process.env, HOME }, encoding: 'utf-8' });
+    if (add.status !== 0) throw new Error(`vaults add ${name} failed: ${add.stderr || add.stdout}`);
+  }
   mkdirSync(SHOTS, { recursive: true });
 }
 
@@ -138,11 +147,11 @@ async function startServer(port) {
   throw new Error('dashboard server did not come up');
 }
 
-async function openProject(browser, base) {
+async function openProject(browser, base, vault = 'proj') {
   const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
   page.on('pageerror', (e) => report.note(`[page error] ${String(e).slice(0, 160)}`));
   await page.addInitScript(() => { Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true }); });
-  await page.goto(`${base}/?vault=proj`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${base}/?vault=${vault}`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3500);
   for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(200); }
   return page;
@@ -209,9 +218,16 @@ try {
   // ── U3: returning, write started ────────────────────────────────────────────────
   console.log('\n── U3: returning (a return write happened) → banner with exactly Resume + Roll back, on two pages');
   seed('returning');
+  const st3 = await (await fetch(`${base}/api/handsfree/status`, { headers: { 'X-Dreamcontext-Vault': 'proj' } })).json();
+  writeFileSync(join(SHOTS, 'U3-status.json'), JSON.stringify(st3, null, 2));
+  report.note(`status for proj: phase=${st3.phase} offers=${JSON.stringify(st3.offers)} here=${JSON.stringify(st3.here)} away=${JSON.stringify(st3.away)} journal=${JSON.stringify(st3.journal)}`);
+  report.check('the status answers the trip\'s own project as in the trip (here.inTrip), offering Resume + Roll back',
+    st3.phase === 'returning' && st3.here?.vault === 'proj' && st3.here?.inTrip === true && JSON.stringify(st3.offers) === '["resume","rollback"]', JSON.stringify(st3.here));
   const p3 = await openProject(browser, base);
   const banner = p3.getByTestId('hf-banner');
-  report.check('the banner shows on the first page', await until(p3, async () => (await banner.count()) > 0));
+  const bannerUp = await until(p3, async () => (await banner.count()) > 0);
+  await shot(p3, 'U3-first-page');
+  report.check('the banner shows on the first page', bannerUp);
   const offers = async () => ({
     resume: await banner.getByTestId('hf-resume').count(),
     rollback: await banner.getByTestId('hf-rollback').count(),
@@ -264,6 +280,32 @@ try {
   await shot(p3, 'U4-receipt');
   await p3.keyboard.press('Escape');
   await p3.close();
+
+  // ── U3b: the same interrupted return, seen from ANOTHER project's window ─────────
+  console.log('\n── U3b: returning, another project\'s window → no banner; the chip names the trip and offers Resume + Roll back');
+  const stOther = await (await fetch(`${base}/api/handsfree/status`, { headers: { 'X-Dreamcontext-Vault': 'other' } })).json();
+  report.check('the status answers the other project as outside the trip, naming the trip project', stOther.here?.vault === 'other' && stOther.here?.inTrip === false && stOther.away?.name === 'proj', JSON.stringify({ here: stOther.here, away: stOther.away }));
+  const pO = await openProject(browser, base, 'other');
+  const chipO = pO.getByTestId('hf-button');
+  report.check('the other window shows the chip', await until(pO, async () => (await chipO.count()) > 0));
+  report.check('the other window shows no trip banner (the lock is per project)', (await pO.getByTestId('hf-banner').count()) === 0);
+  await chipO.click();
+  const els = pO.getByTestId('hf-elsewhere');
+  report.check('the chip opens the elsewhere dialog naming the trip project', await until(pO, async () => (await els.count()) > 0) && (await els.innerText()).includes('proj'));
+  report.check('it offers Resume and Roll back there too (the owner is never stranded), and no Return',
+    (await els.getByTestId('hf-elsewhere-resume').count()) === 1 && (await els.getByTestId('hf-elsewhere-rollback').count()) === 1 && (await els.getByTestId('hf-elsewhere-return').count()) === 0);
+  const resumeLook = await els.getByTestId('hf-elsewhere-resume').evaluate((b) => { const c = getComputedStyle(b); return { text: b.textContent, color: c.color, bg: c.backgroundColor }; });
+  report.check('the Resume button there is legible (its label in a colour unlike its background)', resumeLook.text === 'Resume' && resumeLook.color !== resumeLook.bg, JSON.stringify(resumeLook));
+  await shot(pO, 'U3b-other-window-offers');
+  await els.getByTestId('hf-elsewhere-rollback').click();
+  report.check('Roll back from there also asks in the page first', (await els.getByTestId('hf-elsewhere-rollback-confirm').count()) === 1);
+  const resumeArmed = await els.getByTestId('hf-elsewhere-resume').evaluate((b) => { const c = getComputedStyle(b); const r = b.getBoundingClientRect(); return { text: b.textContent, color: c.color, bg: c.backgroundColor, opacity: c.opacity, filter: c.filter, w: Math.round(r.width), h: Math.round(r.height) }; });
+  report.check('Resume stays legible while Roll back asks', resumeArmed.text === 'Resume' && resumeArmed.color !== resumeArmed.bg, JSON.stringify(resumeArmed));
+  await els.getByTestId('hf-elsewhere-resume').hover();
+  const resumeHover = await els.getByTestId('hf-elsewhere-resume').evaluate((b) => { const c = getComputedStyle(b); return { color: c.color, bg: c.backgroundColor }; });
+  report.check('a hovered primary button keeps its filled background (label never blanked)', resumeHover.bg === resumeLook.bg && resumeHover.color === resumeLook.color, JSON.stringify({ rest: resumeLook, hover: resumeHover }));
+  await shot(pO, 'U3b-other-window-elsewhere');
+  await pO.close();
 
   // ── U5: away ────────────────────────────────────────────────────────────────────
   console.log('\n── U5: away → banner + Return; button brings the banner forward; Show link → QR of the URL');

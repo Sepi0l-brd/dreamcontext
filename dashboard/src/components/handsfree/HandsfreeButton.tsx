@@ -4,7 +4,7 @@ import { useI18n } from '../../context/I18nContext';
 import { isDesktop } from '../../lib/desktop';
 import { startHandsfreeJob } from './handsfreeActions';
 import { focusHandsfreeBanner, onHandsfreeEvent, OPEN_SHEET, openHandsfreeSheet, useHandsfreeFor, type HandsfreeView } from './handsfreeStore';
-import { fill, JobProgress } from './HandsfreeParts';
+import { AbandonConfirm, fill, InlineConfirm, JobProgress } from './HandsfreeParts';
 import { HandsfreeSheet } from './HandsfreeSheet';
 import type { HandsfreeJob, HandsfreeStatus } from './handsfreeTypes';
 import './handsfree.css';
@@ -95,13 +95,14 @@ export function ElsewhereDialog({ status, job, name, onClose }: { status: Handsf
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const goReturn = async () => {
+  const run = async (path: string, body: Record<string, unknown> = {}) => {
     setBusy(true);
     setActionError(null);
-    const r = await startHandsfreeJob('return');
+    const r = await startHandsfreeJob(path, body);
     if (!r.ok && r.code !== 'busy') setActionError(r.message);
     setBusy(false);
   };
+  const offers = status.offers;
 
   return (
     <div className="hf-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -117,9 +118,22 @@ export function ElsewhereDialog({ status, job, name, onClose }: { status: Handsf
           {!running && status.phase === 'away' && (
             <div className="hf-actions hf-actions--end">
               {status.url && <button type="button" className="hf-btn" onClick={() => { onClose(); openHandsfreeSheet('link'); }}>{t('handsfree.banner.showLink')}</button>}
-              {status.offers.includes('return') && (
-                <button type="button" className="hf-btn hf-btn--primary" onClick={() => void goReturn()} disabled={busy} data-testid="hf-elsewhere-return">{t('handsfree.return')}</button>
+              {offers.includes('return') && (
+                <button type="button" className="hf-btn hf-btn--primary" onClick={() => void run('return')} disabled={busy} data-testid="hf-elsewhere-return">{t('handsfree.return')}</button>
               )}
+            </div>
+          )}
+          {/* An interrupted go or return (nothing running): exactly what the status offers, as the
+              trip's own banner does, so no window leaves the owner without Resume / Roll back. */}
+          {!running && status.phase !== 'away' && status.phase !== 'home' && (
+            <div className="hf-actions hf-actions--end">
+              {offers.includes('resume') && (
+                <button type="button" className="hf-btn hf-btn--primary" onClick={() => void run('resume')} disabled={busy} data-testid="hf-elsewhere-resume">{t('handsfree.resume')}</button>
+              )}
+              {offers.includes('rollback') && (
+                <InlineConfirm label={t('handsfree.rollback')} confirmLabel={t('handsfree.rollback.confirm')} body={<p>{t('handsfree.rollback.body')}</p>} onConfirm={() => void run('rollback')} busy={busy} danger testId="hf-elsewhere-rollback" />
+              )}
+              {offers.includes('abandon') && <AbandonConfirm onConfirm={() => void run('abandon', { confirm: 'abandon' })} busy={busy} />}
             </div>
           )}
         </section>
