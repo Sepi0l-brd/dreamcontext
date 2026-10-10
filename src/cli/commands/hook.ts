@@ -5,7 +5,7 @@ import { get as httpGet, request as httpRequest } from 'node:http';
 import { dirname, resolve, join, extname, basename, relative } from 'node:path';
 import { resolveContextRoot } from '../../lib/context-path.js';
 import type { SleepState, Bookmark, SessionRecord } from './sleep.js';
-import { readSleepState, writeSleepState, bumpKnowledgeAccess, resolveRecallMode } from './sleep.js';
+import { readSleepState, writeSleepState, bumpKnowledgeAccess, resolveRecallMode, type RecallMode } from './sleep.js';
 import {
   upsertSessionOnStop,
   appendCompactionRecord,
@@ -45,7 +45,8 @@ import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import {
   loadPatternsReporting, matchPatterns, selectForInjection, syncPatternShimsIfStale,
 } from '../../lib/patterns.js';
-import { hybridSearch, hybridReady } from '../../lib/embeddings/hybrid.js';
+import { hybridSearch, hybridReady, HOOK_MAX_INLINE_EMBED, type RecallTiming } from '../../lib/embeddings/hybrid.js';
+import { resolvePromptTier } from '../../lib/recall-cloud-config.js';
 import {
   crossVaultRecall,
   resolveConnectedVaults,
@@ -279,6 +280,118 @@ function insightReadDirective(slug: string, vault?: string): string {
     ? `read \`${vault}\`'s \`lab/insights/${slug}.md\` + \`lab/cache/${slug}.json\` (or run \`lab show ${slug}\` in that vault)`
     : `\`dreamcontext lab show ${slug}\` — cached series, never fetches`;
   return `    → ALREADY TRACKED as an insight: ${how}. Do NOT fetch this metric from an API, an MCP tool, or a one-off script; only \`lab sync ${slug}\` when the cache is TTL-stale.`;
+}
+
+/** Hits the prompt hook injects in the raw and hybrid modes (owner decision Q1). Haiku mode stays at 3. */
+export const RECALL_INJECT_TOP_K = 5;
+/** Haiku selects at most this many docs (its own cap), and so does its BM25 fallback. */
+export const RECALL_HAIKU_TOP_K = 3;
+/** Ranks printed in full (path, why, excerpt); ranks beyond it are one line each. */
+export const RECALL_FULL_RENDER_RANKS = 3;
+/** Raw BM25 score a printed hit must reach for the block to be injected (threshold unchanged by K=5). */
+export const RECALL_STRONG_SCORE = 2.0;
+
+/**
+ * The injection gate. The window is the printed hits (so K=5 widens it from 3), the threshold is the
+ * raw BM25 score and does not change. `.some()` because hits are ordered by rankScore, so a strong raw
+ * match need not sit at index 0.
+ */
+export function recallGatePasses(hits: readonly RecallHit[], haiku: boolean): boolean {
+  return hits.length > 0 && (haiku || hits.some((h) => h.score >= RECALL_STRONG_SCORE));
+}
+
+/**
+ * The injected block. Ranks 1-3 print in full; ranks 4-5 are ONE line each (`[type] relPath — title`) so
+ * the wider window costs few tokens. An insight keeps its read directive at any rank.
+ */
+export function renderRecallBlock(hits: readonly RecallHit[], label: string): string[] {
+  const lines: string[] = ['', `— Memory recall (${label}, top ${hits.length}) —`];
+  hits.forEach((h, i) => {
+    if (i >= RECALL_FULL_RENDER_RANKS) {
+      const title = (h.doc.title || h.doc.slug).replace(/\s+/g, ' ').trim();
+      lines.push(`  [${h.doc.type}] ${h.doc.relPath} — ${title}`);
+      if (h.doc.type === 'insight') lines.push(insightReadDirective(h.doc.slug));
+      return;
+    }
+    lines.push(`  [${h.doc.type}] ${h.doc.relPath}`);
+    if (h.snippet) lines.push(`    Why: ${h.snippet}`);
+    else if (h.doc.description) lines.push(`    ${h.doc.description}`);
+    if (h.doc.type === 'insight') lines.push(insightReadDirective(h.doc.slug));
+    const excerpt = h.doc.body
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('---') && !l.startsWith('|'))
+      .slice(0, 3)
+      .join(' ')
+      .slice(0, 200);
+    if (excerpt) lines.push(`    > ${excerpt}${excerpt.length >= 200 ? '…' : ''}`);
+  });
+  return lines;
+}
+
+/**
+ * The `DREAMCONTEXT_RECALL_TIMING=1` diagnostic: the hybrid path's RecallTiming as ONE JSON line (for
+ * stderr). Null when the env flag is off or the prompt did not take the hybrid path.
+ */
+export function recallTimingLine(timing: RecallTiming | null, env: NodeJS.ProcessEnv = process.env): string | null {
+  return timing !== null && env.DREAMCONTEXT_RECALL_TIMING === '1' ? JSON.stringify(timing) : null;
+}
+
+export interface PromptRecallDeps {
+  env?: NodeJS.ProcessEnv;
+  /** Injectable home for the tier, consent and key lookups (tests). */
+  home?: string;
+  haiku?: typeof haikuRecall;
+}
+
+export interface PromptRecall {
+  hits: RecallHit[];
+  /** Header label: `Haiku`, `BM25`, or `Hybrid · <effective tier>`. */
+  label: string;
+  haiku: boolean;
+  /** Filled by the hybrid path only. */
+  timing: RecallTiming | null;
+}
+
+/**
+ * Pick the recall hits for one prompt (any mode but `off`). The hybrid path resolves the vault's tier
+ * with `resolvePromptTier` (spawned sessions and the daily cap downgrade it) and hands it to
+ * `hybridSearch`, which still re-derives consent itself; the header names the EFFECTIVE tier it used.
+ */
+export async function selectPromptRecall(prompt: string, root: string, recallMode: RecallMode, deps: PromptRecallDeps = {}): Promise<PromptRecall> {
+  const env = deps.env ?? process.env;
+  if (recallMode === 'haiku') {
+    const result = (deps.haiku ?? haikuRecall)(prompt, root);
+    if (result === 'skip') {
+      if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku: skip (no searchable intent)');
+    } else if (result !== null && result.length > 0) {
+      return { hits: result, label: 'Haiku', haiku: true, timing: null };
+    } else if (result !== null) {
+      if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku: 0 docs selected');
+    } else {
+      if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku failed, falling back to BM25');
+      return { hits: bm25Search(prompt, buildCorpusCached(root), RECALL_HAIKU_TOP_K), label: 'BM25', haiku: false, timing: null };
+    }
+    return { hits: [], label: 'BM25', haiku: false, timing: null };
+  }
+
+  const tier = recallMode === 'hybrid' ? resolvePromptTier(root, env, deps.home).tier : 'local';
+  if (hybridReady(root, recallMode, tier, deps.home)) {
+    // BM25 + dense fusion (decision-embedding-layer). `hybridReady` gates on a model that is already on
+    // disk AND a warm index, so a prompt never triggers a download or a cold index build. Raw `.score`
+    // is untouched, so the gate in `recallGatePasses` is unchanged.
+    const t0 = performance.now();
+    const corpus = buildCorpusCached(root);
+    const timing: RecallTiming = { tier: 'local', querySource: 'none', fallback: 'none', corpusMs: Math.round(performance.now() - t0) };
+    const hits = await hybridSearch(prompt, corpus, root, RECALL_INJECT_TOP_K, {
+      tier,
+      home: deps.home,
+      timing,
+      maxInlineEmbed: HOOK_MAX_INLINE_EMBED,
+    });
+    return { hits, label: `Hybrid · ${timing.tier}`, haiku: false, timing };
+  }
+  return { hits: bm25Search(prompt, buildCorpusCached(root), RECALL_INJECT_TOP_K), label: 'BM25', haiku: false, timing: null };
 }
 
 /**
@@ -2483,59 +2596,15 @@ export function registerHookCommand(program: Command): void {
             const recallMode = resolveRecallMode(root);
 
             if (recallMode !== 'off') {
-              let hits: RecallHit[] = [];
-              let mode = 'BM25';
-
-              if (recallMode === 'haiku') {
-                const result = haikuRecall(prompt, root);
-                if (result === 'skip') {
-                  if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku: skip (no searchable intent)');
-                } else if (result !== null && result.length > 0) {
-                  hits = result;
-                  mode = 'Haiku';
-                } else if (result !== null && result.length === 0) {
-                  if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku: 0 docs selected');
-                } else if (result === null) {
-                  if (process.env.DREAMCONTEXT_DEBUG) console.error('[recall] Haiku failed, falling back to BM25');
-                  const corpus = buildCorpusCached(root);
-                  hits = bm25Search(prompt, corpus, 3);
-                }
-              } else if (hybridReady(root, recallMode)) {
-                // EXPERIMENTAL: BM25 + dense RRF fusion (decision-embedding-layer).
-                // `hybridReady` gates on model-downloaded AND cache-warm, so a
-                // prompt never triggers a surprise 113 MB download or a cold
-                // multi-minute index build. (A per-process ~1s model cold-load
-                // to embed the query is still paid on the first hybrid recall in
-                // each short-lived hook process — inherent to hybrid mode.) Raw
-                // `.score` is untouched, so the >= 2.0 gate below is unchanged.
-                const corpus = buildCorpusCached(root);
-                hits = await hybridSearch(prompt, corpus, root, 3);
-                mode = 'Hybrid';
-              } else {
-                const corpus = buildCorpusCached(root);
-                hits = bm25Search(prompt, corpus, 3);
-              }
+              const { hits, label, haiku, timing } = await selectPromptRecall(prompt, root, recallMode);
+              const timingLine = recallTimingLine(timing);
+              if (timingLine) console.error(timingLine);
 
               // Hits are ordered by rankScore (field/recency/synonym signals), but the
               // gate must test the RAW BM25 score, which may not sit at index 0 after
-              // re-ranking. Use .some() so a strong raw match isn't suppressed by a
-              // lower-raw-score doc winning the rankScore sort.
-              if (hits.length > 0 && (mode === 'Haiku' || hits.some((h) => h.score >= 2.0))) {
-                const lines: string[] = ['', `— Memory recall (${mode}, top ${hits.length}) —`];
-                for (const h of hits) {
-                  lines.push(`  [${h.doc.type}] ${h.doc.relPath}`);
-                  if (h.snippet) lines.push(`    Why: ${h.snippet}`);
-                  else if (h.doc.description) lines.push(`    ${h.doc.description}`);
-                  if (h.doc.type === 'insight') lines.push(insightReadDirective(h.doc.slug));
-                  const excerpt = h.doc.body
-                    .split('\n')
-                    .map(l => l.trim())
-                    .filter(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('---') && !l.startsWith('|'))
-                    .slice(0, 3)
-                    .join(' ')
-                    .slice(0, 200);
-                  if (excerpt) lines.push(`    > ${excerpt}${excerpt.length >= 200 ? '…' : ''}`);
-                }
+              // re-ranking (see recallGatePasses).
+              if (recallGatePasses(hits, haiku)) {
+                const lines = renderRecallBlock(hits, label);
                 console.log(lines.join('\n'));
                 hadRecallHits = true;
 

@@ -6,8 +6,8 @@
 //
 // Usage (needs a built CLI: `npm run build:cli`, or a prebuilt archive's dist):
 //   npx tsx scripts/hook-latency.ts --root <frozen _dream_context> --prompts <gold.jsonl> \
-//       --mode raw|hybrid|floor [--n 50] [--no-model] [--dist <dir/index.js>] [--engine-root <dir>] \
-//       [--cpu-prof <dir>] [--keep-scratch]
+//       --mode raw|hybrid|floor [--tier local|cloud-index|cloud] [--n 50] [--no-model] \
+//       [--dist <dir/index.js>] [--engine-root <dir>] [--cpu-prof <dir>] [--keep-scratch]
 //
 // Modes:
 //   raw     DREAMCONTEXT_RECALL_MODE=raw     — BM25 recall; header must read `(BM25`
@@ -15,6 +15,11 @@
 //   floor   DREAMCONTEXT_MEMORY_HOOK=0       — the recall-free floor; no recall header at all
 //   --no-model  HOME → an empty dir, mode hybrid: the fresh-machine fallback. Header must read
 //               `(BM25`, and no models dir / embedding cache may appear.
+//   --tier      (mode hybrid only) the recall tier to measure. `local` (default) is the e5 hybrid. `cloud-index`
+//               and `cloud` grant the SCRATCH copy a real vault consent (the machine's recall key and the
+//               snapshot's voyage-4 index must exist; `cloud-index` also needs the nano model on disk) and revoke
+//               it in `finally`. Every header must then read `Hybrid · <tier>`. `cloud` spends real money
+//               (about $1 per 1,000 queries): keep n small.
 //
 // Safety:
 //   - --root must be `<FROZEN_DIR>/**/_dream_context`. The hook mutates the vault it runs in
@@ -36,6 +41,10 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SPAWN_ENV_KEYS } from '../src/lib/session-origin.js';
+import { grantVaultConsent, recallCloudKeyInfo, revokeVaultConsent, type RecallTier } from '../src/lib/recall-cloud-config.js';
+import { DEFAULT_RERANK_MODEL } from '../src/lib/embeddings/fusion-config.js';
+import { isNanoDownloaded } from '../src/lib/embeddings/nano.js';
+import { cloudIndexReady } from '../src/lib/embeddings/vector-store.js';
 import {
   FROZEN_DIR,
   assertNotSpawned,
@@ -53,10 +62,13 @@ const RUN_TIMEOUT_MS = 120_000;
 
 export type HookMode = 'raw' | 'hybrid' | 'floor';
 
+const TIERS: readonly RecallTier[] = ['local', 'cloud-index', 'cloud'];
+
 export interface HookLatencyArgs {
   root: string;
   prompts: string;
   mode: HookMode;
+  tier: RecallTier;
   n: number;
   noModel: boolean;
   dist: string;
@@ -67,6 +79,7 @@ export interface HookLatencyArgs {
 
 export interface HookLatencyResult {
   mode: HookMode;
+  tier: RecallTier;
   noModel: boolean;
   n: number;
   kept: number;
@@ -77,6 +90,8 @@ export interface HookLatencyResult {
   meanMs: number;
   /** Recall header counts by label, e.g. `{ BM25: 28, Hybrid: 0 }`. */
   headers: Record<string, number>;
+  /** Recall header counts by FULL label, e.g. `{ 'Hybrid · cloud': 50 }`. */
+  fullHeaders: Record<string, number>;
   /** Runs (of the n measured) that printed no recall header at all. */
   noHeaderRuns: number;
   headerOk: boolean;
@@ -103,6 +118,12 @@ export function parseArgs(argv: string[]): HookLatencyArgs {
   }
   if (noModel && modeArg !== 'hybrid') throw new Error('--no-model tests the hybrid fallback: use --mode hybrid (or omit --mode)');
 
+  const tierArg = value('--tier') ?? 'local';
+  if (!(TIERS as readonly string[]).includes(tierArg)) throw new Error(`--tier must be local, cloud-index or cloud (got ${tierArg})`);
+  const tier = tierArg as RecallTier;
+  if (tier !== 'local' && modeArg !== 'hybrid') throw new Error(`--tier ${tier} measures the hybrid hook: use --mode hybrid`);
+  if (tier !== 'local' && noModel) throw new Error(`--tier ${tier} needs the machine's recall key: it cannot run with --no-model (empty HOME)`);
+
   const n = Number(value('--n') ?? 50);
   if (!Number.isInteger(n) || n < 1) throw new Error(`--n must be a positive integer (got ${value('--n')})`);
 
@@ -113,6 +134,7 @@ export function parseArgs(argv: string[]): HookLatencyArgs {
     root: assertUnder(FROZEN_DIR, root, '--root'),
     prompts: resolve(prompts),
     mode: modeArg,
+    tier,
     n,
     noModel,
     dist,
@@ -125,6 +147,11 @@ export function parseArgs(argv: string[]): HookLatencyArgs {
 /** Recall header labels (`— Memory recall (<label>[, …], top N) —`) in a hook's stdout. */
 export function headerLabels(stdout: string): string[] {
   return [...stdout.matchAll(HEADER_RE)].map((m) => m[1].split(/\s|·/)[0]);
+}
+
+/** Full recall header labels, e.g. `Hybrid · cloud` (the part before `, top N`). */
+export function fullHeaderLabels(stdout: string): string[] {
+  return [...stdout.matchAll(HEADER_RE)].map((m) => m[1].trim());
 }
 
 /** The environment a measured hook child gets: spawn markers removed, auto-upgrade/ensure off. */
@@ -175,6 +202,15 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
   assertUnder(scratchBase, scratch, 'scratch dir');
   const scratchProject = join(scratch, basename(snapshotDir)); // contains _dream_context, now.txt, FINGERPRINT.json
   const emptyHome = args.noModel ? mkdtempSync(join(tmpdir(), 'hook-latency-home-')) : null;
+  let consentedRoot: string | null = null;
+  const revokeConsent = (): void => {
+    if (consentedRoot === null) return;
+    const root = consentedRoot;
+    consentedRoot = null;
+    revokeVaultConsent(root);
+  };
+  // `finally` does not run on a signal: a real consent must not outlive an interrupted run.
+  const onSignal = (): void => { revokeConsent(); process.exit(130); };
 
   try {
     // ONE copy per invocation. The no-model scenario drops the index so its "no cache.json appears"
@@ -182,13 +218,28 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
     rsyncCopy(snapshotDir, scratchProject, args.noModel);
     const scratchRoot = join(scratchProject, '_dream_context');
 
+    if (args.tier !== 'local') {
+      // The prerequisites are checked BEFORE a consent is granted, so a missing one fails without a grant.
+      if (!recallCloudKeyInfo().present) throw new Error(`--tier ${args.tier}: no recall key on this machine (dreamcontext recall cloud key set)`);
+      if (!cloudIndexReady(scratchRoot, 'voyage-4')) throw new Error(`--tier ${args.tier}: the snapshot has no ready voyage-4 index under ${join(snapshotDir, '_dream_context', '.embeddings')}`);
+      if (args.tier === 'cloud-index' && !isNanoDownloaded()) throw new Error('--tier cloud-index: the voyage-4-nano query model is not on disk');
+      process.once('SIGINT', onSignal);
+      process.once('SIGTERM', onSignal);
+      grantVaultConsent(scratchRoot, { tier: args.tier, rerankModel: args.tier === 'cloud' ? DEFAULT_RERANK_MODEL : null, surface: 'cli-tty' });
+      consentedRoot = scratchRoot;
+      notes.push(`real ${args.tier} consent granted to the scratch copy and revoked afterwards`);
+    }
+
     const env = childEnv(process.env, {
       DREAMCONTEXT_RECALL_MODE: args.mode === 'hybrid' ? 'hybrid' : 'raw',
+      ...(args.tier === 'local' ? { DREAMCONTEXT_RECALL_TIER: 'local' } : {}),
       DREAMCONTEXT_AUTO_UPGRADE: '0',
       DREAMCONTEXT_EMBED_AUTO: '0',
       ...(args.mode === 'floor' ? { DREAMCONTEXT_MEMORY_HOOK: '0' } : {}),
       ...(emptyHome ? { HOME: emptyHome } : {}),
     });
+    // A cloud tier is only measured if nothing in the parent's env forces local.
+    if (args.tier !== 'local') delete env.DREAMCONTEXT_RECALL_TIER;
 
     if (args.mode === 'hybrid' && !args.noModel) {
       const warm = spawnSync(process.execPath, [args.dist, 'embed', 'refresh'], { cwd: scratchProject, env, encoding: 'utf-8', timeout: 30 * 60_000 });
@@ -198,6 +249,7 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
     const nodeFlags = args.cpuProfDir ? ['--cpu-prof', `--cpu-prof-dir=${args.cpuProfDir}`] : [];
     const times: number[] = [];
     const headers: Record<string, number> = {};
+    const fullHeaders: Record<string, number> = {};
     let noHeaderRuns = 0;
 
     for (let i = 0; i <= args.n; i++) { // run 0 is the discarded warm-up
@@ -217,6 +269,7 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
       const labels = headerLabels(r.stdout);
       if (labels.length === 0) noHeaderRuns++;
       for (const l of labels) headers[l] = (headers[l] ?? 0) + 1;
+      for (const l of fullHeaderLabels(r.stdout)) fullHeaders[l] = (fullHeaders[l] ?? 0) + 1;
     }
 
     const labelCount = Object.values(headers).reduce((s, c) => s + c, 0);
@@ -228,6 +281,13 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
     } else if (args.mode === 'hybrid' && !args.noModel) {
       headerOk = only('Hybrid');
       if (!headerOk) notes.push(labelCount === 0 ? 'no run printed a recall header' : 'a run fell back off Hybrid — is the model on disk and the index warm?');
+      // The label names the EFFECTIVE tier: a cloud measurement whose headers say another tier measured nothing.
+      // (Not asserted for `local`: an older dist, measured for the baseline, prints a bare `Hybrid`.)
+      const wanted = `Hybrid · ${args.tier}`;
+      if (headerOk && args.tier !== 'local' && (fullHeaders[wanted] ?? 0) !== labelCount) {
+        headerOk = false;
+        notes.push(`expected every header to read "${wanted}", got ${JSON.stringify(fullHeaders)} — the consent, key or index was not honoured`);
+      }
     } else {
       headerOk = only('BM25'); // raw mode, and the no-model fallback
       if (!headerOk) notes.push(labelCount === 0 ? 'no run printed a recall header' : 'a run printed a non-BM25 recall header');
@@ -244,6 +304,7 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
     const [lo, hi] = bootstrapP90(times);
     return {
       mode: args.mode,
+      tier: args.tier,
       noModel: args.noModel,
       n: times.length,
       kept: prompts.length,
@@ -253,11 +314,15 @@ export async function run(args: HookLatencyArgs): Promise<HookLatencyResult> {
       p90ci: [Math.round(lo), Math.round(hi)],
       meanMs: Math.round(times.reduce((s, t) => s + t, 0) / times.length),
       headers,
+      fullHeaders,
       noHeaderRuns,
       headerOk,
       notes,
     };
   } finally {
+    revokeConsent();
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
     if (!args.keepScratch) rmSync(scratch, { recursive: true, force: true });
     if (emptyHome) rmSync(emptyHome, { recursive: true, force: true });
   }

@@ -14,7 +14,10 @@ import {
   type CorpusType,
   type RecallHit,
 } from '../../lib/recall.js';
-import { hybridSearch, hybridReady } from '../../lib/embeddings/hybrid.js';
+import { hybridSearch, hybridReady, type RecallTiming } from '../../lib/embeddings/hybrid.js';
+import { recallCloudStatus, resolvePromptTier, type RecallTier } from '../../lib/recall-cloud-config.js';
+import { cloudIndexReady } from '../../lib/embeddings/vector-store.js';
+import { isNanoDownloaded } from '../../lib/embeddings/nano.js';
 import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import { resolveRecallMode } from './sleep.js';
 import {
@@ -185,6 +188,43 @@ function recallFederated(
   if (staleNote) console.log(chalk.dim(staleNote));
 }
 
+/**
+ * Why a selected hybrid mode did not run hybrid, as one dim stderr line (never stdout, so `--json` /
+ * `--plain` stay clean). A cloud tier says which prerequisite is missing; otherwise it is the local
+ * warm-up hint.
+ */
+export function hybridNotReadyNote(
+  root: string,
+  resolved: { tier: RecallTier; downgraded: null | 'spawned_session' | 'daily_cap' | 'env_override' },
+  home?: string,
+): string {
+  const localHint = 'hybrid recall selected but not warmed — using BM25. Run `dreamcontext embed refresh` to enable it.';
+  const cloudReason = ((): string | null => {
+    if (resolved.downgraded === 'spawned_session') return 'cloud recall is off inside a spawned session.';
+    if (resolved.downgraded === 'daily_cap') return 'the daily cloud query cap is reached.';
+    const status = recallCloudStatus(root, home);
+    if (status.consent === 're-consent-required') {
+      return 'cloud recall needs re-consent (the disclosure or eligible types changed): run `dreamcontext recall cloud status`.';
+    }
+    if (status.consent === 'valid' && !status.key) return 'cloud recall is consented but no recall key is set: run `dreamcontext recall cloud key set`.';
+    if (resolved.tier !== 'local' && !cloudIndexReady(root, 'voyage-4')) {
+      return `${resolved.tier} recall is enabled but its index is not built yet: run \`dreamcontext recall cloud index\`.`;
+    }
+    if (resolved.tier === 'cloud-index' && !isNanoDownloaded(home)) {
+      return 'cloud-index recall needs the voyage-4-nano query model on disk, which is not downloaded yet.';
+    }
+    return null;
+  })();
+  return cloudReason ? `${cloudReason} ${localHint}` : localHint;
+}
+
+/** After a hybrid search: say so when a cloud tier could not answer and a fallback served the prompt. */
+export function cloudFallbackNote(timing: RecallTiming): string | null {
+  if (timing.tier === 'local' || timing.fallback === 'none') return null;
+  const served = timing.querySource === 'none' ? 'BM25' : timing.querySource === 'e5' ? 'local e5' : timing.querySource;
+  return `${timing.tier} recall: ${timing.fallback.replace(/_/g, ' ')} — served by ${served}.`;
+}
+
 export function registerMemoryCommand(program: Command): void {
   const memory = program
     .command('memory')
@@ -263,15 +303,24 @@ export function registerMemoryCommand(program: Command): void {
         // already warm, else plain BM25. `hybridReady` guarantees the explicit
         // `memory recall` never blocks on a first-time download or index build.
         const mode = resolveRecallMode(root);
-        const useHybrid = hybridReady(root, mode);
+        // The tier comes from the vault's own consent (spawned sessions and the daily cap downgrade it);
+        // hybridSearch re-derives it, so this can only ever ask for less than consent allows.
+        const resolved = resolvePromptTier(root);
+        const useHybrid = hybridReady(root, mode, resolved.tier);
         // Hybrid selected but not warm yet → we searched with BM25. Nudge (on
-        // stderr, so --json / --plain stdout stays clean) toward the one-time warm-up.
+        // stderr, so --json / --plain stdout stays clean) toward the missing prerequisite.
         if (mode === 'hybrid' && !useHybrid) {
-          console.error(chalk.dim('  (hybrid recall selected but not warmed — using BM25. Run `dreamcontext embed refresh` to enable it.)'));
+          console.error(chalk.dim(`  (${hybridNotReadyNote(root, resolved)})`));
         }
+        const timing: RecallTiming = { tier: 'local', querySource: 'none', fallback: 'none' };
         const hits = useHybrid
-          ? await hybridSearch(query, corpus, root, topK, { aliasGroups: aliasGroups(vocab) })
+          ? await hybridSearch(query, corpus, root, topK, { aliasGroups: aliasGroups(vocab), tier: resolved.tier, timing })
           : bm25Search(query, corpus, topK, { aliasGroups: aliasGroups(vocab) });
+        if (useHybrid) {
+          const note = cloudFallbackNote(timing);
+          if (note) console.error(chalk.dim(`  (${note})`));
+          if (process.env.DREAMCONTEXT_RECALL_TIMING === '1') console.error(JSON.stringify(timing));
+        }
 
         if (opts.json) {
           const payload = hits.map((h) => ({
