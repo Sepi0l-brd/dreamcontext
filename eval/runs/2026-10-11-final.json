@@ -1,11 +1,131 @@
 {
  "label": "T10-final",
  "date": "2026-10-11",
- "engineSha": "ba736f4f",
+ "engineSha": {
+  "cloud-index": "ba736f4f (run before the fallback guard existed)",
+  "cloud": "c274d18f (with the fallback guard; passed)",
+  "B0": "0ba4c25a"
+ },
  "snapshot": "dc-20261010",
  "injectK": 5,
- "status": "PARTIAL: cloud held-out NOT completed (load-induced); local, hybrid-e5 B0, haiku B0 held-out not available",
+ "status": "HELDOUT COMPLETE for cloud, cloud-index, B0 raw, B0 haiku (T10b, 2026-10-11). Local tier and B0 hybrid-e5 NOT measured (hybrid-e5 e5 snapshot index incomplete).",
  "heldout": {
+  "B0-raw": {
+   "tr": {
+    "n": 23,
+    "r1": 2,
+    "r3": 7,
+    "r5": 7,
+    "mrr": 0.191,
+    "r5ci": [
+     15.6,
+     50.9
+    ],
+    "injected": 23,
+    "injectionRatePct": 100,
+    "effectiveR5": 7
+   },
+   "en": {
+    "n": 25,
+    "r1": 19,
+    "r3": 22,
+    "r5": 22,
+    "mrr": 0.813,
+    "r5ci": [
+     70,
+     95.8
+    ],
+    "injected": 25,
+    "injectionRatePct": 100,
+    "effectiveR5": 22
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 11,
+    "r3": 13,
+    "r5": 18,
+    "mrr": 0.548,
+    "r5ci": [
+     55.1,
+     88
+    ],
+    "injected": 24,
+    "injectionRatePct": 100,
+    "effectiveR5": 18
+   },
+   "all": {
+    "n": 72,
+    "r1": 32,
+    "r3": 42,
+    "r5": 47,
+    "mrr": 0.526,
+    "r5ci": [
+     53.8,
+     75.2
+    ],
+    "injected": 72,
+    "injectionRatePct": 100,
+    "effectiveR5": 47
+   }
+  },
+  "B0-haiku": {
+   "tr": {
+    "n": 23,
+    "r1": 10,
+    "r3": 12,
+    "r5": 12,
+    "mrr": 0.478,
+    "r5ci": [
+     33,
+     70.8
+    ],
+    "injected": 18,
+    "injectionRatePct": 78.3,
+    "effectiveR5": 12
+   },
+   "en": {
+    "n": 25,
+    "r1": 14,
+    "r3": 16,
+    "r5": 16,
+    "mrr": 0.6,
+    "r5ci": [
+     44.5,
+     79.8
+    ],
+    "injected": 19,
+    "injectionRatePct": 76,
+    "effectiveR5": 16
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 12,
+    "r3": 15,
+    "r5": 15,
+    "mrr": 0.563,
+    "r5ci": [
+     42.7,
+     78.8
+    ],
+    "injected": 20,
+    "injectionRatePct": 83.3,
+    "effectiveR5": 15
+   },
+   "all": {
+    "n": 72,
+    "r1": 36,
+    "r3": 43,
+    "r5": 43,
+    "mrr": 0.549,
+    "r5ci": [
+     48.2,
+     70.3
+    ],
+    "injected": 57,
+    "injectionRatePct": 79.2,
+    "effectiveR5": 43
+   }
+  },
   "cloud-index": {
    "tr": {
     "n": 23,
@@ -13,7 +133,12 @@
     "r3": 21,
     "r5": 23,
     "mrr": 0.643,
+    "r5ci": [
+     85.7,
+     100
+    ],
     "injected": 23,
+    "injectionRatePct": 100,
     "effectiveR5": 23
    },
    "en": {
@@ -22,7 +147,12 @@
     "r3": 22,
     "r5": 25,
     "mrr": 0.795,
+    "r5ci": [
+     86.7,
+     100
+    ],
     "injected": 25,
+    "injectionRatePct": 100,
     "effectiveR5": 25
    },
    "mixed": {
@@ -31,7 +161,12 @@
     "r3": 19,
     "r5": 20,
     "mrr": 0.702,
+    "r5ci": [
+     64.1,
+     93.3
+    ],
     "injected": 24,
+    "injectionRatePct": 100,
     "effectiveR5": 20
    },
    "all": {
@@ -39,61 +174,115 @@
     "r1": 40,
     "r3": 62,
     "r5": 68,
-    "mrr": 0.715
+    "mrr": 0.715,
+    "r5ci": [
+     86.6,
+     97.8
+    ],
+    "injected": 72,
+    "injectionRatePct": 100,
+    "effectiveR5": 68
    }
   },
-  "B0-raw": {
+  "cloud": {
    "tr": {
     "n": 23,
-    "r1": 2,
-    "r3": 7,
-    "r5": 7,
-    "mrr": 0.191
+    "r1": 15,
+    "r3": 20,
+    "r5": 22,
+    "mrr": 0.79,
+    "r5ci": [
+     79,
+     99.2
+    ],
+    "injected": 23,
+    "injectionRatePct": 100,
+    "effectiveR5": 22
    },
    "en": {
     "n": 25,
-    "r1": 19,
-    "r3": 22,
-    "r5": 22,
-    "mrr": 0.813
+    "r1": 20,
+    "r3": 25,
+    "r5": 25,
+    "mrr": 0.893,
+    "r5ci": [
+     86.7,
+     100
+    ],
+    "injected": 25,
+    "injectionRatePct": 100,
+    "effectiveR5": 25
    },
    "mixed": {
     "n": 24,
-    "r1": 11,
-    "r3": 13,
-    "r5": 18,
-    "mrr": 0.548
+    "r1": 18,
+    "r3": 23,
+    "r5": 23,
+    "mrr": 0.858,
+    "r5ci": [
+     79.8,
+     99.3
+    ],
+    "injected": 24,
+    "injectionRatePct": 100,
+    "effectiveR5": 23
    },
    "all": {
     "n": 72,
-    "r1": 32,
-    "r3": 42,
-    "r5": 47,
-    "mrr": 0.526
+    "r1": 53,
+    "r3": 68,
+    "r5": 70,
+    "mrr": 0.849,
+    "r5ci": [
+     90.4,
+     99.2
+    ],
+    "injected": 72,
+    "injectionRatePct": 100,
+    "effectiveR5": 70
    }
-  },
-  "cloud": null
+  }
  },
  "signTest": {
-  "cloud-index vs raw (pooled r@5)": {
-   "wins": 23,
-   "losses": 2,
-   "p": 0.0000194
+  "cloud vs haiku [tr]": {
+   "wins": 11,
+   "losses": 1,
+   "p": 0.006348
   },
-  "tr": {
-   "wins": 16,
-   "losses": 0,
-   "p": 0.0000305
-  },
-  "en": {
+  "cloud vs raw [en]": {
    "wins": 3,
    "losses": 0,
    "p": 0.25
   },
-  "mixed": {
+  "cloud vs raw [mixed]": {
+   "wins": 5,
+   "losses": 0,
+   "p": 0.0625
+  },
+  "cloud vs raw [pooled]": {
+   "wins": 24,
+   "losses": 1,
+   "p": 0.00000155
+  },
+  "cloud-index vs haiku [tr]": {
+   "wins": 11,
+   "losses": 0,
+   "p": 0.0009766
+  },
+  "cloud-index vs raw [en]": {
+   "wins": 3,
+   "losses": 0,
+   "p": 0.25
+  },
+  "cloud-index vs raw [mixed]": {
    "wins": 4,
    "losses": 2,
    "p": 0.6875
+  },
+  "cloud-index vs raw [pooled]": {
+   "wins": 23,
+   "losses": 2,
+   "p": 0.00001943
   }
  },
  "evalLedgerUsd": 0.3054,
@@ -101,5 +290,413 @@
   "tsc": "clean",
   "files3": "3 files, 49 tests passed",
   "skillMdBytes": 45991
- }
+ },
+ "previousStatus": "PARTIAL: cloud held-out NOT completed (load-induced); local, hybrid-e5 B0, haiku B0 held-out not available",
+ "floorSet": [
+  "raw",
+  "haiku"
+ ],
+ "missingBaselines": [
+  "hybrid-e5"
+ ],
+ "verdicts": {
+  "AC-Q1 (cloud)": {
+   "tr": {
+    "n": 23,
+    "r5": 22,
+    "need": 21,
+    "verdict": "PASS"
+   },
+   "en": {
+    "n": 25,
+    "r5": 25,
+    "need": 23,
+    "verdict": "PASS"
+   },
+   "mixed": {
+    "n": 24,
+    "r5": 23,
+    "need": 22,
+    "verdict": "PASS"
+   }
+  },
+  "AC-Q2": {
+   "cloud": {
+    "tr": {
+     "n": 23,
+     "tier": 22,
+     "B_L": 12,
+     "B_by_mode": {
+      "raw": 7,
+      "haiku": 12
+     },
+     "argmax": "haiku",
+     "strictThreshold": "B_L<22/23",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 11,
+      "losses": 1,
+      "p": 0.006348
+     },
+     "vsRaw": {
+      "wins": 16,
+      "losses": 1,
+      "p": 0.0002747
+     },
+     "vsHaiku": {
+      "wins": 11,
+      "losses": 1,
+      "p": 0.006348
+     }
+    },
+    "en": {
+     "n": 25,
+     "tier": 25,
+     "B_L": 22,
+     "B_by_mode": {
+      "raw": 22,
+      "haiku": 16
+     },
+     "argmax": "raw",
+     "strictThreshold": "B_L<23/25",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "vsRaw": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "vsHaiku": {
+      "wins": 9,
+      "losses": 0,
+      "p": 0.003906
+     }
+    },
+    "mixed": {
+     "n": 24,
+     "tier": 23,
+     "B_L": 18,
+     "B_by_mode": {
+      "raw": 18,
+      "haiku": 15
+     },
+     "argmax": "raw",
+     "strictThreshold": "B_L<23/24",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 5,
+      "losses": 0,
+      "p": 0.0625
+     },
+     "vsRaw": {
+      "wins": 5,
+      "losses": 0,
+      "p": 0.0625
+     },
+     "vsHaiku": {
+      "wins": 8,
+      "losses": 0,
+      "p": 0.007813
+     }
+    },
+    "pooled": {
+     "n": 72,
+     "tier": 70,
+     "bestB0": 47,
+     "B_by_mode": {
+      "raw": 47,
+      "haiku": 43
+     },
+     "argmax": "raw",
+     "verdict": "PASS",
+     "paired": {
+      "wins": 24,
+      "losses": 1,
+      "p": 0.00000155
+     },
+     "vsRaw": {
+      "wins": 24,
+      "losses": 1,
+      "p": 0.00000155
+     },
+     "vsHaiku": {
+      "wins": 28,
+      "losses": 1,
+      "p": 1.118e-7
+     }
+    }
+   },
+   "cloud-index": {
+    "tr": {
+     "n": 23,
+     "tier": 23,
+     "B_L": 12,
+     "B_by_mode": {
+      "raw": 7,
+      "haiku": 12
+     },
+     "argmax": "haiku",
+     "strictThreshold": "B_L<22/23",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 11,
+      "losses": 0,
+      "p": 0.0009766
+     },
+     "vsRaw": {
+      "wins": 16,
+      "losses": 0,
+      "p": 0.00003052
+     },
+     "vsHaiku": {
+      "wins": 11,
+      "losses": 0,
+      "p": 0.0009766
+     }
+    },
+    "en": {
+     "n": 25,
+     "tier": 25,
+     "B_L": 22,
+     "B_by_mode": {
+      "raw": 22,
+      "haiku": 16
+     },
+     "argmax": "raw",
+     "strictThreshold": "B_L<23/25",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "vsRaw": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "vsHaiku": {
+      "wins": 9,
+      "losses": 0,
+      "p": 0.003906
+     }
+    },
+    "mixed": {
+     "n": 24,
+     "tier": 20,
+     "B_L": 18,
+     "B_by_mode": {
+      "raw": 18,
+      "haiku": 15
+     },
+     "argmax": "raw",
+     "strictThreshold": "B_L<23/24",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 4,
+      "losses": 2,
+      "p": 0.6875
+     },
+     "vsRaw": {
+      "wins": 4,
+      "losses": 2,
+      "p": 0.6875
+     },
+     "vsHaiku": {
+      "wins": 7,
+      "losses": 2,
+      "p": 0.1797
+     }
+    },
+    "pooled": {
+     "n": 72,
+     "tier": 68,
+     "bestB0": 47,
+     "B_by_mode": {
+      "raw": 47,
+      "haiku": 43
+     },
+     "argmax": "raw",
+     "verdict": "PASS",
+     "paired": {
+      "wins": 23,
+      "losses": 2,
+      "p": 0.00001943
+     },
+     "vsRaw": {
+      "wins": 23,
+      "losses": 2,
+      "p": 0.00001943
+     },
+     "vsHaiku": {
+      "wins": 27,
+      "losses": 2,
+      "p": 0.000001624
+     }
+    }
+   }
+  },
+  "AC-Q3": {
+   "cloud": {
+    "exactTermR1": {
+     "tier": {
+      "n": 12,
+      "r1": 10
+     },
+     "rawB0": {
+      "n": 12,
+      "r1": 8
+     },
+     "haikuB0": {
+      "n": 12,
+      "r1": 4
+     },
+     "verdict": "PASS"
+    },
+    "enR5": {
+     "tier": 25,
+     "B_EN": 22,
+     "verdict": "PASS"
+    }
+   },
+   "cloud-index": {
+    "exactTermR1": {
+     "tier": {
+      "n": 12,
+      "r1": 8
+     },
+     "rawB0": {
+      "n": 12,
+      "r1": 8
+     },
+     "haikuB0": {
+      "n": 12,
+      "r1": 4
+     },
+     "verdict": "PASS"
+    },
+    "enR5": {
+     "tier": 25,
+     "B_EN": 22,
+     "verdict": "PASS"
+    }
+   }
+  },
+  "AC-Q5": {
+   "note": "reported, not gating",
+   "injection": {
+    "raw": {
+     "tr": {
+      "injectionRatePct": 100,
+      "effectiveR5": 7,
+      "effectiveR5pct": 30.4
+     },
+     "en": {
+      "injectionRatePct": 100,
+      "effectiveR5": 22,
+      "effectiveR5pct": 88
+     },
+     "mixed": {
+      "injectionRatePct": 100,
+      "effectiveR5": 18,
+      "effectiveR5pct": 75
+     },
+     "all": {
+      "injectionRatePct": 100,
+      "effectiveR5": 47,
+      "effectiveR5pct": 65.3
+     }
+    },
+    "haiku": {
+     "tr": {
+      "injectionRatePct": 78.3,
+      "effectiveR5": 12,
+      "effectiveR5pct": 52.2
+     },
+     "en": {
+      "injectionRatePct": 76,
+      "effectiveR5": 16,
+      "effectiveR5pct": 64
+     },
+     "mixed": {
+      "injectionRatePct": 83.3,
+      "effectiveR5": 15,
+      "effectiveR5pct": 62.5
+     },
+     "all": {
+      "injectionRatePct": 79.2,
+      "effectiveR5": 43,
+      "effectiveR5pct": 59.7
+     }
+    },
+    "cloud-index": {
+     "tr": {
+      "injectionRatePct": 100,
+      "effectiveR5": 23,
+      "effectiveR5pct": 100
+     },
+     "en": {
+      "injectionRatePct": 100,
+      "effectiveR5": 25,
+      "effectiveR5pct": 100
+     },
+     "mixed": {
+      "injectionRatePct": 100,
+      "effectiveR5": 20,
+      "effectiveR5pct": 83.3
+     },
+     "all": {
+      "injectionRatePct": 100,
+      "effectiveR5": 68,
+      "effectiveR5pct": 94.4
+     }
+    },
+    "cloud": {
+     "tr": {
+      "injectionRatePct": 100,
+      "effectiveR5": 22,
+      "effectiveR5pct": 95.7
+     },
+     "en": {
+      "injectionRatePct": 100,
+      "effectiveR5": 25,
+      "effectiveR5pct": 100
+     },
+     "mixed": {
+      "injectionRatePct": 100,
+      "effectiveR5": 23,
+      "effectiveR5pct": 95.8
+     },
+     "all": {
+      "injectionRatePct": 100,
+      "effectiveR5": 70,
+      "effectiveR5pct": 97.2
+     }
+    }
+   }
+  }
+ },
+ "caveats": [
+  "hybrid-e5 B0 baseline missing; floor set is {raw, haiku}",
+  "cloud-index ran on engine ba736f4f before the fallback guard (no network at query time; per-query querySource/fallback fields are not recorded in the result file)",
+  "local tier unmeasured",
+  "n is 72 (23/25/24) not 75; per-language verdicts at n≈25 are directional, pooled is primary",
+  "B0 and cloud-index latencies were recorded under machine load and are not valid AC-L evidence"
+ ]
 }
