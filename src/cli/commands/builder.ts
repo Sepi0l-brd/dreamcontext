@@ -17,6 +17,7 @@ import {
   type OrphanCheck,
 } from '../../lib/builder-tools.js';
 import { acquireFileLockWithin, releaseFileLock } from '../../lib/file-lock.js';
+import { DEFAULT_SESSION_DEPS, registerBuilderSessionCommands, type SessionDeps } from './builder-sessions.js';
 
 /**
  * `dreamcontext builder …` — what a headless `claude -p` builder and the orchestrator that
@@ -31,6 +32,8 @@ import { acquireFileLockWithin, releaseFileLock } from '../../lib/file-lock.js';
  *                   stayed busy past --max-wait and nothing ran.
  *   report <file> <TaskId>  did that builder finish? reported (exit 0) | unfinished | stopped |
  *                   missing (exit 3), with the line that decided it.
+ *   base | spawn | fork | resume | wait | test | status   start and track builder sessions,
+ *                   and the lead's wave-end check (./builder-sessions.ts).
  */
 
 /** `report`'s exit code for anything but `reported`. */
@@ -144,10 +147,10 @@ export async function builderHeavy(deps: BuilderDeps, argv: string[], opts: { ma
   });
 }
 
-export function registerBuilderCommand(program: Command, deps: BuilderDeps = DEFAULT_DEPS): void {
+export function registerBuilderCommand(program: Command, deps: BuilderDeps = DEFAULT_DEPS, sessionDeps: SessionDeps = DEFAULT_SESSION_DEPS): void {
   const cmd = program
     .command('builder')
-    .description('Helpers for headless builder sessions: machine load, the heavy-check lock, and whether a builder reported');
+    .description('Headless builder sessions: start, fork, resume and wait for them; machine load, the heavy-check lock, and whether a builder reported');
 
   cmd
     .command('load')
@@ -172,4 +175,6 @@ export function registerBuilderCommand(program: Command, deps: BuilderDeps = DEF
     .action((file: string, taskId: string) => {
       process.exitCode = builderReport(deps, file, taskId);
     });
+
+  registerBuilderSessionCommands(cmd, sessionDeps);
 }

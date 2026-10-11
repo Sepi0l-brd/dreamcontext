@@ -533,9 +533,36 @@
     },
     {
       "path": "builder",
-      "desc": "Helpers for headless builder sessions: machine load, the heavy-check lock, and whether a builder reported",
+      "desc": "Headless builder sessions: start, fork, resume and wait for them; machine load, the heavy-check lock, and whether a builder reported",
       "args": [],
       "group": true
+    },
+    {
+      "path": "builder base",
+      "desc": "Mint or update the builder base every fork reads from cache (capped at 150k tokens)",
+      "args": [
+        "<slug>"
+      ],
+      "valueFlags": [
+        "--prompt-file",
+        "--update",
+        "--wave",
+        "--effort",
+        "--max-wait"
+      ]
+    },
+    {
+      "path": "builder fork",
+      "desc": "Start a builder forked from the base, so it starts knowing what the base read (detached)",
+      "args": [
+        "<slug>",
+        "<lane>"
+      ],
+      "valueFlags": [
+        "--owns",
+        "--prompt-file",
+        "--name"
+      ]
     },
     {
       "path": "builder heavy",
@@ -558,6 +585,61 @@
       "args": [
         "<file>",
         "<taskId>"
+      ]
+    },
+    {
+      "path": "builder resume",
+      "desc": "Resume the same builder (detached): it fixes and again runs no tests",
+      "args": [
+        "<slug>",
+        "<lane>"
+      ],
+      "valueFlags": [
+        "--message-file"
+      ]
+    },
+    {
+      "path": "builder spawn",
+      "desc": "Start a fresh builder for one lane (detached; returns at once)",
+      "args": [
+        "<slug>",
+        "<lane>"
+      ],
+      "valueFlags": [
+        "--owns",
+        "--prompt-file",
+        "--name",
+        "--effort"
+      ]
+    },
+    {
+      "path": "builder status",
+      "desc": "One line per builder session of the task (never blocks)",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
+      "path": "builder test",
+      "desc": "Wave-end check through the heavy lock: exit 0 green, 1 failures (key + owning lane), 75 a check did not run",
+      "args": [
+        "<slug>"
+      ],
+      "valueFlags": [
+        "--wave",
+        "--related",
+        "--also"
+      ]
+    },
+    {
+      "path": "builder wait",
+      "desc": "Block until builders return: exit 0 all reported, 4 still running, 5 one needs attention",
+      "args": [
+        "<slug>"
+      ],
+      "valueFlags": [
+        "--lanes",
+        "--max-wait"
       ]
     },
     {
