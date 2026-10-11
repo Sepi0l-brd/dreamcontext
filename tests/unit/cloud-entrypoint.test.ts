@@ -32,7 +32,7 @@ describe('entrypoint claude-login: the signed-in email must be the slot\'s', () 
   it('the wrong account in a slot is a clear WARNING naming both emails (smoke #5)', () => {
     const out = verdict({ loggedIn: true, email: 'kerem77@example.com' }, REG, 'mehmet-vandelay-studio');
     expect(out.split('\n')[0]).toBe('signed in kerem77@example.com');
-    expect(out).toMatch(/^WARNING: the slot mehmet-vandelay-studio is registered for mehmet@vandelay\.studio, but kerem@gmail\.com signed in here\./m);
+    expect(out).toMatch(/^WARNING: the slot mehmet-vandelay-studio is registered for mehmet@vandelay\.studio, but kerem77@example\.com signed in here\./m);
   });
 
   it('the right account (any letter case), a not-signed-in slot, an unknown slot or an unreadable registry: no warning', () => {

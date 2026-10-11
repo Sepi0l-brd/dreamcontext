@@ -125,7 +125,7 @@ describe('filterPeerMentions: aliases', () => {
     const PROJECTS = [peer('larkspur', { whatItIs: 'Deep tutoring product' }), peer('acme', { agent: 'peer-acme-payments' })];
     // `whatItIs` is NOT searched, so a description never pulls a project into the list.
     expect(filterPeerMentions(PROJECTS, 'deep')).toEqual([]);
-    expect(filterPeerMentions(PROJECTS, 'til').map((p) => p.vault)).toEqual(['larkspur']);
+    expect(filterPeerMentions(PROJECTS, 'lar').map((p) => p.vault)).toEqual(['larkspur']);
     expect(filterPeerMentions(PROJECTS, 'payments').map((p) => p.vault)).toEqual(['acme']);
   });
 });
