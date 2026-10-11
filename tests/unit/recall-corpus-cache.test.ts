@@ -3,7 +3,9 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { bm25Search, buildCorpus, type CorpusDoc } from '../../src/lib/recall.js';
+import {
+  bm25Search, buildCorpus, docFieldTermFreq, docHasTerm, docTermFreq, type CorpusDoc,
+} from '../../src/lib/recall.js';
 import { buildCorpusCached } from '../../src/lib/recall-corpus-cache.js';
 import { writeDigest } from '../../src/lib/session-digest.js';
 
@@ -238,4 +240,60 @@ describe.skipIf(!existsSync(FROZEN_DC))('buildCorpusCached on a copy of the real
         .toEqual(expected.map((h) => [h.doc.type, h.doc.slug, h.score, h.rankScore, h.snippet]));
     }
   }, 120_000);
+});
+
+describe('buildCorpusCached: the lazy on-disk shape (format 4)', () => {
+  it('writes a pure-ASCII file whose non-ASCII text (and astral characters) survive the round trip', () => {
+    write('knowledge/emoji.md', md('Emoji', 'Zamanlayıcı notları — «quoted» 🚀 and café.'));
+    buildCorpusCached(root);
+    const raw = readFileSync(CACHE_FILE(root));
+    expect(raw.every((byte) => byte < 0x80)).toBe(true);
+    const warm = buildCorpusCached(root);
+    expect(warm).toEqual(buildCorpus(root));
+    expect(warm.find((d) => d.slug === 'emoji')!.body).toContain('Zamanlayıcı notları — «quoted» 🚀 and café.');
+  });
+
+  it('stores each doc\'s term columns sorted, in step with each other', () => {
+    buildCorpusCached(root);
+    const parsed = JSON.parse(readFileSync(CACHE_FILE(root), 'utf-8')) as {
+      v: number; entries: Array<{ docs: Array<{ terms: string[]; tf: number[]; ff: number[] }> }>;
+    };
+    expect(parsed.v).toBe(4);
+    for (const entry of parsed.entries) for (const doc of entry.docs) {
+      expect(doc.terms).toEqual([...doc.terms].sort());
+      expect(doc.tf).toHaveLength(doc.terms.length);
+      expect(doc.ff).toHaveLength(doc.terms.length);
+    }
+  });
+
+  it('answers has / tf / field-tf from the columns, without materialising the collections, and matches the maps', () => {
+    buildCorpusCached(root);
+    const revived = buildCorpusCached(root).find((d) => d.slug === 'scheduler')!;
+    const plain = buildCorpus(root).find((d) => d.slug === 'scheduler')!;
+    expect(revived.termColumns).toBeDefined();
+    const own = (key: string): PropertyDescriptor => Object.getOwnPropertyDescriptor(revived, key)!;
+    for (const key of ['tokenSet', 'termFreq', 'fieldFreq']) expect(own(key).get).toBeTypeOf('function');
+
+    for (const term of [...plain.termFreq.keys(), 'absentterm', 'zzz', 'a']) {
+      expect(docHasTerm(revived, term)).toBe(plain.tokenSet.has(term));
+      expect(docTermFreq(revived, term)).toBe(plain.termFreq.get(term) ?? 0);
+      expect(docFieldTermFreq(revived, term)).toBe(plain.fieldFreq?.get(term) ?? plain.termFreq.get(term) ?? 0);
+    }
+    // searching never forced the collections
+    search([revived], 'scheduler jobs retries');
+    for (const key of ['tokenSet', 'termFreq', 'fieldFreq']) expect(own(key).get).toBeTypeOf('function');
+
+    // reading one materialises it, equal to the plain one
+    expect(revived.termFreq).toEqual(plain.termFreq);
+    expect(own('termFreq').get).toBeUndefined();
+  });
+
+  it('assigning a term collection drops the columns, so the helpers follow the new value', () => {
+    buildCorpusCached(root);
+    const revived = buildCorpusCached(root).find((d) => d.slug === 'scheduler')!;
+    revived.termFreq = new Map([['onlyterm', 7]]);
+    expect(revived.termColumns).toBeUndefined();
+    expect(docTermFreq(revived, 'onlyterm')).toBe(7);
+    expect(docTermFreq(revived, 'scheduler')).toBe(0);
+  });
 });

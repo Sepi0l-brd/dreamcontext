@@ -9,6 +9,7 @@ import type { RecallTiming } from '../../src/lib/embeddings/hybrid.js';
 import {
   RECALL_FULL_RENDER_RANKS,
   RECALL_INJECT_TOP_K,
+  hybridHeaderLabel,
   recallGatePasses,
   recallTimingLine,
   renderRecallBlock,
@@ -171,6 +172,32 @@ describe('tier resolution', () => {
     expect(renderRecallBlock(r.hits, r.label)[1]).toBe('— Memory recall (Hybrid · cloud, top 5) —');
   });
 
+  it('the header names the EFFECTIVE query source: a cloud call that failed says it fell back, and why', async () => {
+    const corpus = writeVault(env.root);
+    await consentAndIndex(env, corpus, 'cloud');
+    const down = fakeOpenRouter({ reject: true });
+    vi.stubGlobal('fetch', down.fetch);
+
+    const failed = await selectPromptRecall(PROMPT, env.root, 'hybrid', { env: {}, home: env.home });
+    expect(down.calls.filter((c) => c.url.endsWith('/embeddings')).length).toBeGreaterThan(0);
+    expect(failed.timing).toMatchObject({ tier: 'cloud', querySource: 'none' });
+    expect(failed.timing?.fallback).not.toBe('none');
+    // No local model on this machine (embedder mocked as not downloaded): BM25 served the prompt.
+    expect(failed.label).toBe(`Hybrid · cloud → BM25: ${failed.timing?.fallback.replace(/_/g, ' ')}`);
+    expect(failed.hits).toHaveLength(RECALL_INJECT_TOP_K);
+    expect(renderRecallBlock(failed.hits, failed.label)[1]).toMatch(/^— Memory recall \(Hybrid · cloud → BM25: [a-z ]+, top 5\) —$/);
+    // the latency script still reads it as a Hybrid header, not as the cloud tier
+    expect(headerLabels(renderRecallBlock(failed.hits, failed.label).join('\n'))).toEqual(['Hybrid']);
+    expect(fullHeaderLabels(renderRecallBlock(failed.hits, failed.label).join('\n'))[0]).not.toBe('Hybrid · cloud');
+
+    // the next prompt: the breaker is open, no cloud call is made, and the header says so
+    const second = fakeOpenRouter();
+    vi.stubGlobal('fetch', second.fetch);
+    const paused = await selectPromptRecall(PROMPT, env.root, 'hybrid', { env: {}, home: env.home });
+    expect(second.calls).toHaveLength(0);
+    expect(paused.label).toBe('Hybrid · cloud → BM25: breaker open');
+  });
+
   it('a consented rerank model reaches the rerank call', async () => {
     const corpus = writeVault(env.root);
     await consentAndIndex(env, corpus, 'cloud', 'voyageai/rerank-2.5-lite');
@@ -279,6 +306,19 @@ describe('memory recall notes', () => {
     expect(cloudFallbackNote({ tier: 'local', querySource: 'none', fallback: 'no_local_model' })).toBeNull();
     expect(cloudFallbackNote({ tier: 'cloud', querySource: 'api', fallback: 'none' })).toBeNull();
     expect(cloudFallbackNote({ tier: 'cloud', querySource: 'e5', fallback: 'breaker_open' })).toBe('cloud recall: breaker open — served by local e5.');
+  });
+});
+
+describe('hybridHeaderLabel', () => {
+  it('names where a prompt was really served', () => {
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'none' })).toBe('Hybrid · cloud');
+    // the cloud answered; only the optional rerank was withheld
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'rerank_not_consented' })).toBe('Hybrid · cloud');
+    expect(hybridHeaderLabel({ tier: 'cloud-index', querySource: 'nano', fallback: 'none' })).toBe('Hybrid · cloud-index');
+    expect(hybridHeaderLabel({ tier: 'local', querySource: 'e5', fallback: 'none' })).toBe('Hybrid · local');
+    expect(hybridHeaderLabel({ tier: 'local', querySource: 'none', fallback: 'no_local_model' })).toBe('Hybrid · local');
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'e5', fallback: 'breaker_open' })).toBe('Hybrid · cloud → local: breaker open');
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'none', fallback: 'no_index' })).toBe('Hybrid · cloud → BM25: no index');
   });
 });
 

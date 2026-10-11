@@ -74,6 +74,13 @@ export interface CorpusDoc {
    * whose `tokens` array is rebuilt lazily — read it through {@link tokenCountOf}.
    */
   tokenCount?: number;
+  /**
+   * Set (non-enumerable) only on docs revived from the corpus cache: the doc's terms as sorted parallel
+   * columns, so BM25 can answer `has / tf / field-tf` without building the three per-doc collections below
+   * (they materialise lazily on first access). Read through {@link docHasTerm} / {@link docTermFreq} /
+   * {@link docFieldTermFreq}, which fall back to the collections when absent.
+   */
+  termColumns?: TermColumns;
   tokenSet: Set<string>; // for DF lookup
   termFreq: Map<string, number>;
   // ── B1/B2/B3/B5 ranking metadata (all optional so external CorpusDoc
@@ -237,6 +244,48 @@ export interface RecallHit {
   // Higher = more relevant. Not threshold-compatible with `score`.
   rankScore: number;
   snippet: string;       // ~3 lines around the best match
+}
+
+/** A doc's distinct terms, sorted by UTF-16 code units, with their flat and field-weighted frequencies. */
+export interface TermColumns {
+  terms: string[];
+  tf: number[];
+  ff: number[];
+}
+
+/** Index of `term` in the sorted `terms` column, or -1. Same ordering as the default `Array#sort`. */
+function termIndex(terms: string[], term: string): number {
+  let lo = 0;
+  let hi = terms.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const t = terms[mid];
+    if (t === term) return mid;
+    if (t < term) lo = mid + 1; else hi = mid - 1;
+  }
+  return -1;
+}
+
+/** `doc.tokenSet.has(term)` without materialising the set of a cache-revived doc. */
+export function docHasTerm(doc: CorpusDoc, term: string): boolean {
+  const cols = doc.termColumns;
+  return cols ? termIndex(cols.terms, term) >= 0 : doc.tokenSet.has(term);
+}
+
+/** `doc.termFreq.get(term) ?? 0` without materialising the map of a cache-revived doc. */
+export function docTermFreq(doc: CorpusDoc, term: string): number {
+  const cols = doc.termColumns;
+  if (!cols) return doc.termFreq.get(term) ?? 0;
+  const i = termIndex(cols.terms, term);
+  return i < 0 ? 0 : cols.tf[i];
+}
+
+/** `doc.fieldFreq?.get(term) ?? doc.termFreq.get(term) ?? 0`, likewise without the maps. */
+export function docFieldTermFreq(doc: CorpusDoc, term: string): number {
+  const cols = doc.termColumns;
+  if (!cols) return doc.fieldFreq?.get(term) ?? doc.termFreq.get(term) ?? 0;
+  const i = termIndex(cols.terms, term);
+  return i < 0 ? 0 : cols.ff[i];
 }
 
 /** Stable identity for a corpus doc: `type/slug` (e.g. `knowledge/haiku-recall-architecture`). */
@@ -1325,7 +1374,7 @@ export function bm25Search(
   const df: Record<string, number> = {};
   for (const term of allTerms) {
     let count = 0;
-    for (const d of corpus) if (d.tokenSet.has(term)) count++;
+    for (const d of corpus) if (docHasTerm(d, term)) count++;
     df[term] = count;
   }
 
@@ -1337,7 +1386,7 @@ export function bm25Search(
 
   // Score one term against a doc on the FIELD-WEIGHTED (BM25F) channel.
   const bm25fTerm = (doc: CorpusDoc, term: string, dl: number): number => {
-    const tf = doc.fieldFreq?.get(term) ?? doc.termFreq.get(term) ?? 0;
+    const tf = docFieldTermFreq(doc, term);
     if (tf === 0) return 0;
     const num = tf * (K1 + 1);
     const den = tf + K1 * (1 - B + B * (dl / avgFieldLen));
@@ -1359,7 +1408,7 @@ export function bm25Search(
     let rawScore = 0;
     const dlFlat = tokenCountOf(doc) || 1;
     for (const term of queryTerms) {
-      const tf = doc.termFreq.get(term) ?? 0;
+      const tf = docTermFreq(doc, term);
       if (tf === 0) continue;
       const num = tf * (K1 + 1);
       const den = tf + K1 * (1 - B + B * (dlFlat / avgdl));

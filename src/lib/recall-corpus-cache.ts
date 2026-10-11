@@ -1,3 +1,4 @@
+import * as nodeBuffer from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -34,9 +35,12 @@ import {
  * must never be written into: callers pass `cacheDir` (see {@link peerCacheDir}) and the
  * cache lives under the reader's own home instead. JSON, never a binary serialization:
  * the in-vault file can travel with a brain-sync repo, so it must stay safe to parse. Docs are stored COLUMNAR — the
- * `termFreq`/`fieldFreq` maps as parallel arrays, the token list as one space-joined
- * string of term indexes — which parses ~4x faster than per-entry pairs. The `tokens` array of a revived
- * doc is rebuilt lazily (only reflection-style callers read it; BM25 needs the count).
+ * `termFreq`/`fieldFreq` maps as parallel arrays SORTED by term, the token list as one space-joined
+ * string of term indexes — which parses ~4x faster than per-entry pairs. A revived doc builds nothing
+ * until it is read: BM25 answers `has / tf / field-tf` by binary search over the sorted columns
+ * (`termColumns`, see recall.ts), and the `tokenSet` / `termFreq` / `fieldFreq` collections and the `tokens`
+ * array materialise on first access (only reflection-style callers read them). Building ~1.6k docs'
+ * worth of Maps on every hook process was a third of the cache-load cost.
  *
  * Invalidation: a different format version, a different {@link corpusBuildFingerprint}
  * (tokenizer / stemmer / loader changes), or a different context root discards the whole
@@ -44,7 +48,7 @@ import {
  * on any cache failure the plain `buildCorpus` result is returned.
  */
 
-const FORMAT_VERSION = 3;
+const FORMAT_VERSION = 4;
 const CACHE_DIR = '.recall-cache';
 const CACHE_FILE = 'corpus.json';
 
@@ -111,16 +115,17 @@ function debug(message: string, err?: unknown): void {
 /** The stored form of a built doc, or null when it would not survive the round trip exactly. */
 function toStored(doc: CorpusDoc): StoredDoc | null {
   if (!doc.fieldFreq) return null;
-  const terms: string[] = [];
-  const tf: number[] = [];
-  const ff: number[] = [];
+  const rows: Array<[string, number, number]> = [];
   for (const [term, count] of doc.termFreq) {
     const weighted = doc.fieldFreq.get(term);
     if (weighted === undefined || !doc.tokenSet.has(term)) return null;
-    terms.push(term);
-    tf.push(count);
-    ff.push(weighted);
+    rows.push([term, count, weighted]);
   }
+  // Sorted by UTF-16 code units (what `<` compares): revived docs binary-search these columns.
+  rows.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const terms = rows.map((r) => r[0]);
+  const tf = rows.map((r) => r[1]);
+  const ff = rows.map((r) => r[2]);
   // The columnar form assumes one shared key set; anything else is stored uncached.
   if (doc.fieldFreq.size !== terms.length || doc.tokenSet.size !== terms.length) return null;
   // Every token is a key of termFreq (that is what termFreq counts), so the sequence is
@@ -142,31 +147,45 @@ function toStored(doc: CorpusDoc): StoredDoc | null {
   return stored;
 }
 
-/** Revive a stored doc: real Maps/Set, `tokens` rebuilt lazily, `tokenCount` set. */
+/**
+ * Define `key` as an own enumerable property computed on first read (then a plain writable value).
+ * Assigning to a term collection first also drops the doc's `termColumns`, which would no longer describe it.
+ */
+function defineLazy<T>(doc: CorpusDoc, key: 'tokens' | 'tokenSet' | 'termFreq' | 'fieldFreq', build: () => T): void {
+  const settle = (value: T): T => {
+    Object.defineProperty(doc, key, { value, enumerable: true, writable: true, configurable: true });
+    return value;
+  };
+  Object.defineProperty(doc, key, {
+    enumerable: true,
+    configurable: true,
+    get: () => settle(build()),
+    set: (value: T) => {
+      if (key !== 'tokens') {
+        Object.defineProperty(doc, 'termColumns', { value: undefined, enumerable: false, writable: true, configurable: true });
+      }
+      settle(value);
+    },
+  });
+}
+
+function columnMap(terms: string[], values: number[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < terms.length; i++) map.set(terms[i], values[i]);
+  return map;
+}
+
+/** Revive a stored doc: nothing is built until read; `termColumns` and `tokenCount` set (non-enumerable). */
 function reviveDoc(stored: StoredDoc): CorpusDoc {
   const { terms, tf, ff, tc, tk, ...rest } = stored;
   const doc = rest as unknown as CorpusDoc;
-  const termFreq = new Map<string, number>();
-  const fieldFreq = new Map<string, number>();
-  for (let i = 0; i < terms.length; i++) {
-    termFreq.set(terms[i], tf[i]);
-    fieldFreq.set(terms[i], ff[i]);
-  }
-  doc.termFreq = termFreq;
-  doc.fieldFreq = fieldFreq;
-  doc.tokenSet = new Set(terms);
   // Non-enumerable: a revived doc must still compare equal to a freshly built one.
+  Object.defineProperty(doc, 'termColumns', { value: { terms, tf, ff }, enumerable: false, writable: true, configurable: true });
   Object.defineProperty(doc, 'tokenCount', { value: tc, enumerable: false });
-  const settle = (value: string[]): string[] => {
-    Object.defineProperty(doc, 'tokens', { value, enumerable: true, writable: true, configurable: true });
-    return value;
-  };
-  Object.defineProperty(doc, 'tokens', {
-    enumerable: true,
-    configurable: true,
-    get: () => settle(tc === 0 ? [] : tk.split(' ').map((id) => terms[Number(id)])),
-    set: (value: string[]) => { settle(value); },
-  });
+  defineLazy(doc, 'tokenSet', () => new Set(terms));
+  defineLazy(doc, 'termFreq', () => columnMap(terms, tf));
+  defineLazy(doc, 'fieldFreq', () => columnMap(terms, ff));
+  defineLazy(doc, 'tokens', () => (tc === 0 ? [] : tk.split(' ').map((id) => terms[Number(id)])));
   return doc;
 }
 
@@ -176,12 +195,22 @@ function cachePath(cacheDir: string): string {
   return join(cacheDir, CACHE_FILE);
 }
 
+/**
+ * The file's text. Our own writer emits pure ASCII (see `serialize`), which reads as a one-byte latin1 string,
+ * far cheaper than a decoded utf-8 one. A file anything else wrote (raw non-ASCII, or a Node without
+ * `buffer.isAscii`) is decoded as utf-8, so a foreign write is never misread.
+ */
+function readCacheText(path: string): string {
+  const bytes = readFileSync(path);
+  return nodeBuffer.isAscii?.(bytes) ? bytes.toString('latin1') : bytes.toString('utf-8');
+}
+
 function readCacheFile(cacheDir: string, contextRoot: string, fingerprint: string): Map<string, StoredEntry> {
   const loaded = new Map<string, StoredEntry>();
   const path = cachePath(cacheDir);
   if (!existsSync(path)) return loaded;
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<CacheFile>;
+    const parsed = JSON.parse(readCacheText(path)) as Partial<CacheFile>;
     if (
       parsed.v !== FORMAT_VERSION || parsed.fp !== fingerprint
       || parsed.root !== contextRoot || !Array.isArray(parsed.entries)
@@ -200,6 +229,14 @@ function readCacheFile(cacheDir: string, contextRoot: string, fingerprint: strin
   return loaded;
 }
 
+/**
+ * The file's JSON with every non-ASCII character as a `\uXXXX` escape, so it reads back as a one-byte string
+ * (~22 ms off a 22 MB load). Parsing restores the exact text, including surrogate pairs.
+ */
+function serialize(file: CacheFile): string {
+  return JSON.stringify(file).replace(/[\u0080-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 function writeCacheFile(dir: string, contextRoot: string, fingerprint: string, entries: StoredEntry[]): void {
   mkdirSync(dir, { recursive: true });
   // Self-ignoring, like `.embeddings/`: neither the project repo nor a brain-sync repo
@@ -211,7 +248,7 @@ function writeCacheFile(dir: string, contextRoot: string, fingerprint: string, e
   const tmp = `${cachePath(dir)}.${process.pid}.tmp`;
   try {
     // 0600: the file holds the text of the vault it caches, which may be another project's.
-    writeFileSync(tmp, JSON.stringify(file), { mode: 0o600 });
+    writeFileSync(tmp, serialize(file), { mode: 0o600 });
     renameSync(tmp, cachePath(dir));
   } catch (err) {
     try { unlinkSync(tmp); } catch { /* never written */ }

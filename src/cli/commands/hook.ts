@@ -337,6 +337,20 @@ export function recallTimingLine(timing: RecallTiming | null, env: NodeJS.Proces
   return timing !== null && env.DREAMCONTEXT_RECALL_TIMING === '1' ? JSON.stringify(timing) : null;
 }
 
+/**
+ * The header label of a hybrid prompt, from the EFFECTIVE query source. A cloud tier that answered
+ * (`api`, or the cloud-index tier's local nano query) is `Hybrid · cloud`; one that fell back says where it
+ * went and why: `Hybrid · cloud → local: breaker open`, or `→ BM25` when no local model could serve either.
+ */
+export function hybridHeaderLabel(timing: RecallTiming): string {
+  const base = `Hybrid · ${timing.tier}`;
+  const fellBack = timing.tier !== 'local' && (timing.querySource === 'e5' || timing.querySource === 'none');
+  if (!fellBack) return base;
+  const served = timing.querySource === 'e5' ? 'local' : 'BM25';
+  const why = timing.fallback === 'none' ? '' : `: ${timing.fallback.replace(/_/g, ' ')}`;
+  return `${base} → ${served}${why}`;
+}
+
 export interface PromptRecallDeps {
   env?: NodeJS.ProcessEnv;
   /** Injectable home for the tier, consent and key lookups (tests). */
@@ -346,7 +360,7 @@ export interface PromptRecallDeps {
 
 export interface PromptRecall {
   hits: RecallHit[];
-  /** Header label: `Haiku`, `BM25`, or `Hybrid · <effective tier>`. */
+  /** Header label: `Haiku`, `BM25`, `Hybrid · <effective tier>`, or `Hybrid · <tier> → local: <why>` after a fallback (no parentheses or commas: scripts/hook-latency.ts parses the header). */
   label: string;
   haiku: boolean;
   /** Filled by the hybrid path only. */
@@ -389,7 +403,7 @@ export async function selectPromptRecall(prompt: string, root: string, recallMod
       timing,
       maxInlineEmbed: HOOK_MAX_INLINE_EMBED,
     });
-    return { hits, label: `Hybrid · ${timing.tier}`, haiku: false, timing };
+    return { hits, label: hybridHeaderLabel(timing), haiku: false, timing };
   }
   return { hits: bm25Search(prompt, buildCorpusCached(root), RECALL_INJECT_TOP_K), label: 'BM25', haiku: false, timing: null };
 }
