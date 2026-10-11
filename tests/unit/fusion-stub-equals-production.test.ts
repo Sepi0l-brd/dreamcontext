@@ -3,12 +3,13 @@ import { CHANGELOG_RANK_FACTOR } from '../../src/lib/recall.js';
 import {
   ADAPTIVE_PIN_MARGIN, ADAPTIVE_RAW_CUTOFF, ADAPTIVE_RELATIVE_LAMBDA, ADAPTIVE_RRF_BM25_WEIGHT, RRF_K,
 } from '../../src/lib/embeddings/hybrid.js';
-import { DEFAULT_RERANK_MODEL, FUSION_BY_TIER } from '../../src/lib/embeddings/fusion-config.js';
+import { DEFAULT_RERANK_MODEL, FUSION_BY_TIER, SPIKE_FUSION, SPIKE_RERANK_MODEL } from '../../src/lib/embeddings/fusion-config.js';
+import { RERANK_MODELS } from '../../src/lib/recall-cloud-config.js';
 import { LOCAL_E5_PROFILE, VOYAGE_4_PROFILE, profileForTier } from '../../src/lib/embeddings/profiles.js';
 import { EMBED_DIMS, EMBED_MODEL } from '../../src/lib/embeddings/embedder.js';
 import { VOYAGE_DIMS } from '../../src/lib/embeddings/nano.js';
 
-describe('the fusion stubs ARE today\'s production constants (nothing in a spike is tuned)', () => {
+describe('the SPIKE fusion constants ARE today\'s production constants (nothing in a spike is tuned)', () => {
   const production = {
     rawCutoff: ADAPTIVE_RAW_CUTOFF,
     rrfK: RRF_K,
@@ -24,13 +25,30 @@ describe('the fusion stubs ARE today\'s production constants (nothing in a spike
   };
 
   it('matches local and cloud-index exactly, with no rerank', () => {
-    expect(FUSION_BY_TIER.local).toEqual({ ...production, rerank: null });
-    expect(FUSION_BY_TIER['cloud-index']).toEqual({ ...production, rerank: null });
+    expect(SPIKE_FUSION.local).toEqual({ ...production, rerank: null });
+    expect(SPIKE_FUSION['cloud-index']).toEqual({ ...production, rerank: null });
   });
 
   it('matches cloud plus the pinned spike rerank: N=20, alpha=1.0, rerank-2.5-lite', () => {
-    expect(FUSION_BY_TIER.cloud).toEqual({ ...production, rerank: { candidates: 20, blendAlpha: 1.0 } });
-    expect(DEFAULT_RERANK_MODEL).toBe('voyageai/rerank-2.5-lite');
+    expect(SPIKE_FUSION.cloud).toEqual({ ...production, rerank: { candidates: 20, blendAlpha: 1.0, pool: 'fused-top' } });
+    expect(SPIKE_RERANK_MODEL).toBe('voyageai/rerank-2.5-lite');
+  });
+});
+
+describe('the tuned FUSION_BY_TIER (T6b) keeps the tier contract', () => {
+  it('reranks only on cloud, within the 40-candidate budget, with an explicit pool', () => {
+    expect(FUSION_BY_TIER.local.rerank).toBeNull();
+    expect(FUSION_BY_TIER['cloud-index'].rerank).toBeNull();
+    const rr = FUSION_BY_TIER.cloud.rerank;
+    expect(rr).not.toBeNull();
+    expect(rr!.candidates).toBeLessThanOrEqual(40);
+    expect(['fused-top', 'bm25-dense-union']).toContain(rr!.pool);
+    expect(rr!.blendAlpha).toBeGreaterThanOrEqual(0);
+    expect(rr!.blendAlpha).toBeLessThanOrEqual(1);
+  });
+
+  it('defaults to a known rerank model', () => {
+    expect(DEFAULT_RERANK_MODEL === null || RERANK_MODELS.includes(DEFAULT_RERANK_MODEL)).toBe(true);
   });
 });
 

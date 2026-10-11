@@ -29,10 +29,9 @@ export interface FusionParams {
 }
 
 /**
- * Today's production adaptive constants, as literals (hybrid.ts imports this module in T6a, so it
- * cannot be imported from here). The `fusion-stub-equals-production` test pins them equal to
- * hybrid.ts's ADAPTIVE_* / RRF_K and recall.ts's CHANGELOG_RANK_FACTOR. Nothing in a spike is tuned:
- * T6b replaces these with the train-tuned values.
+ * Today's production adaptive constants, as literals (hybrid.ts imports this module, so it cannot be
+ * imported from here). The `fusion-stub-equals-production` test pins them equal to hybrid.ts's
+ * ADAPTIVE_* / RRF_K and recall.ts's CHANGELOG_RANK_FACTOR.
  */
 const PRODUCTION: FusionParams = {
   rawCutoff: 18,
@@ -49,11 +48,33 @@ const PRODUCTION: FusionParams = {
   rerank: null,
 };
 
-export const FUSION_BY_TIER: Record<RecallTier, FusionParams> = {
+/** What the G1 spike measured (TS/E0): production constants, and for `cloud` rerank N=20, alpha=1.0, fused-top. Pinned by a test, never tuned. */
+export const SPIKE_FUSION: Record<RecallTier, FusionParams> = {
   local: { ...PRODUCTION },
   'cloud-index': { ...PRODUCTION },
-  cloud: { ...PRODUCTION, rerank: { candidates: 20, blendAlpha: 1.0 } },
+  cloud: { ...PRODUCTION, rerank: { candidates: 20, blendAlpha: 1.0, pool: 'fused-top' } },
+};
+export const SPIKE_RERANK_MODEL: RerankModel = 'voyageai/rerank-2.5-lite';
+
+/**
+ * T6b: train-tuned by coordinate descent (scripts/recall-tune.ts; eval/runs/*-tune-train.json). On the
+ * voyage-4 index the dominant lever is the dense share in the BM25-confident zone (relativeLambda
+ * 0.1 -> 0.7: worst-language train r@5 50 -> 90); every other fusion axis was flat and keeps its
+ * production value. The dense gate is the most aggressive one that lost no r@5 hit in any language
+ * and no r@1 hit on train + legacy.
+ */
+const VOYAGE_CORE: FusionParams = {
+  ...PRODUCTION,
+  relativeLambda: 0.7,
+  denseGate: { rawSure: 60, rawLead: 14, leadRatio: 2 },
 };
 
-/** The reranker `enable` defaults to. Stub = the model G1's spike runs; T6b sets the stage-2 winner (or null). */
+export const FUSION_BY_TIER: Record<RecallTier, FusionParams> = {
+  local: { ...PRODUCTION },
+  'cloud-index': { ...VOYAGE_CORE },
+  // Rerank: voyage rerank-2.5-lite over the BM25-top-20 + dense-top-20 union (<= 40), blended 0.7 rerank / 0.3 fused.
+  cloud: { ...VOYAGE_CORE, rerank: { candidates: 40, blendAlpha: 0.7, pool: 'bm25-dense-union' } },
+};
+
+/** The reranker `enable` defaults to. */
 export const DEFAULT_RERANK_MODEL: RerankModel | null = 'voyageai/rerank-2.5-lite';

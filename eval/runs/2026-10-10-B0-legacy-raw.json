@@ -1,0 +1,1865 @@
+{
+ "label": "B0-legacy-raw",
+ "split": "legacy",
+ "mode": "raw",
+ "tier": null,
+ "denseOnly": null,
+ "rerankModel": null,
+ "injectK": 5,
+ "engineSha": "0ba4c25a",
+ "corpusFingerprint": "03d9ce95b568031c0c2e2b31baa2eb7f1e66c8b7106c751c2d43b9f2c9b1bc96",
+ "now": "2026-10-10T20:09:05.000Z",
+ "overall": {
+  "recall1": 57.77777777777777,
+  "recall3": 72.22222222222221,
+  "recall5": 82.22222222222221,
+  "mrr": 0.6714462081128749,
+  "ndcg10": 0.718663856010396,
+  "n": 90,
+  "injectionRate": 100,
+  "effective5": 82.22222222222221
+ },
+ "byLang": {
+  "en": {
+   "recall1": 64.51612903225806,
+   "recall3": 77.41935483870968,
+   "recall5": 91.93548387096774,
+   "mrr": 0.7438812083973376,
+   "ndcg10": 0.7976391039820635,
+   "n": 62,
+   "injectionRate": 100,
+   "effective5": 91.93548387096774,
+   "r5ci": [
+    82.4712077925188,
+    96.50621681441662
+   ]
+  },
+  "tr": {
+   "recall1": 16.666666666666664,
+   "recall3": 38.88888888888889,
+   "recall5": 38.88888888888889,
+   "mrr": 0.27645502645502645,
+   "ndcg10": 0.31811792189153926,
+   "n": 18,
+   "injectionRate": 100,
+   "effective5": 38.88888888888889,
+   "r5ci": [
+    20.304991926931162,
+    61.381331419343844
+   ]
+  },
+  "mixed": {
+   "recall1": 90,
+   "recall3": 100,
+   "recall5": 100,
+   "mrr": 0.9333333333333332,
+   "ndcg10": 0.95,
+   "n": 10,
+   "injectionRate": 100,
+   "effective5": 100,
+   "r5ci": [
+    72.24598312333835,
+    100
+   ]
+  }
+ },
+ "byLangCategory": {
+  "en": {
+   "exact-term": {
+    "recall1": 81.25,
+    "recall3": 93.75,
+    "recall5": 100,
+    "mrr": 0.8770833333333333,
+    "ndcg10": 0.907361410050375,
+    "n": 16,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "paraphrase": {
+    "recall1": 60,
+    "recall3": 70,
+    "recall5": 85,
+    "mrr": 0.6872222222222222,
+    "ndcg10": 0.7484615249467328,
+    "n": 20,
+    "injectionRate": 100,
+    "effective5": 85
+   },
+   "recency": {
+    "recall1": 62.5,
+    "recall3": 75,
+    "recall5": 87.5,
+    "mrr": 0.71875,
+    "ndcg10": 0.7577007889556063,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 87.5
+   },
+   "field-match": {
+    "recall1": 75,
+    "recall3": 75,
+    "recall5": 100,
+    "mrr": 0.80625,
+    "ndcg10": 0.8521911706634918,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "topical-adjacency": {
+    "recall1": 40,
+    "recall3": 70,
+    "recall5": 90,
+    "mrr": 0.6142857142857142,
+    "ndcg10": 0.7087475710194492,
+    "n": 10,
+    "injectionRate": 100,
+    "effective5": 90
+   }
+  },
+  "tr": {
+   "turkish": {
+    "recall1": 16.666666666666664,
+    "recall3": 38.88888888888889,
+    "recall5": 38.88888888888889,
+    "mrr": 0.27645502645502645,
+    "ndcg10": 0.31811792189153926,
+    "n": 18,
+    "injectionRate": 100,
+    "effective5": 38.88888888888889
+   }
+  },
+  "mixed": {
+   "mixed": {
+    "recall1": 90,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 0.9333333333333332,
+    "ndcg10": 0.95,
+    "n": 10,
+    "injectionRate": 100,
+    "effective5": 100
+   }
+  }
+ },
+ "latency": {
+  "meanMs": 27258.170499011103,
+  "p50Ms": 26164.35870899982,
+  "p90Ms": 39257.53220899997,
+  "p90ci": [
+   35653.35308400029,
+   41985.19066700002
+  ]
+ },
+ "perQuery": [
+  {
+   "id": "q001",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/memory-recall-bm25",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/recall-engine-v2",
+    "changelog/changelog#2026-05-23-memory-770",
+    "knowledge/haiku-recall-architecture",
+    "knowledge/decision-embedding-layer",
+    "changelog/changelog#2026-06-02-recall-739",
+    "task/memory-uplift-handoff",
+    "task/memory-engine-360-roadmap",
+    "task/feat-hybrid-recall-fusion-bm25-plus-dense-via-rrf-behind-flag"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q002",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "feature/memory-recall-bm25",
+    "knowledge/recall-engine-v2",
+    "knowledge/decision-embedding-layer",
+    "task/haiku-recall-extraction",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/recall-tokenizer-turkish-ascii-limitation",
+    "task/planner-brief",
+    "changelog/changelog#2026-05-26-recall-757",
+    "changelog/changelog#2026-06-02-recall-739"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q003",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/server-security-hardening",
+    "knowledge/dashboard-server-security",
+    "changelog/changelog#2026-05-31-server-753",
+    "knowledge/dashboard-knowledge-rendering",
+    "task/v06-control-plane-backend",
+    "task/share-one-knowledge-file-or-board-over-a-tunnel-via-a-read-only-mutation-free-surface",
+    "knowledge/control-plane-api",
+    "task/v06-control-panel-vaults-tauri",
+    "changelog/changelog#2026-06-13-federation-701",
+    "changelog/changelog#2026-05-31-control-panel-748"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q004",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/dashboard-server-security",
+    "task/server-security-hardening",
+    "task/dashboard-network-auth-jupyter-token-gate-for-non-loopback-binds",
+    "changelog/changelog#2026-05-31-server-753",
+    "task/share-one-knowledge-file-or-board-over-a-tunnel-via-a-read-only-mutation-free-surface",
+    "task/v06-control-panel-vaults-tauri",
+    "task/a-website-the-owner-visits-cannot-open-a-project-chat-or-terminal-websocket",
+    "changelog/changelog#2026-07-18-security-424",
+    "knowledge/shared-local-config-split",
+    "knowledge/sandboxed-app-bridge-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q005",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox",
+    "task/v06-control-panel-vaults-tauri",
+    "task/a-dreamcontext-assistant-lives-in-the-notch-wakes-on-a-hotkey-and-drives-every-project-as-the-owner-s-replica",
+    "knowledge/test-isolation-injectable-home",
+    "task/people-first-plan-v2-delta",
+    "changelog/changelog#2026-06-13-desktop-700",
+    "feature/control-panel",
+    "feature/dreamcontext-assistant",
+    "changelog/changelog#2026-07-05-knowledge-511"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q006",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "feature/control-panel",
+    "changelog/changelog#2026-05-31-control-panel-748",
+    "task/v06-control-plane-backend",
+    "feature/launcher-quiz-onboarding",
+    "task/disable-claude-native-memory",
+    "task/v06-control-panel-frontend",
+    "task/v06-control-panel-vaults-tauri",
+    "changelog/changelog#2026-06-14-onboarding-687",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q007",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/rice-prioritization",
+    "task/rice-prioritization",
+    "changelog/changelog#2026-05-09-tasks-789",
+    "feature/task-management",
+    "feature/memory-recall-bm25",
+    "knowledge/competitive-analysis-ecc",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "knowledge/default",
+    "task/the-meeting-room-gets-its-own-byte-channel-so-a-dropped-or-pasted-file-reaches-every-agent",
+    "changelog/changelog#2026-07-05-roadmap-522"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q008",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill",
+    "changelog/changelog#2026-05-24-multi-review-760",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "feature/proactive-learning-layer",
+    "knowledge/feature-integration-pattern",
+    "knowledge/fork-resume-builder-sessions",
+    "task/feat-knowledge-move-data-structures-into-knowledge-render-sql-in-the-dashboard-knowledge-view"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q009",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/multi-reviewer-pattern",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/delta-r3",
+    "task/feat-roadmap-task-derived-roadmap-auto-progress-sprint-timeline-from-tasks-features",
+    "task/multi-review-skill",
+    "task/v06-control-plane-backend",
+    "task/delta-r4"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q010",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 3,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "feature/sleep-consolidation",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/feat-dashboard-live-sleep-debt-tracker-header-widget",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "changelog/changelog#2026-06-29-sleep-571",
+    "core/6.system_flow",
+    "knowledge/sleep.excalidraw",
+    "changelog/changelog#2026-08-01-dashboard-287"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q011",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-gate-and-goal-skill",
+    "knowledge/fork-resume-builder-sessions",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "changelog/changelog#2026-05-31-skill-packs-754",
+    "task/feat-app-goal-skill-live-panel-above-the-agent-composer-sleepy-team-dock-chip",
+    "task/agent-work-in-chat-reads-as-a-quest-party-characters-a-quest-map-a-team-log-and-the-r-d-in-plain-words",
+    "task/goal-skill-and-related-skills-recall",
+    "task/goal-skill-v2-fork-resume",
+    "task/recall-dil-fark-etmeksizin-isabetli-olur-yerel-bulut-indeksli-ve-bulut-katmanlari-olculerek-gelir",
+    "task/agents-channel-after-first-real-use-answers-thread-under-your-ask-the-whole-report-lives-in-the-thread-and-diagrams-pdfs-and-clips-an-agent-posts-actually-render"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q012",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "feature/manifest-based-install-update",
+    "feature/project-initialization",
+    "task/v06-install-update-hardening",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "task/sleep-folds-work-into-existing-tasks-by-default-and-files-a-new-task-only-as-a-high-confidence-exception",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "task/automations-scheduled-headless-claude-jobs",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "task/hands-free-mode-moves-the-active-project-to-a-cloud-machine-the-phone-drives-it-through-a-link-and-password-and-return-brings-every-diff-and-session-back-to-the-laptop"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q013",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/decision-embedding-layer",
+    "feature/memory-recall-bm25",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/recall-engine-v2",
+    "knowledge/project-origin-and-prd",
+    "task/feat-sleep-semantic-dedup-nearest-neighbor-merge-instead-of-duplicate",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit",
+    "feature/tag-taxonomy",
+    "knowledge/haiku-recall-architecture",
+    "task/memory-uplift-handoff"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 10,
+   "hits": [
+    "knowledge/positioning",
+    "feature/opt-in-context-handoff",
+    "feature/calendar-integration",
+    "knowledge/fork-resume-builder-sessions",
+    "knowledge/competitive-landscape",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "feature/context-gate-and-goal-skill",
+    "task/doctor-s-over-limit-snapshot-warning-is-a-dead-end-when-no-single-core-file-is-the-culprit",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session",
+    "feature/memory-recall-bm25"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q015",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/hosted-dreamcontext-com-a-github-oauth-collaboration-layer-over-the-brain",
+    "whiteboard/control-panel",
+    "task/a-website-the-owner-visits-cannot-open-a-project-chat-or-terminal-websocket",
+    "task/only-the-system-may-write-control-bearing-frontmatter-pinned-federated-id-type-date",
+    "knowledge/decision-jev-for-validator-browser-loops",
+    "task/server-security-hardening",
+    "changelog/changelog#2026-08-26-lab-209",
+    "knowledge/shared-local-config-split",
+    "feature/whiteboards",
+    "knowledge/a-delete-is-never-inferred-from-absence"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q016",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "feature/memory-recall-bm25",
+    "task/haiku-recall-extraction",
+    "changelog/changelog#2026-05-26-recall-757",
+    "knowledge/decision-embedding-layer",
+    "knowledge/recall.excalidraw",
+    "knowledge/project-origin-and-prd",
+    "feature/patterns-auto-injection",
+    "knowledge/jarvis-mode-plan-v7"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q017",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/council-skill",
+    "task/council-skill",
+    "knowledge/decision-should-dreamcontext-0-20-2-be-published-to-npm-now-or-batched-with-more-features",
+    "knowledge/technical-decisions-archive",
+    "knowledge/decision-meta-marketing-skill-adoption",
+    "task/council-v2-the-chamber",
+    "changelog/changelog#2026-07-23-council-394",
+    "knowledge/surfaces.excalidraw",
+    "knowledge/council.excalidraw",
+    "changelog/changelog#2026-07-23-council-389"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q018",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/manifest-based-install-update",
+    "knowledge/macos-launchd-scheduler-constraints",
+    "feature/project-initialization",
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "task/the-desktop-app-reaps-the-dev-servers-and-emulators-its-chat-tabs-agents-leave-running",
+    "knowledge/desktop-beta-tauri-multivault",
+    "changelog/changelog#2026-08-08-tasks-262",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "task/v05-positioning-easy-install-update-nudge"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q019",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/rice-prioritization",
+    "task/rice-prioritization",
+    "feature/memory-recall-bm25",
+    "changelog/changelog#2026-07-17-quick-438",
+    "task/feat-tasks-filter-group-tasks-list-by-tag-version-priority-document-in-skill",
+    "task/four-validation-defects-impossible-dates-git-rename-truncation-council-eof-scoring-baseline",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "feature/task-management",
+    "knowledge/board"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q020",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-consolidation",
+    "knowledge/positioning",
+    "knowledge/memory-archive-2026-h1",
+    "knowledge/0.soul-2026-h2",
+    "task/knowledge-workflows",
+    "feature/sleep-fanout-architecture",
+    "task/sleep-folds-work-into-existing-tasks-by-default-and-files-a-new-task-only-as-a-high-confidence-exception",
+    "knowledge/6.system_flow-neuroscience-2026-h2",
+    "feature/context-snapshot",
+    "task/meta-marketing-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q021",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/positioning",
+    "changelog/changelog#2026-07-19-readme-415",
+    "knowledge/hook-delivered-must-not-miss-rules",
+    "feature/peer-mail",
+    "knowledge/route-the-finding-to-the-lane-that-owns-the-file",
+    "knowledge/promo-video-from-a-reference-reel",
+    "task/a-dream-html-block-renders-where-it-was-written-and-grows-out-of-a-skeleton-in-its-own-slot",
+    "feature/sleep-fanout-architecture",
+    "task/the-assistant-is-woken-by-an-event-whenever-a-session-it-delegated-asks-finishes-a-turn-or-closes",
+    "task/switching-mode-or-permission-in-the-chat-composer-must-not-eat-the-half-typed-message"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q022",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "feature/sleepy-notch-capture",
+    "task/memory-engine-360-roadmap",
+    "knowledge/desktop-beta-tauri-multivault",
+    "knowledge/codex-cli-integration-feasibility",
+    "knowledge/0.soul-2026-h2",
+    "task/sleepy-notch-capture",
+    "knowledge/canonical-form-delta",
+    "task/knowledge-workflows",
+    "knowledge/mutation-test-assertions"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q023",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-fanout-architecture",
+    "knowledge/sleep-debt.excalidraw",
+    "knowledge/technical-decisions-archive",
+    "feature/sleep-consolidation",
+    "task/sleep-fanout-architecture",
+    "feature/launcher-project-switcher",
+    "feature/brain-curator",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "knowledge/loop.excalidraw",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q024",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/a-notification-lands-you-in-the-exact-chat-a-dreamcontext-url-scheme-and-an-app-sent-turn-done-banner",
+    "knowledge/desktop-beta-tauri-multivault",
+    "feature/launcher-quiz-onboarding",
+    "knowledge/vault-registry-multivault",
+    "task/unified-dashboard-beta-multivault",
+    "feature/launcher-project-switcher",
+    "feature/first-run-onboarding",
+    "feature/continuous-app-update",
+    "feature/launcher-federation-graph",
+    "feature/dreamcontext-assistant"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q025",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "feature/memory-recall-bm25",
+    "knowledge/graphify-coexistence-decision",
+    "knowledge/decision-embedding-layer",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/haiku-recall-architecture",
+    "changelog/changelog#2026-05-23-memory-770",
+    "knowledge/recall-engine-v2",
+    "knowledge/dashboard-knowledge-rendering",
+    "changelog/changelog#2026-05-23-memory-769"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q026",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 3,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "knowledge/haiku-recall-architecture",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "knowledge/recall-tokenizer-turkish-ascii-limitation",
+    "knowledge/positioning",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q027",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "whiteboard/onboarding",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/launcher-acilisi-9-5s-den-0-4s-ye-team-fetch-event-loop-disina-cli-path-cache-probe-memo-fontlar-bundle-da",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "changelog/changelog#2026-05-31-server-753",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q028",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 7,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/sleep-stops-filing-junk-tasks-a-bar-for-what-deserves-a-task-and-the-right-model-per-specialist",
+    "feature/sleep-consolidation",
+    "core/6.system_flow",
+    "knowledge/recall-engine-v2",
+    "task/sleep-debt-never-reaches-0-consolidated-work-re-books-itself-at-the-next-stop"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q029",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "feature/rice-prioritization",
+    "changelog/changelog#2026-07-17-quick-438",
+    "changelog/changelog#2026-07-05-migration-516",
+    "knowledge/sleep-debt.excalidraw",
+    "task/distil-the-110kb-automations-task-body-under-the-github-issue-limit-so-its-mirror-syncs-again",
+    "changelog/changelog#2026-08-24-planning-213",
+    "task/rice-prioritization",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/say-the-session-continues-after-sleep-so-users-stop-abandoning-it-and-starting-over"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q030",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/capture-guard-q030-displaced-under-200-capture-flood",
+    "knowledge/recall-engine-v2",
+    "whiteboard/onboarding",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "knowledge/licensing.excalidraw",
+    "knowledge/mehmet-q3-hedefleri",
+    "changelog/changelog#2026-06-14-quick-676",
+    "knowledge/settings-redesign.excalidraw",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q031",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "whiteboard/onboarding",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar",
+    "knowledge/sleep-debt.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q032",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault",
+    "task/launcher-acilisi-9-5s-den-0-4s-ye-team-fetch-event-loop-disina-cli-path-cache-probe-memo-fontlar-bundle-da",
+    "changelog/changelog#2026-07-05-knowledge-511",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "whiteboard/control-panel",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/agents-run-across-my-devices-sessions-sync-every-question-and-answer-pushes-immediately-and-a-refresh-button-pulls-now",
+    "changelog/changelog#2026-06-13-desktop-700",
+    "knowledge/test-isolation-injectable-home"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q033",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "knowledge/decision-embedding-layer",
+    "feature/memory-recall-bm25",
+    "knowledge/settings-redesign.excalidraw",
+    "changelog/changelog#2026-05-26-recall-757",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/recall-engine-v2",
+    "task/planner-brief",
+    "changelog/changelog#2026-05-31-server-753",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q034",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "feature/control-panel",
+    "task/v06-control-plane-backend",
+    "task/v06-control-panel-vaults-tauri",
+    "changelog/changelog#2026-05-31-control-panel-747",
+    "changelog/changelog#2026-05-31-control-panel-748",
+    "changelog/changelog#2026-06-13-federation-701",
+    "changelog/changelog#2026-06-01-control-panel-741",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox",
+    "knowledge/three-reviewer-parallel-mandates-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q035",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill",
+    "knowledge/feature-integration-pattern",
+    "changelog/changelog#2026-05-24-multi-review-760",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "feature/sleep-fanout-architecture",
+    "feature/proactive-learning-layer",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/three-reviewer-parallel-mandates-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q036",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "task/ecc-inspired-roadmap",
+    "knowledge/competitive-landscape",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/code-quality-hooks",
+    "task/memory-engine-360-roadmap",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q037",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 3,
+   "hits": [
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver",
+    "task/pre-publish-checklist-v0-28-0",
+    "knowledge/publish-checklist",
+    "knowledge/release-publish-checklist",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/heal-the-v0-24-1-release-record-npm-has-it-the-git-tag-and-announcement-do-not",
+    "whiteboard/control-panel",
+    "knowledge/decision-should-dreamcontext-0-20-2-be-published-to-npm-now-or-batched-with-more-features",
+    "task/pre-publish-checklist-v0-26-1",
+    "task/pre-publish-checklist-v0-26-3"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q038",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "feature/context-gate-and-goal-skill",
+    "changelog/changelog#2026-07-17-goal-skill-437",
+    "task/goal-skill-and-related-skills-recall",
+    "changelog/changelog#2026-05-31-skill-packs-754",
+    "feature/jev-verify-skill-pack",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "task/goal-skill-pack-headless-permission-flags-and-report-vs-work-gate",
+    "task/v06-control-plane-backend",
+    "feature/council-skill",
+    "feature/dreamcontext-deep-research"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q039",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/control-panel",
+    "feature/web-dashboard",
+    "feature/whiteboards",
+    "task/v06-control-panel-vaults-tauri",
+    "task/v06-control-panel-frontend",
+    "feature/project-tabs-one-window-multi-vault",
+    "task/feat-dashboard-redesign-tasks-board-saved-views-with-shared-local-persistence",
+    "task/full-redesign-dashboard-and-desktop",
+    "feature/sleepy-notch-capture",
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q040",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/memory-recall-bm25",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/decision-embedding-layer",
+    "knowledge/haiku-recall-architecture",
+    "knowledge/recall-engine-v2",
+    "task/planner-brief",
+    "task/captures-never-graduate-age-scratch-by-date-and-promote-what-recurs-into-knowledge",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "task/sleepy-intelligent-search-toggle-real-claude-code-ask-chat",
+    "feature/context-snapshot"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q041",
+   "category": "recency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "feature/sleep-fanout-architecture",
+    "feature/sleep-consolidation",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/sleep-fanout-architecture",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "changelog/changelog#2026-08-01-sleep-276",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "knowledge/sleep-federation-agent-retired"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q042",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/memory-uplift-handoff",
+    "knowledge/memory-uplift-comparison.excalidraw",
+    "task/excalidraw-skill-v3-deterministic-chart-kit-line-bar-gantt-quadrant-on-js-api-spec-json-plus-auditor-text-vs-box-measure-enforcement",
+    "task/memory-engine-360-roadmap",
+    "task/ecc-inspired-roadmap",
+    "knowledge/haiku-recall-architecture",
+    "changelog/changelog#2026-06-10-memory-717",
+    "task/captures-never-graduate-age-scratch-by-date-and-promote-what-recurs-into-knowledge",
+    "knowledge/visual-first-board-ritual",
+    "knowledge/positioning"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q043",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-embedding-layer",
+    "feature/memory-recall-bm25",
+    "knowledge/recall-engine-v2",
+    "task/planner-brief",
+    "thesis/hybrid-recall-beats-bm25f",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit",
+    "changelog/changelog#2026-07-07-recall-478",
+    "task/recall-dil-fark-etmeksizin-isabetli-olur-yerel-bulut-indeksli-ve-bulut-katmanlari-olculerek-gelir",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/recall-tokenizer-turkish-ascii-limitation"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q044",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill",
+    "changelog/changelog#2026-05-26-multi-review-758",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "feature/launcher-project-switcher",
+    "changelog/changelog#2026-05-24-multi-review-760",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/1.user-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q045",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/control-panel",
+    "task/v06-control-panel-polish",
+    "task/v06-control-panel-vaults-tauri",
+    "task/agents-channel-after-first-real-use-answers-thread-under-your-ask-the-whole-report-lives-in-the-thread-and-diagrams-pdfs-and-clips-an-agent-posts-actually-render",
+    "task/v06-control-panel-frontend",
+    "task/unified-dashboard-full",
+    "task/whiteboard-ikinci-tur-html-ustunde-kaydirma-calisir-web-blogu-yerel-dosya-acar-panel-tahtadaki-ajanlari-tanir-ajan-karti-sabit-boyda-gelir-tahtaya-gorsel-eklenir-ajana-birakma-ve-panel-ile-kart-iliskisi-netlesir",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "task/whiteboard-sayfasi-kaldigin-yerden-acilir-board-ajani-sayfalar-arasi-canli-kalan-yan-panelde-yasar-sag-alttaki-ajan-dock-u-whiteboard-da-gorunmez",
+    "feature/whiteboards"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q046",
+   "category": "recency",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/v06-dashboard-pack-install",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "task/fix-distribution-skill-packs-ship-all-assets-cjs-helpers-statusline-registration-via-setup-update",
+    "feature/optional-skill-packs",
+    "feature/manifest-based-install-update",
+    "feature/context-gate-and-goal-skill",
+    "task/v05-positioning-easy-install-update-nudge",
+    "task/drift-nag-scoped-and-dashboard-auto-open",
+    "task/readme-deepdive-v05-refresh",
+    "task/goal-skill-pack-headless-permission-flags-and-report-vs-work-gate"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q047",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-snapshot",
+    "task/optional-local-context-compression-layer-to-cut-snapshot-recall-token-latency-cost",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "feature/multi-product-support",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "feature/manifest-based-install-update",
+    "knowledge/sleep-debt.excalidraw",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/automations-are-undiscoverable-the-skill-description-omits-scheduling-entirely-and-the-snapshot-has-no-automations-channel",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q048",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault",
+    "changelog/changelog#2026-07-05-knowledge-511",
+    "changelog/changelog#2026-06-13-desktop-700",
+    "knowledge/test-isolation-injectable-home",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox",
+    "task/unified-dashboard-beta-multivault",
+    "task/unified-dashboard-full",
+    "feature/project-tabs-one-window-multi-vault",
+    "changelog/changelog#2026-06-13-desktop-693",
+    "knowledge/desktop-beta-tauri-multivault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q049",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "knowledge/competitive-landscape",
+    "task/code-quality-hooks",
+    "task/memory-engine-360-roadmap",
+    "task/ecc-inspired-roadmap",
+    "knowledge/technical-decisions-archive",
+    "knowledge/codex-cli-integration-feasibility",
+    "changelog/changelog#2026-05-26-skill-packs-756",
+    "task/auto-switch-brings-the-session-home-when-the-preferred-account-s-window-reopens",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q050",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-control-plane-backend",
+    "feature/control-panel",
+    "task/v06-control-panel-vaults-tauri",
+    "changelog/changelog#2026-05-31-control-panel-747",
+    "changelog/changelog#2026-05-31-control-panel-748",
+    "changelog/changelog#2026-06-01-control-panel-741",
+    "task/only-the-system-may-write-control-bearing-frontmatter-pinned-federated-id-type-date",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox",
+    "task/v06-control-panel-frontend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q051",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/pre-publish-checklist-v0-28-0",
+    "task/pre-publish-checklist-v0-26-1",
+    "knowledge/release-publish-checklist",
+    "knowledge/publish-checklist",
+    "task/pre-publish-checklist-v0-26-3",
+    "task/pre-publish-checklist-v0-25-0",
+    "task/pre-publish-checklist-v0-24-0",
+    "task/pre-publish-checklist-v0-30-0",
+    "task/pre-publish-checklist-v0-23-0",
+    "task/pre-publish-checklist-v0-27-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q052",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/manifest-based-install-update",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "feature/continuous-app-update",
+    "task/v06-install-update-hardening",
+    "feature/optional-skill-packs",
+    "changelog/changelog#2026-07-26-automations-354",
+    "task/fix-distribution-skill-packs-ship-all-assets-cjs-helpers-statusline-registration-via-setup-update",
+    "task/v06-dashboard-pack-install",
+    "changelog/changelog#2026-07-05-migration-516"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q053",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 5,
+   "hits": [
+    "task/server-security-hardening",
+    "changelog/changelog#2026-05-31-server-753",
+    "task/v06-control-panel-vaults-tauri",
+    "changelog/changelog#2026-07-06-brain-sync-506",
+    "knowledge/dashboard-server-security",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "changelog/changelog#2026-05-31-security-744",
+    "task/share-one-knowledge-file-or-board-over-a-tunnel-via-a-read-only-mutation-free-surface",
+    "task/v06-control-plane-backend",
+    "knowledge/three-reviewer-parallel-mandates-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q054",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/multi-product-support",
+    "task/knowledge-support-topical-subfolders-for-grouping-beyond-data-structures-diagrams-products",
+    "feature/knowledge-base",
+    "feature/tag-taxonomy",
+    "changelog/changelog#2026-07-05-migration-516",
+    "feature/sleep-fanout-architecture",
+    "feature/brain-curator",
+    "feature/launcher-quiz-onboarding",
+    "knowledge/data-structures-migration-ownership",
+    "task/knowledge-features-support-topical-subfolders-multi-product-recursive-consumers-create-move-folder"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q055",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/planner-brief",
+    "knowledge/recall-engine-v2",
+    "knowledge/decision-embedding-layer",
+    "thesis/hybrid-recall-beats-bm25f",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "feature/memory-recall-bm25",
+    "knowledge/jev-system-one-model",
+    "knowledge/recall-tokenizer-turkish-ascii-limitation",
+    "task/recall-dil-fark-etmeksizin-isabetli-olur-yerel-bulut-indeksli-ve-bulut-katmanlari-olculerek-gelir",
+    "task/plan-r5"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q056",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/recall-engine-v2",
+    "feature/memory-recall-bm25",
+    "knowledge/haiku-recall-architecture",
+    "task/snapshot-changelog-refactor",
+    "task/knowledge-move-command",
+    "feature/knowledge-base",
+    "knowledge/dashboard-knowledge-rendering",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "task/knowledge-move-cannot-relocate-a-board-directory-with-its-companion-files-across-context-folders",
+    "task/issue-20-excalidraw-knowledge"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q057",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "task/stop-the-diagram-generator-writing-off-vocabulary-tags-then-clear-the-orphan-tag-backlog",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "feature/sleep-fanout-architecture",
+    "changelog/changelog#2026-05-23-memory-770",
+    "feature/sleep-consolidation",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/sleep-fanout-3specialist-collapse"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q058",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-dashboard-pack-install",
+    "task/v06-control-plane-backend",
+    "feature/control-panel",
+    "knowledge/0.soul-2026-h2",
+    "knowledge/1.user-2026-h2",
+    "changelog/changelog#2026-05-31-control-panel-748",
+    "knowledge/4.tech_stack-dependencies-2026-h2",
+    "changelog/changelog#2026-06-13-cli-699",
+    "feature/continuous-app-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q059",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 7,
+   "hits": [
+    "knowledge/6.system_flow-neuroscience-2026-h2",
+    "core/6.system_flow",
+    "knowledge/neuroscience.excalidraw",
+    "task/neuroscience-improvements",
+    "knowledge/sleep-debt.excalidraw",
+    "task/memory-engine-360-roadmap",
+    "feature/sleep-consolidation",
+    "changelog/changelog#2026-02-27-memory-825",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/memory-upgrade-plan.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q060",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/code-quality-hooks",
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur",
+    "task/meta-marketing-skill",
+    "knowledge/competitive-analysis-ecc",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "task/agents-epic-finished-end-to-end-and-the-side-menu-gets-one-maturity-model-section-hues-and-honest-icons",
+    "task/a-dreamcontext-assistant-lives-in-the-notch-wakes-on-a-hotkey-and-drives-every-project-as-the-owner-s-replica",
+    "changelog/changelog#2026-03-02-src/cli/commands/hook.ts, src/cli/commands/sleep.ts, src/cli/commands/install-skill.ts, skill/SKILL.md, agents/dreamcontext-rem-sleep.md-811",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "task/insights-v2-blocks-reach-a-polished-fully-customizable-chart-standard-axes-correct-hover-charts-that-fit-their-cell"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h001",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "whiteboard/control-panel",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "changelog/changelog#2026-05-31-server-753",
+    "whiteboard/onboarding"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h002",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/graphify-coexistence-decision",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "changelog/changelog#2026-05-23-memory-770",
+    "knowledge/decision-embedding-layer",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "feature/memory-recall-bm25",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "knowledge/dashboard-knowledge-rendering",
+    "changelog/changelog#2026-05-23-memory-769"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h003",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "knowledge/licensing.excalidraw",
+    "knowledge/licensing-policy",
+    "task/apache-relicense-push-and-publish",
+    "changelog/changelog#2026-06-06-licensing-726",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/launcher-acilisi-9-5s-den-0-4s-ye-team-fetch-event-loop-disina-cli-path-cache-probe-memo-fontlar-bundle-da",
+    "knowledge/publish-checklist",
+    "task/update-refreshes-skills-and-agents-but-never-the-root-instruction-block-its-help-promises",
+    "knowledge/sleep-debt.excalidraw",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h004",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/sleep-stops-filing-junk-tasks-a-bar-for-what-deserves-a-task-and-the-right-model-per-specialist",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h005",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "knowledge/recall-tokenizer-turkish-ascii-limitation",
+    "knowledge/settings-redesign.excalidraw",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "knowledge/decision-embedding-layer",
+    "task/lab-request-budget-an-upstream-freshness-gate-so-insights-and-reports-stop-re-querying-data-that-has-not-changed"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h006",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "whiteboard/onboarding",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "knowledge/sleep-debt.excalidraw",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h007",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "feature/rice-prioritization",
+    "changelog/changelog#2026-07-17-quick-438",
+    "changelog/changelog#2026-07-05-migration-516",
+    "knowledge/sleep-debt.excalidraw",
+    "task/distil-the-110kb-automations-task-body-under-the-github-issue-limit-so-its-mirror-syncs-again",
+    "changelog/changelog#2026-08-24-planning-213",
+    "task/rice-prioritization",
+    "task/say-the-session-continues-after-sleep-so-users-stop-abandoning-it-and-starting-over",
+    "changelog/changelog#2026-05-09-tasks-789"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h008",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/capture-guard-q030-displaced-under-200-capture-flood",
+    "knowledge/settings-redesign.excalidraw",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "knowledge/recall-engine-v2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h009",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "whiteboard/control-panel",
+    "task/a-lab-report-cannot-choose-its-measurement-window-so-it-silently-composes-7-day-and-30-day-tiles-side-by-side-and-aligning-them-corrupts-objective-krs",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/feat-sleep-versioned-migration-system-per-release-migration-registry-sleep-migration-agent-migration-ledger-report",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h010",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "whiteboard/onboarding",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h011",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 5,
+   "hits": [
+    "feature/hands-free-cloud-mode",
+    "knowledge/synthetic-fixtures-for-published-artifacts",
+    "feature/okr-roadmap",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "task/the-desktop-app-reaps-the-dev-servers-and-emulators-its-chat-tabs-agents-leave-running",
+    "feature/calendar-integration",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "feature/automations-scheduled-headless-claude-jobs"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h012",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 9,
+   "hits": [
+    "knowledge/positioning",
+    "core/0.soul",
+    "feature/calendar-integration",
+    "knowledge/injected-vault-prose-trust-boundary",
+    "feature/project-initialization",
+    "feature/manifest-based-install-update",
+    "feature/brain-repo-sync",
+    "feature/multi-product-support",
+    "feature/context-snapshot",
+    "feature/patterns-auto-injection"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h013",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "feature/memory-recall-bm25",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/decision-embedding-layer",
+    "task/haiku-recall-extraction",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/2.memory-2026-h2",
+    "feature/sleepy-search-ask",
+    "knowledge/jarvis-mode-plan-v7",
+    "feature/launcher-quiz-onboarding"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 3,
+   "hits": [
+    "feature/automations-scheduled-headless-claude-jobs",
+    "knowledge/wave-by-wave-rollout",
+    "feature/reflection-engine",
+    "task/automations-hitl-a-run-can-stop-and-ask-and-the-verdict-comes-back-from-wherever-you-are",
+    "task/sleep-folds-work-into-existing-tasks-by-default-and-files-a-new-task-only-as-a-high-confidence-exception",
+    "knowledge/feature-integration-pattern",
+    "task/agents-epic-finished-end-to-end-and-the-side-menu-gets-one-maturity-model-section-hues-and-honest-icons",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/auto-switch-brings-the-session-home-when-the-preferred-account-s-window-reopens",
+    "knowledge/multi-session-checkout-safety"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h015",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/injected-vault-prose-trust-boundary",
+    "knowledge/multi-reviewer-pattern",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "task/delta-r2",
+    "knowledge/jarvis-mode-plan-v7",
+    "task/delta-r3",
+    "task/v06-control-plane-backend",
+    "knowledge/quest-party-chat-ux-plan",
+    "task/automation-runs-must-degrade-gracefully-on-the-account-usage-limit"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h016",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/council-skill",
+    "task/council-skill",
+    "task/council-v2-the-chamber",
+    "knowledge/decision-should-dreamcontext-0-20-2-be-published-to-npm-now-or-batched-with-more-features",
+    "changelog/changelog#2026-07-23-council-394",
+    "knowledge/pid-lockfile-concurrent-json",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "changelog/changelog#2026-07-23-council-389",
+    "knowledge/council.excalidraw",
+    "changelog/changelog#2026-06-28-dashboard-582"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h017",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "feature/hands-free-cloud-mode",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "task/sleep-cycle-bookmarks-its-own-sub-agent-briefs-and-reports-as-star-star-decision-entries-mis-linked-to-an-arbitrary-task",
+    "task/a-notification-lands-you-in-the-exact-chat-a-dreamcontext-url-scheme-and-an-app-sent-turn-done-banner",
+    "feature/sleepy-notch-capture",
+    "knowledge/desktop-beta-tauri-multivault",
+    "task/chat-prose-reads-at-a-body-column-rhythm-not-a-ui-label-s",
+    "task/sleepy-notch-capture",
+    "knowledge/6.system_flow-neuroscience-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h018",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "feature/chat-composer-shelf",
+    "knowledge/codex-cli-integration-feasibility",
+    "knowledge/default",
+    "knowledge/data-structures-migration-ownership",
+    "knowledge/proof-of-looking-gate",
+    "task/git-worktrees-split-the-brain-resolve-the-context-root-from-the-main-worktree",
+    "knowledge/parent-on-the-wire-child-in-a-sidecar",
+    "core/0.soul",
+    "task/per-project-format-rule-overrides-for-specialist-agents-task-feature-knowledge",
+    "knowledge/shared-local-config-split"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h019",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "feature/control-panel",
+    "task/disable-claude-native-memory",
+    "feature/sleepy-notch-capture",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "changelog/changelog#2026-06-05-cli-736",
+    "feature/memory-recall-bm25",
+    "knowledge/0.soul-2026-h2",
+    "task/whiteboard-wiki-olur-sayfalar-board-dan-cikmadan-popup-ta-wiki-menusunde-ve-tuval-wiki-modunda-okunur",
+    "feature/sleepy-search-ask",
+    "knowledge/competitive-analysis-ecc"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h020",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-embedding-layer",
+    "feature/memory-recall-bm25",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "task/feat-hybrid-recall-fusion-bm25-plus-dense-via-rrf-behind-flag",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit",
+    "changelog/changelog#2026-07-07-recall-478",
+    "task/feat-sleep-semantic-dedup-nearest-neighbor-merge-instead-of-duplicate",
+    "knowledge/recall-engine-v2",
+    "changelog/changelog#2026-07-16-sleep-444",
+    "task/sleep-folds-work-into-existing-tasks-by-default-and-files-a-new-task-only-as-a-high-confidence-exception"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h021",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/mermaid-render-fix",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "knowledge/lean-task-authoring-pattern",
+    "task/task-manager-show-the-agent-s-document-edits-as-a-git-style-diff",
+    "changelog/changelog#2026-05-22-dashboard-776",
+    "changelog/changelog#2026-05-23-dashboard-763",
+    "knowledge/sleep-debt.excalidraw",
+    "task/roadmap-timeline-start-only-dated-tasks-collapse-the-committed-window-bar-to-a-point",
+    "task/readme-howitworks-figures",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h022",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "feature/optional-skill-packs",
+    "task/optional-skill-packs",
+    "feature/context-gate-and-goal-skill",
+    "feature/manifest-based-install-update",
+    "task/readme-deepdive-v05-refresh",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "feature/dreamcontext-deep-research",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "knowledge/memory-archive-2026-h1",
+    "knowledge/feature-integration-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h023",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "feature/control-panel",
+    "changelog/changelog#2026-05-31-control-panel-748",
+    "task/v06-control-plane-backend",
+    "task/v06-control-panel-vaults-tauri",
+    "task/feat-federation-local-cross-project-context-mesh-vault-discovery-cross-vault-recall-per-link-connections-sleep-driven-digest-inbox",
+    "changelog/changelog#2026-05-31-control-panel-747",
+    "task/federation-cross-project-mesh",
+    "task/disable-claude-native-memory",
+    "task/v06-control-panel-frontend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h024",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 5,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/feat-dashboard-live-sleep-debt-tracker-header-widget",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "feature/sleep-consolidation",
+    "changelog/changelog#2026-06-29-sleep-571",
+    "knowledge/sleep.excalidraw",
+    "feature/sleep-self-running.excalidraw",
+    "core/6.system_flow",
+    "task/enforce-mutual-exclusion-on-sleep-consolidation-lock"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h025",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill",
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "changelog/changelog#2026-05-24-multi-review-760",
+    "feature/sleep-fanout-architecture",
+    "feature/context-gate-and-goal-skill",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/feature-integration-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h026",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-snapshot",
+    "feature/knowledge-base",
+    "task/feat-knowledge-excalidraw-boards-as-first-class-knowledge-index-extracted-text-never-the-scene-json-per-diagram-folders-generators-dark-to-memory-dashboard",
+    "feature/memory-recall-bm25",
+    "changelog/changelog#2026-05-23-snapshot-767",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/only-the-system-may-write-control-bearing-frontmatter-pinned-federated-id-type-date",
+    "task/goal-skill-plan-v1",
+    "task/optional-local-context-compression-layer-to-cut-snapshot-recall-token-latency-cost",
+    "knowledge/data-structures-migration-ownership"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h027",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/manifest-based-install-update",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "task/retire-the-telegram-channel-for-agents-end-to-end",
+    "task/upgrade-never-runs-migrations-and-maybeupdateallprojects-has-4-silent-skip-holes",
+    "task/pre-publish-checklist-v0-26-1",
+    "feature/project-initialization",
+    "changelog/changelog#2026-05-22-install-772",
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "feature/optional-skill-packs"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h028",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/dashboard-network-auth-jupyter-token-gate-for-non-loopback-binds",
+    "knowledge/dashboard-server-security",
+    "task/server-security-hardening",
+    "task/share-one-knowledge-file-or-board-over-a-tunnel-via-a-read-only-mutation-free-surface",
+    "changelog/changelog#2026-05-31-server-753",
+    "task/feat-dashboard-redesign-tasks-board-saved-views-with-shared-local-persistence",
+    "task/v06-control-plane-backend",
+    "changelog/changelog#2026-07-18-security-424",
+    "knowledge/4.tech_stack-dependencies-2026-h2",
+    "feature/hands-free-cloud-mode"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h029",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/eisenhower-matrixi-drag-drop",
+    "task/feat-dashboard-redesign-tasks-board-saved-views-with-shared-local-persistence",
+    "changelog/changelog#2026-06-28-dashboard-580",
+    "feature/web-dashboard",
+    "task/desktop-086-version-bump-and-dnd-fix",
+    "changelog/changelog#2026-06-28-dashboard-579",
+    "task/web-dashboard",
+    "task/interactive-roadmap-dashboard-forecast-timeline-cascade-editable-detail-panel",
+    "feature/okr-roadmap",
+    "task/hypotheses-ui-redesign-verdict-first-cards-list-board-toggle-seen-state-calm-detail-modal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h030",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-gate-and-goal-skill",
+    "task/goal-skill-and-related-skills-recall",
+    "changelog/changelog#2026-07-17-goal-skill-437",
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "task/initializer-skill",
+    "feature/multi-review-skill",
+    "changelog/changelog#2026-05-31-skill-packs-754",
+    "task/a-headless-builder-reads-as-a-live-teammate-in-chat-its-brief-its-steps-and-its-status-not-a-bare-shell-row",
+    "task/sleep-cycle-bookmarks-its-own-sub-agent-briefs-and-reports-as-star-star-decision-entries-mis-linked-to-an-arbitrary-task"
+   ],
+   "injected": true
+  }
+ ]
+}
