@@ -5,8 +5,9 @@ import { isCloudSurface } from '../../lib/cloudSurface';
 import { useCloudRecallStatus, useDisableCloudRecall, type CloudTier } from '../../hooks/useCloudRecall';
 import {
   useRecallOptions,
-  type RecallLanguage,
+  type LanguageMix,
   type RecallMeasurement,
+  type RecallMeasurements,
   type RecallOptionId,
   type RecallOptions,
 } from '../../hooks/useRecallOptions';
@@ -18,9 +19,9 @@ import { CloudRecallCard } from './CloudRecallCard';
 import './RecallModeCards.css';
 
 /**
- * Settings → Recall: every way of fetching memory back, side by side, with the same four facts for
- * each (accuracy per language, extra time, cost, what leaves this computer) and a personal
- * recommendation on top. The numbers are the server's (`GET /api/recall/options`); the words are i18n.
+ * Settings → Recall: every way of fetching memory back, side by side, with the same facts for each
+ * (accuracy for English-only and multi-language brains as two bars, then extra time, cost and what
+ * leaves this computer as chips) and a personal recommendation on top that shows its own rule. The numbers are the server's (`GET /api/recall/options`); the words are i18n.
  *
  * Choosing keeps the existing mechanisms: `recall_mode` through the sleep settings, and the two cloud
  * tiers through the cloud-recall card (key, disclosure, consent, index) — which this reuses, not
@@ -28,8 +29,18 @@ import './RecallModeCards.css';
  */
 
 const MAIN_OPTIONS: readonly RecallOptionId[] = ['haiku', 'cloud', 'cloud-index', 'raw', 'off'];
-const LANGUAGES: readonly RecallLanguage[] = ['tr', 'en', 'mixed'];
 const DEFAULT_MODE: RecallMode = 'haiku';
+
+/** The two audiences the page speaks to. The held-out set's Turkish and mixed questions are one: multi-language. */
+type Audience = 'english' | 'multi';
+const AUDIENCES: readonly Audience[] = ['english', 'multi'];
+
+/** When each option is the advice: the rule the recommendation follows, shown as a small table. */
+const RULES: ReadonlyArray<{ id: string; option: RecallOptionId }> = [
+  { id: 'english', option: 'raw' },
+  { id: 'multi', option: 'cloud' },
+  { id: 'multi-private', option: 'cloud-index' },
+];
 
 function isCloudTier(id: RecallOptionId): id is CloudTier {
   return id === 'cloud' || id === 'cloud-index';
@@ -52,22 +63,41 @@ function usd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function AccuracyBars({ m }: { m: RecallMeasurement }) {
-  const { t } = useI18n();
-  if (m.accuracyR5Pct === null) return <>{t('settings.recall.m.accuracy.none')}</>;
+function audienceOf(mix: LanguageMix): Audience | null {
+  if (mix === 'english') return 'english';
+  if (mix === 'turkish' || mix === 'mixed') return 'multi';
+  return null;
+}
+
+/** Accuracy for one audience: English as measured; multi-language = Turkish and mixed, weighted by their question counts. */
+function accuracyFor(m: RecallMeasurement, audience: Audience, q: RecallMeasurements['queries']): number | null {
   const acc = m.accuracyR5Pct;
+  if (!acc) return null;
+  if (audience === 'english') return acc.en;
+  const n = q.tr + q.mixed;
+  return n > 0 ? (acc.tr * q.tr + acc.mixed * q.mixed) / n : (acc.tr + acc.mixed) / 2;
+}
+
+function AccuracyBars({ m, queries, mine }: { m: RecallMeasurement; queries: RecallMeasurements['queries']; mine: Audience | null }) {
+  const { t, locale } = useI18n();
+  if (m.accuracyR5Pct === null) return null;
+  // Turkish writes the sign first (%52), English after (52%).
+  const percent = new Intl.NumberFormat(numberLocale(locale), { style: 'percent', maximumFractionDigits: 0 });
   return (
     <span className="recall-bars">
-      {LANGUAGES.map((lang) => {
-        const pct = Math.round(acc[lang]);
-        const label = t(`settings.recall.m.lang.${lang}`);
+      {AUDIENCES.map((a) => {
+        const pct = Math.round(accuracyFor(m, a, queries) ?? 0);
+        const label = t(`settings.recall.aud.${a}`);
+        const shown = percent.format(pct / 100);
+        // The bar that answers for this brain is drawn; the other one recedes.
+        const dim = mine !== null && mine !== a;
         return (
-          <span key={lang} className="recall-bar-row">
+          <span key={a} className={`recall-bar-row${dim ? ' recall-bar-row--dim' : ''}`}>
             <span className="recall-bar-label">{label}</span>
-            <span className="recall-bar" role="meter" aria-label={`${label} ${pct}%`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+            <span className="recall-bar" role="meter" aria-label={`${label} ${shown}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
               <span className="recall-bar-fill" style={{ width: `${pct}%` }} />
             </span>
-            <span className="recall-bar-pct">%{pct}</span>
+            <span className="recall-bar-pct">{shown}</span>
           </span>
         );
       })}
@@ -75,56 +105,90 @@ function AccuracyBars({ m }: { m: RecallMeasurement }) {
   );
 }
 
-function Metrics({ m }: { m: RecallMeasurement }) {
+/**
+ * This vault's own index: what building it would cost now (`null` = unknown, use the measured figure),
+ * whether it is built, and whether the estimate is still on its way (then no figure at all: a stand-in
+ * that flips to a very different number a second later is worse than a blank).
+ */
+interface VaultIndex { estUsd: number | null; built: boolean; loading: boolean }
+
+/** Time, cost and what leaves, as three short chips. */
+function Facts({ m, index }: { m: RecallMeasurement; index: VaultIndex }) {
   const { t, locale } = useI18n();
   const fmt = (ms: number): string => (ms / 1000).toLocaleString(numberLocale(locale), { maximumFractionDigits: 1 });
   const sec = t('settings.recall.m.sec');
   const { min, max } = m.overheadP90Ms;
   let latency: string;
-  if (max === 0) latency = t('settings.recall.m.latency.none');
-  else if (min === max) latency = `~${fmt(max)} ${sec}`;
-  else latency = `${fmt(min)}–${fmt(max)} ${sec}`;
-  if (m.overheadIsEstimate) latency += ` (${t('settings.recall.m.latency.estimate')})`;
+  if (max === 0) latency = t('settings.recall.chip.no-delay');
+  else if (min === max) latency = `+${fmt(max)} ${sec}`;
+  else latency = `+${fmt(min)}–${fmt(max)} ${sec}`;
 
-  const { indexOnceUsd, per1000QueriesUsd } = m.cost;
+  const { per1000QueriesUsd } = m.cost;
+  // The index cost is THIS vault's (its own chunk count); the measured figure is only the fallback.
+  const indexOnceUsd = m.cost.indexOnceUsd > 0 && index.estUsd !== null ? index.estUsd : m.cost.indexOnceUsd;
+  const indexBuilt = m.cost.indexOnceUsd > 0 && index.built;
+  const indexPending = m.cost.indexOnceUsd > 0 && per1000QueriesUsd === 0 && index.loading;
   let cost = t('settings.recall.m.cost.free');
-  if (per1000QueriesUsd > 0) cost = fill(t('settings.recall.m.cost.cloud'), { per1000: usd(per1000QueriesUsd), index: usd(indexOnceUsd) });
-  else if (indexOnceUsd > 0) cost = fill(t('settings.recall.m.cost.index'), { index: usd(indexOnceUsd) });
+  if (per1000QueriesUsd > 0) cost = fill(t('settings.recall.chip.per1000'), { per1000: usd(per1000QueriesUsd) });
+  else if (indexBuilt) cost = t('settings.recall.chip.index-built');
+  else if (indexOnceUsd > 0) cost = fill(t('settings.recall.chip.once'), { index: usd(indexOnceUsd) });
+
+  const costTitle = per1000QueriesUsd > 0 || indexOnceUsd > 0
+    ? fill(t(per1000QueriesUsd > 0 ? 'settings.recall.m.cost.cloud' : 'settings.recall.m.cost.index'), { per1000: usd(per1000QueriesUsd), index: usd(indexOnceUsd) })
+    : undefined;
 
   return (
-    <dl className="recall-metrics">
-      <dt>{t('settings.recall.m.accuracy')}</dt>
-      <dd><AccuracyBars m={m} /></dd>
-      <dt>{t('settings.recall.m.latency')}</dt>
-      <dd>{latency}</dd>
-      <dt>{t('settings.recall.m.cost')}</dt>
-      <dd>{cost}</dd>
-      <dt>{t('settings.recall.m.egress')}</dt>
-      <dd>{t(`settings.recall.m.egress.${m.egress}`)}</dd>
-    </dl>
+    <span className="recall-facts">
+      <span className="recall-fact" title={`${t('settings.recall.m.latency')}${m.overheadIsEstimate ? ` (${t('settings.recall.m.latency.estimate')})` : ''}`}>{latency}</span>
+      {!indexPending && <span className="recall-fact" title={costTitle}>{cost}</span>}
+      <span
+        className={`recall-fact${m.egress === 'nothing' ? ' recall-fact--local' : ''}`}
+        title={t(`settings.recall.m.egress.${m.egress}`)}
+      >
+        {t(`settings.recall.chip.egress.${m.egress}`)}
+      </span>
+    </span>
   );
 }
 
 function Recommendation({ options }: { options: RecallOptions }) {
   const { t } = useI18n();
-  const { recommendation: r, measurements } = options;
-  const byId = (id: RecallOptionId): RecallMeasurement | undefined => measurements.options.find((o) => o.id === id);
+  const { recommendation: r } = options;
   const name = (id: RecallOptionId): string => t(`settings.recall.opt.${id}.label`);
-  const pct = (id: RecallOptionId, lang: RecallLanguage): number => Math.round(byId(id)?.accuracyR5Pct?.[lang] ?? 0);
-
-  const sentence = fill(t(`settings.recall.rec.${r.reason}`), {
-    option: name(r.option),
-    from: pct('haiku', 'tr'),
-    to: pct('cloud', 'tr'),
-    en: pct('raw', 'en'),
-  });
-  const keyLine = r.reason === 'turkish-brain' ? t(r.keyPresent ? 'settings.recall.rec.key_ready' : 'settings.recall.rec.key_needed') : '';
-  const noteLine = r.note ? fill(t(`settings.recall.rec.note.${r.note}`), { option: name('cloud-index') }) : '';
+  const mixLabel = (mix: LanguageMix): string => t(`settings.recall.mix.${audienceOf(mix) ?? 'unknown'}`);
+  const known = r.reason !== 'no-language-signal';
+  const lit = (option: RecallOptionId): boolean => option === r.option;
+  const keyLine = r.option === 'cloud' ? t(r.keyPresent ? 'settings.recall.rec.key_ready' : 'settings.recall.rec.key_needed') : '';
 
   return (
     <section className="recall-rec" aria-label={t('settings.recall.rec.title')}>
-      <span className="recall-rec-title">{t('settings.recall.rec.title')}</span>
-      <p className="recall-rec-text">{[sentence, keyLine, noteLine].filter(Boolean).join(' ')}</p>
+      <div className="recall-rec-head">
+        <span className="recall-rec-title">{t('settings.recall.rec.title')}</span>
+        <span className="recall-rec-pick">{name(r.option)}</span>
+      </div>
+      <div className="recall-rec-signals">
+        <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.prompts')}</span>{mixLabel(r.promptsMix)}</span>
+        <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.docs')}</span>{mixLabel(r.docsMix)}</span>
+      </div>
+      {known ? (
+        <ul className="recall-rules">
+          {RULES.map((rule) => (
+            <li key={rule.id} className={`recall-rule${lit(rule.option) ? ' recall-rule--on' : ''}`}>
+              <span className="recall-rule-when">{t(`settings.recall.rule.${rule.id}`)}</span>
+              <span className="recall-rule-arrow" aria-hidden="true">→</span>
+              <span className="recall-rule-then">{name(rule.option)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="recall-rec-text">{fill(t('settings.recall.rec.no-language-signal'), { option: name(r.option) })}</p>
+      )}
+      {(keyLine || r.note === 'light-machine') && (
+        <p className="recall-rec-note">
+          {[keyLine, r.note === 'light-machine' ? fill(t('settings.recall.rec.note.light-machine'), { option: name('cloud-index') }) : '']
+            .filter(Boolean).join(' ')}
+        </p>
+      )}
     </section>
   );
 }
@@ -137,7 +201,7 @@ function Footnote({ options }: { options: RecallOptions }) {
   });
   return (
     <p className="recall-foot">
-      {fill(t('settings.recall.m.foot'), { total: queries.total, tr: queries.tr, en: queries.en, mixed: queries.mixed, date })}
+      {fill(t('settings.recall.m.foot'), { total: queries.total, en: queries.en, multi: queries.tr + queries.mixed, date })}
     </p>
   );
 }
@@ -154,7 +218,7 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
   const queryClient = useQueryClient();
   const cloudSurface = isCloudSurface();
   const { data: options, isError: optionsFailed } = useRecallOptions();
-  const { data: cloud } = useCloudRecallStatus();
+  const { data: cloud, isPending: cloudPending } = useCloudRecallStatus();
   const disable = useDisableCloudRecall();
   /** A cloud tier whose card is open for review, before it has consent. */
   const [openTier, setOpenTier] = useState<CloudTier | null>(null);
@@ -176,6 +240,13 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
       return;
     }
     if (isPlainMode(id)) onSelectMode(id);
+  };
+
+  const mine = options ? audienceOf(options.recommendation.languageMix) : null;
+  const vaultIndex: VaultIndex = {
+    estUsd: cloud?.plan ? cloud.plan.estUsd : null,
+    built: Boolean(cloud?.indexReady) && (cloud?.plan?.toEmbed ?? 1) === 0,
+    loading: cloudPending,
   };
 
   const refreshMode = (): void => { void queryClient.invalidateQueries({ queryKey: ['sleep'] }); };
@@ -202,7 +273,12 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
           </>
         )}
       >
-        {m && <Metrics m={m} />}
+        {m && options && (
+          <span className="recall-option-body">
+            <AccuracyBars m={m} queries={options.measurements.queries} mine={mine} />
+            <Facts m={m} index={vaultIndex} />
+          </span>
+        )}
         {id === 'hybrid' && selected === 'hybrid' && <EmbeddingModelCard />}
         {showCloud && isCloudTier(id) && (
           <CloudRecallCard

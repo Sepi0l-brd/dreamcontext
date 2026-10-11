@@ -30,7 +30,8 @@ export interface RecallMeasurements {
   options: RecallMeasurement[];
 }
 
-export type RecommendationReason = 'turkish-brain' | 'english-brain' | 'no-language-signal';
+export type RecommendationReason = 'multi-language' | 'english-only' | 'no-language-signal';
+export type LanguageMix = 'turkish' | 'mixed' | 'english' | 'unknown';
 export type RecommendationNote = 'private-query-available' | 'light-machine' | null;
 
 export interface RecallRecommendation {
@@ -38,7 +39,10 @@ export interface RecallRecommendation {
   reason: RecommendationReason;
   note: RecommendationNote;
   keyPresent: boolean;
-  languageMix: 'turkish' | 'mixed' | 'english' | 'unknown';
+  /** The more Turkish of the documents' and the prompts' readings: what the advice used. */
+  languageMix: LanguageMix;
+  docsMix: LanguageMix;
+  promptsMix: LanguageMix;
   machineClass: 'light' | 'standard';
 }
 
