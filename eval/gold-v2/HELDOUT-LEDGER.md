@@ -16,3 +16,4 @@ final run happens only after a documented AC-Q2 failure.
 | 2026-10-11 | heldout | hybrid-e5 | - | 0ba4c25a | B0 baseline (TB) |
 | 2026-10-11 | reserve | hybrid-e5 | - | 0ba4c25a | B0 baseline (TB) |
 | 2026-10-11 | heldout | tier-local | - | 8ed3a6d8 | final (T10) |
+| 2026-10-11 | reserve | local-gemma | λ0.5/w0.3 | a15213bc | local model trial (reserve look) |

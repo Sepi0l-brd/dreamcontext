@@ -1979,5 +1979,277 @@
   "meetsFloorProxy": true,
   "reaches90PerLangTrain": false,
   "e5MeetsFloorProxy": false
+ },
+ "reserveLook": {
+  "date": "2026-10-11",
+  "config": {
+   "model": "EmbeddingGemma-300m q8",
+   "relativeLambda": 0.5,
+   "rrfBm25Weight": 0.3,
+   "base": "FUSION_BY_TIER.local"
+  },
+  "engineSha": "a15213bc",
+  "n": {
+   "tr": 19,
+   "en": 20,
+   "mixed": 18,
+   "all": 57
+  },
+  "table": {
+   "raw": {
+    "all": {
+     "n": 57,
+     "h1": 27,
+     "h3": 33,
+     "h5": 35,
+     "mrr": 0.5376
+    },
+    "tr": {
+     "n": 19,
+     "h1": 2,
+     "h3": 2,
+     "h5": 3,
+     "mrr": 0.1272
+    },
+    "en": {
+     "n": 20,
+     "h1": 14,
+     "h3": 18,
+     "h5": 19,
+     "mrr": 0.8042
+    },
+    "mixed": {
+     "n": 18,
+     "h1": 11,
+     "h3": 13,
+     "h5": 13,
+     "mrr": 0.6746
+    }
+   },
+   "hybrid-e5": {
+    "all": {
+     "n": 57,
+     "h1": 27,
+     "h3": 31,
+     "h5": 36,
+     "mrr": 0.5303
+    },
+    "tr": {
+     "n": 19,
+     "h1": 2,
+     "h3": 2,
+     "h5": 4,
+     "mrr": 0.1263
+    },
+    "en": {
+     "n": 20,
+     "h1": 14,
+     "h3": 16,
+     "h5": 19,
+     "mrr": 0.785
+    },
+    "mixed": {
+     "n": 18,
+     "h1": 11,
+     "h3": 13,
+     "h5": 13,
+     "mrr": 0.6736
+    }
+   },
+   "haiku": {
+    "all": {
+     "n": 57,
+     "h1": 30,
+     "h3": 35,
+     "h5": 35,
+     "mrr": 0.5643
+    },
+    "tr": {
+     "n": 19,
+     "h1": 5,
+     "h3": 8,
+     "h5": 8,
+     "mrr": 0.3421
+    },
+    "en": {
+     "n": 20,
+     "h1": 14,
+     "h3": 15,
+     "h5": 15,
+     "mrr": 0.7167
+    },
+    "mixed": {
+     "n": 18,
+     "h1": 11,
+     "h3": 12,
+     "h5": 12,
+     "mrr": 0.6296
+    }
+   },
+   "local-gemma": {
+    "all": {
+     "n": 57,
+     "h1": 32,
+     "h3": 38,
+     "h5": 40,
+     "mrr": 0.6323
+    },
+    "tr": {
+     "n": 19,
+     "h1": 4,
+     "h3": 7,
+     "h5": 7,
+     "mrr": 0.3113
+    },
+    "en": {
+     "n": 20,
+     "h1": 14,
+     "h3": 16,
+     "h5": 17,
+     "mrr": 0.761
+    },
+    "mixed": {
+     "n": 18,
+     "h1": 14,
+     "h3": 15,
+     "h5": 16,
+     "mrr": 0.8281
+    }
+   }
+  },
+  "verdicts": {
+   "tr": {
+    "gemmaH5": 7,
+    "n": 19,
+    "bestB0H5": 8,
+    "bestB0Modes": [
+     "haiku"
+    ],
+    "strictRequired": true,
+    "floorPass": false,
+    "target90": false,
+    "targetHits": 18,
+    "sign": {
+     "raw": {
+      "wins": 5,
+      "losses": 1,
+      "p": 0.21875
+     },
+     "hybrid-e5": {
+      "wins": 4,
+      "losses": 1,
+      "p": 0.375
+     },
+     "haiku": {
+      "wins": 1,
+      "losses": 2,
+      "p": 1
+     }
+    }
+   },
+   "en": {
+    "gemmaH5": 17,
+    "n": 20,
+    "bestB0H5": 19,
+    "bestB0Modes": [
+     "raw",
+     "hybrid-e5"
+    ],
+    "strictRequired": false,
+    "floorPass": false,
+    "target90": false,
+    "targetHits": 18,
+    "sign": {
+     "raw": {
+      "wins": 0,
+      "losses": 2,
+      "p": 0.5
+     },
+     "hybrid-e5": {
+      "wins": 0,
+      "losses": 2,
+      "p": 0.5
+     },
+     "haiku": {
+      "wins": 3,
+      "losses": 1,
+      "p": 0.625
+     }
+    }
+   },
+   "mixed": {
+    "gemmaH5": 16,
+    "n": 18,
+    "bestB0H5": 13,
+    "bestB0Modes": [
+     "raw",
+     "hybrid-e5"
+    ],
+    "strictRequired": true,
+    "floorPass": true,
+    "target90": false,
+    "targetHits": 17,
+    "sign": {
+     "raw": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "hybrid-e5": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "haiku": {
+      "wins": 5,
+      "losses": 1,
+      "p": 0.21875
+     }
+    }
+   },
+   "all": {
+    "gemmaH5": 40,
+    "n": 57,
+    "bestB0H5": 36,
+    "bestB0Modes": [
+     "hybrid-e5"
+    ],
+    "strictRequired": true,
+    "floorPass": true,
+    "target90": null,
+    "targetHits": null,
+    "sign": {
+     "raw": {
+      "wins": 8,
+      "losses": 3,
+      "p": 0.22656
+     },
+     "hybrid-e5": {
+      "wins": 7,
+      "losses": 3,
+      "p": 0.34375
+     },
+     "haiku": {
+      "wins": 9,
+      "losses": 4,
+      "p": 0.26685
+     }
+    }
+   }
+  },
+  "guards": {
+   "exactTermR1": {
+    "gemma": 5,
+    "raw": 6,
+    "n": 9,
+    "pass": false
+   },
+   "enR5": {
+    "gemma": 17,
+    "bestB0": 19,
+    "pass": false
+   }
+  },
+  "note": "aggregates only; per-query result sealed in LOCAL-gemma-reserve.json; local-e5 has no reserve run"
  }
 }
