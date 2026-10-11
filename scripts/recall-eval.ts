@@ -21,7 +21,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bm25Search, docKey } from '../src/lib/recall.js';
 import {
-  FROZEN_DIR,
   frozenDir,
   SNAPSHOT_ID,
   assertNotSpawned,
@@ -147,6 +146,8 @@ export interface RunDeps {
   repoRoot?: string;
   /** Wall-clock stamp for ledger lines / file names. */
   today?: () => string;
+  /** Replace the engine loader (tests): the engine whose hybridSearch the tier runs call. */
+  engineOverride?: (engineRoot: string) => Promise<Engine>;
   /** Replace the search function (tests). */
   searchOverride?: (engine: Engine, corpus: ReturnType<Engine['buildCorpus']>) => SearchFn;
 }
@@ -189,7 +190,45 @@ export function selfCheck(engine: Engine, corpus: ReturnType<Engine['buildCorpus
   }
 }
 
-async function buildSearch(args: RecallEvalArgs, engine: Engine, corpus: ReturnType<Engine['buildCorpus']>, root: string, now: Date): Promise<SearchFn> {
+/**
+ * A cloud-tier measurement is only valid if every query actually ran the tier it names. A query
+ * that fell back (timeout, breaker, no index, ...) silently measured e5 or BM25 instead, so the
+ * run is refused rather than recorded. `querySource: 'none'` with `fallback: 'none'` is the
+ * dense gate skipping a query BM25 was already sure of: not a fallback. With no rerank model
+ * requested, `rerank_not_consented` is the intended state of a `cloud` run, not a failure.
+ */
+export interface TierGuard { calls: number; offending: number; reasons: Map<string, number> }
+
+function newTierGuard(): TierGuard {
+  return { calls: 0, offending: 0, reasons: new Map() };
+}
+
+function offenceOf(t: RecallTimingLike, tier: 'cloud' | 'cloud-index', rerankRequested: boolean): string | null {
+  const wanted = tier === 'cloud' ? 'api' : 'nano';
+  if (t.fallback === 'rerank_not_consented' && !rerankRequested && t.querySource === wanted) return null;
+  if (t.fallback !== 'none') return `fallback=${t.fallback} source=${t.querySource}`;
+  if (t.querySource !== wanted && t.querySource !== 'none') return `source=${t.querySource}`;
+  return null;
+}
+
+interface RecallTimingLike { querySource: string; fallback: string }
+
+/** Throws when any query of a cloud-tier run did not run its tier; names the count and the reasons. */
+export function assertTierHonoured(guard: TierGuard, tier: EvalTier): void {
+  if (guard.offending === 0) return;
+  const why = [...guard.reasons].map(([r, n]) => `${r} x${n}`).join(', ');
+  throw new Error(`tier ${tier}: ${guard.offending} of ${guard.calls} queries did not run the tier (${why}); the run is refused and nothing is recorded`);
+}
+
+async function buildSearch(
+  args: RecallEvalArgs,
+  engine: Engine,
+  corpus: ReturnType<Engine['buildCorpus']>,
+  root: string,
+  now: Date,
+  guard: TierGuard,
+  home?: string,
+): Promise<SearchFn> {
   if (args.mode === 'raw') return async (q, k) => engine.bm25Search(q, corpus, k, { now });
   if (args.mode === 'haiku') {
     // haikuRecall has no `now` option: its BM25 prepass uses the wall clock (documented B0 exception).
@@ -213,14 +252,26 @@ async function buildSearch(args: RecallEvalArgs, engine: Engine, corpus: ReturnT
   // only ever run on a frozen root, where the engine honours evalConsent.
   const extra: Record<string, unknown> = {};
   if (args.tier && args.tier !== 'local') {
-    assertUnder(FROZEN_DIR, root, '--corpus-root (cloud tiers run on a frozen root only)');
+    assertUnder(frozenDir(home), root, '--corpus-root (cloud tiers run on a frozen root only)');
     extra.tier = args.tier;
     extra.evalConsent = true;
     if (args.rerankModel) extra.rerankModel = args.rerankModel;
   } else if (args.tier) {
     extra.tier = 'local';
   }
-  return (q, k) => hybrid.hybridSearch(q, corpus, root, k, { now, ...extra } as Parameters<typeof hybrid.hybridSearch>[4]);
+  const guarded = args.tier === 'cloud' || args.tier === 'cloud-index' ? args.tier : null;
+  return (q, k) => {
+    const timing = { tier: extra.tier, querySource: 'none', fallback: 'none' };
+    const opts = { now, ...extra, ...(guarded ? { timing } : {}) } as Parameters<typeof hybrid.hybridSearch>[4];
+    return hybrid.hybridSearch(q, corpus, root, k, opts).then((hits) => {
+      if (guarded) {
+        guard.calls++;
+        const why = offenceOf(timing, guarded, args.rerankModel !== null);
+        if (why !== null) { guard.offending++; guard.reasons.set(why, (guard.reasons.get(why) ?? 0) + 1); }
+      }
+      return hits;
+    });
+  };
 }
 
 function appendLedger(repo: string, line: string): void {
@@ -254,15 +305,18 @@ export async function run(args: RecallEvalArgs, deps: RunDeps = {}): Promise<Run
   const gold = goldFiles.flatMap((f) => loadGold(f));
   if (gold.length === 0) throw new Error('empty gold set');
 
-  const engine = await loadEngine(args.engineRoot);
+  const engine = await (deps.engineOverride ?? loadEngine)(args.engineRoot);
   const corpus = engine.stableCorpus(root);
   if (args.engineRoot === resolve(REPO)) selfCheck(engine, corpus, gold, now);
 
-  const search = deps.searchOverride ? deps.searchOverride(engine, corpus) : await buildSearch(args, engine, corpus, root, now);
+  const guard = newTierGuard();
+  const search = deps.searchOverride ? deps.searchOverride(engine, corpus) : await buildSearch(args, engine, corpus, root, now, guard, home);
   const report = await evaluateSearch(search, gold, {
     injectK: args.injectK,
     injectRule: args.mode === 'haiku' ? 'nonempty' : 'gate',
   });
+  // Before any output: a refused run leaves no result file and no ledger line.
+  if (args.tier) assertTierHonoured(guard, args.tier);
 
   const json = {
     label,

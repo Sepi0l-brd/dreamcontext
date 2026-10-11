@@ -1,0 +1,105 @@
+{
+ "label": "T10-final",
+ "date": "2026-10-11",
+ "engineSha": "ba736f4f",
+ "snapshot": "dc-20261010",
+ "injectK": 5,
+ "status": "PARTIAL: cloud held-out NOT completed (load-induced); local, hybrid-e5 B0, haiku B0 held-out not available",
+ "heldout": {
+  "cloud-index": {
+   "tr": {
+    "n": 23,
+    "r1": 9,
+    "r3": 21,
+    "r5": 23,
+    "mrr": 0.643,
+    "injected": 23,
+    "effectiveR5": 23
+   },
+   "en": {
+    "n": 25,
+    "r1": 17,
+    "r3": 22,
+    "r5": 25,
+    "mrr": 0.795,
+    "injected": 25,
+    "effectiveR5": 25
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 14,
+    "r3": 19,
+    "r5": 20,
+    "mrr": 0.702,
+    "injected": 24,
+    "effectiveR5": 20
+   },
+   "all": {
+    "n": 72,
+    "r1": 40,
+    "r3": 62,
+    "r5": 68,
+    "mrr": 0.715
+   }
+  },
+  "B0-raw": {
+   "tr": {
+    "n": 23,
+    "r1": 2,
+    "r3": 7,
+    "r5": 7,
+    "mrr": 0.191
+   },
+   "en": {
+    "n": 25,
+    "r1": 19,
+    "r3": 22,
+    "r5": 22,
+    "mrr": 0.813
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 11,
+    "r3": 13,
+    "r5": 18,
+    "mrr": 0.548
+   },
+   "all": {
+    "n": 72,
+    "r1": 32,
+    "r3": 42,
+    "r5": 47,
+    "mrr": 0.526
+   }
+  },
+  "cloud": null
+ },
+ "signTest": {
+  "cloud-index vs raw (pooled r@5)": {
+   "wins": 23,
+   "losses": 2,
+   "p": 0.0000194
+  },
+  "tr": {
+   "wins": 16,
+   "losses": 0,
+   "p": 0.0000305
+  },
+  "en": {
+   "wins": 3,
+   "losses": 0,
+   "p": 0.25
+  },
+  "mixed": {
+   "wins": 4,
+   "losses": 2,
+   "p": 0.6875
+  }
+ },
+ "evalLedgerUsd": 0.3054,
+ "tests": {
+  "tsc": "clean",
+  "files3": "3 files, 49 tests passed",
+  "skillMdBytes": 45991
+ }
+}

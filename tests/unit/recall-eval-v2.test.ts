@@ -249,6 +249,52 @@ describe('recall-eval CLI', () => {
       expect(ledger).toContain('B0 raw held-out once');
     });
 
+    describe('cloud tiers refuse a run that fell back', () => {
+      type Timing = { querySource: string; fallback: string };
+      const fakeEngine = async (script: (i: number) => Timing): Promise<Engine> => {
+        const real = await loadEngine('.');
+        let i = 0;
+        const hybridSearch = async (_q: string, _c: unknown, _r: string, _k: number, o: { timing?: Timing }) => {
+          Object.assign(o.timing!, script(i++));
+          return [];
+        };
+        return { ...real, hybrid: async () => ({ hybridSearch }) as never };
+      };
+      const tierArgs = (tier: 'cloud' | 'cloud-index', over: Partial<RecallEvalArgs> = {}): RecallEvalArgs =>
+        ({ ...parseArgs(['--split', 'heldout', '--tier', tier]), ledger: 'tier run', ...over });
+      const deps = (engine: Engine) => ({ home, repoRoot: repo, today: () => '2026-10-11', engineOverride: async () => engine });
+      const ledgerFile = (): string => join(repo, 'eval', 'gold-v2', 'HELDOUT-LEDGER.md');
+
+      it('fails on the first fallback with the count, and records no ledger line and no result file', async () => {
+        const engine = await fakeEngine((i) => (i === 1 ? { querySource: 'e5', fallback: 'timeout' } : { querySource: 'api', fallback: 'none' }));
+        await expect(run(tierArgs('cloud'), deps(engine))).rejects.toThrow(/1 of \d+ queries did not run the tier.*timeout/);
+        expect(existsSync(ledgerFile())).toBe(false);
+        expect(existsSync(join(sealedDir(home), 'heldout-tier-cloud.json'))).toBe(false);
+      });
+
+      it('a silent switch to e5 is an offence even when fallback says none', async () => {
+        const engine = await fakeEngine(() => ({ querySource: 'e5', fallback: 'none' }));
+        await expect(run(tierArgs('cloud-index'), deps(engine))).rejects.toThrow(/did not run the tier.*source=e5/);
+        expect(existsSync(ledgerFile())).toBe(false);
+      });
+
+      it('passes when every query ran its tier (api for cloud, nano for cloud-index, none for a gate skip)', async () => {
+        const cloud = await fakeEngine((i) => (i % 2 ? { querySource: 'none', fallback: 'none' } : { querySource: 'api', fallback: 'none' }));
+        const a = await run(tierArgs('cloud', { label: 'ok-cloud' }), deps(cloud));
+        expect(a.outFile).not.toBeNull();
+        const idx = await fakeEngine(() => ({ querySource: 'nano', fallback: 'none' }));
+        const b = await run(tierArgs('cloud-index', { label: 'ok-index' }), deps(idx));
+        expect(existsSync(b.outFile!)).toBe(true);
+        expect(readFileSync(ledgerFile(), 'utf-8').trim().split('\n')).toHaveLength(2);
+      });
+
+      it('rerank_not_consented is fine only when no rerank model was requested', async () => {
+        const engine = await fakeEngine(() => ({ querySource: 'api', fallback: 'rerank_not_consented' }));
+        await expect(run(tierArgs('cloud', { rerankModel: 'voyageai/rerank-2.5-lite' }), deps(engine))).rejects.toThrow(/rerank_not_consented/);
+        expect((await run(tierArgs('cloud', { rerankModel: null }), deps(engine))).sealed).toBe(true);
+      });
+    });
+
     it('refuses an --out outside the sealed dir', async () => {
       await expect(run(argsFor({ ledger: 'x', out: join(tmp, 'leak.json') }), { home, repoRoot: repo }))
         .rejects.toThrow(/must be under/);

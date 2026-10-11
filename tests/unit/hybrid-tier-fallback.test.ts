@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { bm25Search, docKey, type CorpusDoc } from '../../src/lib/recall.js';
 import {
-  BREAKER_PAUSE_MS, breakerOpen, hybridSearch, tripBreaker, type RecallTiming,
+  BREAKER_PAUSE_MS, EVAL_CLOUD_TIMEOUT_ENV, HOOK_MAX_INLINE_EMBED, breakerOpen, hybridSearch, tripBreaker, type RecallTiming,
 } from '../../src/lib/embeddings/hybrid.js';
 import { refreshEmbeddings } from '../../src/lib/embeddings/store.js';
 import { setRecallCloudKey } from '../../src/lib/recall-cloud-config.js';
 import {
-  KEY, axisCorpus, axisVector, consentAndIndex, fakeOpenRouter, setupEnv, teardownEnv, type Env,
+  KEY, axisCorpus, axisVector, consentAndIndex, fakeOpenRouter, mkDoc, setupEnv, teardownEnv, type Env,
 } from './_hybrid-fixture.js';
 
 vi.mock('../../src/lib/embeddings/embedder.js', () => ({
@@ -19,7 +19,7 @@ vi.mock('../../src/lib/embeddings/embedder.js', () => ({
   embedQuery: vi.fn(),
   isEmbedModelDownloaded: vi.fn(() => false),
 }));
-import { embedQuery, isEmbedModelDownloaded } from '../../src/lib/embeddings/embedder.js';
+import { embedPassages, embedQuery, isEmbedModelDownloaded } from '../../src/lib/embeddings/embedder.js';
 
 let env: Env;
 let corpus: CorpusDoc[];
@@ -36,6 +36,7 @@ beforeEach(async () => {
   await consentAndIndex(env, corpus, 'cloud');
 });
 afterEach(() => {
+  delete process.env[EVAL_CLOUD_TIMEOUT_ENV];
   vi.useRealTimers();
   vi.unstubAllGlobals();
   teardownEnv(env);
@@ -126,6 +127,105 @@ describe('cloud tier', () => {
     expect(fake.calls).toHaveLength(0);
     expect(t).toMatchObject({ tier: 'cloud-index', querySource: 'nano', fallback: 'none' });
     expect(docKey(hits[0].doc)).toBe('knowledge/e4');
+  });
+});
+
+describe('a cloud fallback onto a partial e5 cache', () => {
+  it('embeds at most HOOK_MAX_INLINE_EMBED chunks inline and returns without a full build', async () => {
+    vi.mocked(isEmbedModelDownloaded).mockReturnValue(true);
+    await refreshEmbeddings(env.root, corpus, async (texts) => texts.map(() => new Float32Array([1, 0, 0, 0])));
+    const bigger = [...corpus, ...Array.from({ length: 30 }, (_, i) => mkDoc(env.root, `extra${i}`, `zzw3 unindexed extra document number ${i}`))];
+    vi.mocked(embedQuery).mockResolvedValue(new Float32Array([1, 0, 0, 0]));
+    const embedded: number[] = [];
+    vi.mocked(embedPassages).mockImplementation(async (texts: string[]) => {
+      embedded.push(texts.length);
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('fetch', fakeOpenRouter({ hang: true }).fetch);
+    const t = timing();
+    const pending = hybridSearch('zzw3', bigger, env.root, 5, { tier: 'cloud', home: env.home, timing: t });
+    await vi.advanceTimersByTimeAsync(1600);
+    const hits = await pending;
+    expect(t).toMatchObject({ fallback: 'timeout', querySource: 'e5' });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(embedded.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(HOOK_MAX_INLINE_EMBED);
+    expect(embedded.length).toBeGreaterThan(0); // the cap bounds the build; it does not skip it
+  });
+
+  it('honours an explicit maxInlineEmbed over the default', async () => {
+    vi.mocked(isEmbedModelDownloaded).mockReturnValue(true);
+    await refreshEmbeddings(env.root, corpus, async (texts) => texts.map(() => new Float32Array([1, 0, 0, 0])));
+    const bigger = [...corpus, ...Array.from({ length: 30 }, (_, i) => mkDoc(env.root, `more${i}`, `zzw3 unindexed more document number ${i}`))];
+    vi.mocked(embedQuery).mockResolvedValue(new Float32Array([1, 0, 0, 0]));
+    let total = 0;
+    vi.mocked(embedPassages).mockImplementation(async (texts: string[]) => {
+      total += texts.length;
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    });
+    vi.stubGlobal('fetch', fakeOpenRouter({ reject: true }).fetch);
+    await hybridSearch('zzw3', bigger, env.root, 5, { tier: 'cloud', home: env.home, timing: timing(), maxInlineEmbed: 2 });
+    expect(total).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('eval-only cloud timeout override', () => {
+  function frozenEnv(): Env {
+    const snap = join(env.home, '.dreamcontext', 'eval-frozen', 'dc-timeout');
+    const root = join(snap, '_dream_context');
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(snap, 'FINGERPRINT.json'), '{}');
+    writeFileSync(join(snap, 'now.txt'), '2026-10-10T00:00:00Z');
+    return { ...env, root };
+  }
+
+  /** Runs one query against a hanging OpenRouter, advancing `ms`; reports whether it had settled by then. */
+  async function settledAfter(e: Env, docs: CorpusDoc[], ms: number, over: Parameters<typeof hybridSearch>[4]): Promise<{ done: boolean; t: RecallTiming }> {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('fetch', fakeOpenRouter({ hang: true }).fetch);
+    const t = timing();
+    let done = false;
+    const pending = hybridSearch('zzw3', docs, e.root, 5, { tier: 'cloud', home: e.home, timing: t, ...over }).then(() => { done = true; });
+    await vi.advanceTimersByTimeAsync(ms);
+    const settled = done;
+    await vi.advanceTimersByTimeAsync(25_000);
+    await pending;
+    vi.useRealTimers();
+    return { done: settled, t };
+  }
+
+  it('lengthens the query timeout under evalConsent on a frozen root', async () => {
+    const e = frozenEnv();
+    const docs = axisCorpus(e.root);
+    await consentAndIndex(e, docs, 'cloud');
+    process.env[EVAL_CLOUD_TIMEOUT_ENV] = '6000';
+    const r = await settledAfter(e, docs, 3000, { evalConsent: true });
+    expect(r.done).toBe(false); // the fixed 1500 ms would have given up long before
+    expect(r.t.fallback).toBe('timeout');
+  });
+
+  it('clamps to 1500 .. 20000 ms and ignores non-integers', async () => {
+    const e = frozenEnv();
+    const docs = axisCorpus(e.root);
+    await consentAndIndex(e, docs, 'cloud');
+    process.env[EVAL_CLOUD_TIMEOUT_ENV] = '50';
+    expect((await settledAfter(e, docs, 1600, { evalConsent: true })).done).toBe(true);
+    process.env[EVAL_CLOUD_TIMEOUT_ENV] = '2500.5';
+    expect((await settledAfter(e, docs, 1600, { evalConsent: true })).done).toBe(true);
+    process.env[EVAL_CLOUD_TIMEOUT_ENV] = '999999';
+    const big = await settledAfter(e, docs, 19_000, { evalConsent: true });
+    expect(big.done).toBe(false);
+    expect(big.t.fallback).toBe('timeout');
+  });
+
+  it('is ignored without evalConsent, and on a root outside the frozen dir', async () => {
+    process.env[EVAL_CLOUD_TIMEOUT_ENV] = '6000';
+    expect((await settledAfter(env, corpus, 1600, {})).done).toBe(true); // real vault: fixed timeout
+    const e = frozenEnv();
+    const docs = axisCorpus(e.root);
+    await consentAndIndex(e, docs, 'cloud');
+    expect((await settledAfter(e, docs, 1600, {})).done).toBe(true); // frozen root but no evalConsent
+    expect((await settledAfter(env, corpus, 1600, { evalConsent: true })).done).toBe(true); // evalConsent but real vault
   });
 });
 

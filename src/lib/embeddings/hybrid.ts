@@ -363,6 +363,23 @@ export const CLOUD_STAGE_BUDGET_MS = 3500;
 export const BREAKER_PAUSE_MS = 300_000;
 export const HOOK_MAX_INLINE_EMBED = 8;
 
+/** Env override of the cloud call timeouts. Honoured ONLY for an eval run on a frozen root; production stays fixed. */
+export const EVAL_CLOUD_TIMEOUT_ENV = 'DREAMCONTEXT_EVAL_CLOUD_TIMEOUT_MS';
+export const EVAL_CLOUD_TIMEOUT_MIN_MS = 1500;
+export const EVAL_CLOUD_TIMEOUT_MAX_MS = 20_000;
+
+interface CloudBudget { queryMs: number; rerankMs: number; stageMs: number }
+
+/** The cloud call budgets: fixed constants, unless an eval-minted call carries a valid env override (integer ms, clamped). */
+function cloudBudget(evalMinted: boolean): CloudBudget {
+  const fixed: CloudBudget = { queryMs: CLOUD_QUERY_TIMEOUT_MS, rerankMs: RERANK_TIMEOUT_MS, stageMs: CLOUD_STAGE_BUDGET_MS };
+  if (!evalMinted) return fixed;
+  const raw = process.env[EVAL_CLOUD_TIMEOUT_ENV];
+  if (raw === undefined || !/^\d+$/.test(raw.trim())) return fixed;
+  const ms = Math.min(EVAL_CLOUD_TIMEOUT_MAX_MS, Math.max(EVAL_CLOUD_TIMEOUT_MIN_MS, Number(raw.trim())));
+  return { queryMs: ms, rerankMs: ms, stageMs: 2 * ms };
+}
+
 export type FallbackReason =
   | CloudFailureKind
   | 'none' | 'breaker_open' | 'withheld' | 'not_consented' | 'spawned_session'
@@ -454,7 +471,11 @@ export interface HybridOptions extends Bm25Options {
   queryVec?: Float32Array;
   /** Injectable reranker (tests, eval caches). Default `openRouterRerank`. */
   rerankImpl?: (p: EgressPayload<'rerank'>, o: CloudCallOpts) => Promise<{ scores: Array<{ index: number; relevance: number }>; costUsd: number }>;
-  /** Cap on chunks the local refresh embeds inline (the hook passes HOOK_MAX_INLINE_EMBED). */
+  /**
+   * Cap on chunks the local refresh embeds inline. Default HOOK_MAX_INLINE_EMBED, so a search never
+   * pays for a cold or partial e5 build (a cloud fallback onto a partial cache once took 56 minutes).
+   * A full build is the explicit `refreshEmbeddings` / `embed refresh` job, not a search's.
+   */
   maxInlineEmbed?: number;
   /** Filled in with what this search did. */
   timing?: RecallTiming;
@@ -539,6 +560,7 @@ async function cloudSearch(
 ): Promise<RecallHit[] | null> {
   const evalMinted = opts.evalConsent === true && isUnderEvalFrozenDir(contextRoot, home);
   const params = opts.fusionParams ?? FUSION_BY_TIER[eff];
+  const budget = cloudBudget(evalMinted);
   if (shouldSkipDense(bm25Hits, params.denseGate)) {
     timing.fallback = 'none';
     return bm25Hits.slice(0, topK);
@@ -558,7 +580,7 @@ async function cloudSearch(
     const minted = buildEgressPayload({ kind: 'query', contextRoot, tier: 'cloud', evalConsent: opts.evalConsent, home, query });
     if (minted.payload === null) { timing.fallback = fallbackFor(minted.withheld[0]?.rule ?? 'empty'); return null; }
     try {
-      const res = await openRouterEmbed(minted.payload, { timeoutMs: CLOUD_QUERY_TIMEOUT_MS });
+      const res = await openRouterEmbed(minted.payload, { timeoutMs: budget.queryMs });
       qv = res.vectors[0] ?? null;
       timing.querySource = 'api';
     } catch (err) {
@@ -594,10 +616,10 @@ async function cloudSearch(
     if (model === null) {
       timing.fallback = 'rerank_not_consented';
     } else {
-      const remaining = CLOUD_STAGE_BUDGET_MS - (performance.now() - stageStart);
+      const remaining = budget.stageMs - (performance.now() - stageStart);
       const window = rerankWindow(fused, bm25Hits, dense, rr);
       if (remaining > 0 && window.length > 0) {
-        order = await rerankOrder({ query, qv, index, window, fused, model, rr, byKey, contextRoot, evalMinted, home, opts, timing, timeoutMs: Math.min(RERANK_TIMEOUT_MS, remaining) }) ?? order;
+        order = await rerankOrder({ query, qv, index, window, fused, model, rr, byKey, contextRoot, evalMinted, home, opts, timing, timeoutMs: Math.min(budget.rerankMs, remaining) }) ?? order;
       }
     }
   }
@@ -710,7 +732,7 @@ async function localSearch(
     // the next full-corpus query would re-embed the whole corpus inline. Pruning
     // is the explicit refreshers' job. NEVER waits on the vault's cache lock: this
     // runs in front of a prompt, so a held lock means search what is loaded.
-    refreshEmbeddings(contextRoot, corpus, undefined, { additive: true, waitForLock: false, maxInlineEmbed: opts.maxInlineEmbed }),
+    refreshEmbeddings(contextRoot, corpus, undefined, { additive: true, waitForLock: false, maxInlineEmbed: opts.maxInlineEmbed ?? HOOK_MAX_INLINE_EMBED }),
     embedQuery(query),
   ]);
   if (refreshed === null || queryVec === null) {

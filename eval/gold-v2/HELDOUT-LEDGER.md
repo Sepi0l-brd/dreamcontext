@@ -9,3 +9,6 @@ final run happens only after a documented AC-Q2 failure.
 
 | 2026-10-11 | heldout | raw | - | 0ba4c25a | B0 baseline (TB) |
 | 2026-10-11 | reserve | raw | - | 0ba4c25a | B0 baseline (TB) |
+| 2026-10-11 | heldout | tier-cloud-index | - | ba736f4f | final (T10) |
+| 2026-10-11 | heldout | haiku | - | 0ba4c25a | B0 baseline (TB) |
+| 2026-10-11 | reserve | haiku | - | 0ba4c25a | B0 baseline (TB) |
