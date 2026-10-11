@@ -399,6 +399,22 @@ describe('builder base / fork / spawn / resume / wait', () => {
     expect(await builderLane(deps(), 'demo', 'w1-A', 'fork', { owns: ['a.ts'], promptFile: file('a.md', 'a'), canary: true })).toBe(BUILDER_CANARY_MISS_EXIT);
     expect(out.join('\n')).toMatch(/CACHE MISS/);
   });
+
+  it('canary: a fork whose first turn is still running is not a miss (exit 4, no verdict)', async () => {
+    await mintBase();
+    uuids.unshift('eeeeeeee-0000-4000-8000-00000000000e');
+    const t0 = now;
+    expect(await builderLane(deps(), 'demo', 'w1-A', 'fork', { owns: ['a.ts'], promptFile: file('a.md', 'a'), canary: true })).toBe(BUILDER_WAIT_RUNNING_EXIT);
+    expect(out.join('\n')).toMatch(/not a cache miss/);
+    expect(now - t0).toBeGreaterThanOrEqual(5 * 60_000); // a 3-minute first turn fits inside the wait
+  });
+
+  it('a lane name with commas reaches goal-live as one actor', async () => {
+    const specs: string[] = [];
+    await builderLane({ ...deps(), goalLive: (spec) => { specs.push(spec); } }, 'demo', 'w1-A', 'fresh',
+      { owns: ['a.ts'], promptFile: file('a.md', 'a'), name: 'lib: opt-out, check, lock' });
+    expect(specs).toEqual(['w1-A=lib: opt-out; check; lock']);
+  });
   // ─── builder test ──────────────────────────────────────────────────────────
 
   const outFile = (argv: string[]) => argv.find((a) => a.startsWith('--outputFile='))!.slice('--outputFile='.length);
@@ -492,6 +508,16 @@ describe('builder base / fork / spawn / resume / wait', () => {
     expect(await builderTest(deps(), 'demo', { wave: '1', failed: true })).toBe(0);
     expect(out.join('\n')).toMatch(/tests\/gone\.test\.ts ran no tests/);
     expect(existsSync(statefile())).toBe(false);
+  });
+
+  it('test: a lead building alone (no lanes registered) gets its failures with no owner', async () => {
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ devDependencies: { vitest: '4' } }));
+    writeFileSync(join(root, 'tsconfig.json'), '{}');
+    check = script({ tests: report([{ file: 'tests/a.test.ts', failed: ['a handles empty'], passed: 1 }]) });
+    expect(await builderTest(deps(), 'demo', { wave: '1', related: ['src/a.ts'] })).toBe(1);
+    const printed = out.join('\n');
+    expect(printed).toMatch(/^FAIL: tests\/a\.test\.ts > a handles empty :: expected 1 to be 2$/m);
+    expect(printed).not.toMatch(/no lane owns/);
   });
 
   it('test --wave final: the run-end check keeps its own failure state; a bad wave is refused', async () => {

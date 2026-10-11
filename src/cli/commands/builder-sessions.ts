@@ -87,7 +87,9 @@ export const BUILDER_CANARY_MISS_EXIT = 6;
 /** A lane resumed this many times is not converging: the next one is the owner's call. */
 export const MAX_RESUMES = 3;
 const TICK_MS = 10_000;
-const CANARY_MAX_MS = 120_000;
+/** A fork's first turn plans its whole lane from the context it inherited: measured at 3 min on a
+ *  125k base. The canary waits up to one wait slice for it, and no first call is never a miss. */
+const CANARY_MAX_MS = 540_000;
 
 export interface SessionDeps {
   root: () => string;
@@ -462,7 +464,8 @@ export async function builderLane(deps: SessionDeps, slug: string, lane: string,
   }
   const base = kind === 'fork' && rec.parent ? ` (fork of base ${rec.parent})` : '';
   await logQuietly(deps, slug, `${lane} spawned sid ${rec.sid} pid ${rec.pid} cfg ${rec.cfg}${base}`);
-  goalLiveQuietly(deps, `${lane}${opts.name ? `=${opts.name}` : ''}`, {
+  // A comma separates actors in a goal-live spec: one inside the name would split this lane into several.
+  goalLiveQuietly(deps, `${lane}${opts.name ? `=${opts.name.replace(/,/g, ';')}` : ''}`, {
     kind: kind === 'fork' ? 'fork' : 'spawn', role: 'implementer', session: rec.sid,
     ...(wave != null ? { wave: String(wave) } : {}),
     ...(kind === 'fork' && rec.parent ? { contextOf: rec.parent } : {}),
@@ -488,8 +491,8 @@ async function canary(deps: SessionDeps, rec: LaneRecord): Promise<number> {
     }
     await deps.sleep(3000);
   }
-  deps.print(`canary ${rec.lane}: no first call within ${CANARY_MAX_MS / 1000} s; check builder status`);
-  return BUILDER_CANARY_MISS_EXIT;
+  deps.print(`canary ${rec.lane}: no first call within ${CANARY_MAX_MS / 60_000} min: a long first turn, not a cache miss. builder status shows the read once it lands`);
+  return BUILDER_WAIT_RUNNING_EXIT;
 }
 
 export async function builderResume(
@@ -639,10 +642,12 @@ export async function builderTest(deps: SessionDeps, slug: string, opts: TestOpt
   }
   for (const f of failures) state.seen[f.key] = (state.seen[f.key] ?? 0) + 1;
 
+  // A lead that builds alone has no lanes: its failures are its own, so no owner is printed.
   const lanes = Object.values(peekRegistry(root, slug).lanes);
   for (const f of failures.slice(0, MAX_PRINTED_FAILURES)) {
-    const owner = ownerOf(f.file, lanes);
     const again = state.seen[f.key] >= 2 ? ` [FAILED ${state.seen[f.key]}x: after a fix this goes to the owner]` : '';
+    if (lanes.length === 0) { deps.print(`FAIL: ${f.key}${again}`); continue; }
+    const owner = ownerOf(f.file, lanes);
     deps.print(`FAIL ${owner ?? `? (no lane owns ${f.file})`}: ${f.key}${again}`);
   }
   if (failures.length > MAX_PRINTED_FAILURES) deps.print(`... and ${failures.length - MAX_PRINTED_FAILURES} more (see the logs above)`);
@@ -702,7 +707,7 @@ export function registerBuilderSessionCommands(cmd: Command, deps: SessionDeps =
       .option('--name <text>', 'What it builds, for the live map')
       .option(kind === 'spawn' ? '--effort <level>' : '--canary', kind === 'spawn'
         ? `${BUILDER_EFFORTS.join('|')} (default ${BUILDER_DEFAULT_EFFORT})`
-        : `Wait for the first call and report the cache read (exit ${BUILDER_CANARY_MISS_EXIT} on a miss)`)
+        : `Wait for the first call and report the cache read (exit ${BUILDER_CANARY_MISS_EXIT} on a miss, ${BUILDER_WAIT_RUNNING_EXIT} when none landed in ${CANARY_MAX_MS / 60_000} min)`)
       .description(kind === 'spawn'
         ? 'Start a fresh builder for one lane (detached; returns at once)'
         : 'Start a builder forked from the base, so it starts knowing what the base read (detached)')
