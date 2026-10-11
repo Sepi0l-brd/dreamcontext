@@ -15,27 +15,14 @@ marketing/
 # Obsidian vault config — editor-local (created by the excalidraw skill)
 .obsidian/
 
-# Project's own dogfooded context. core/ + knowledge/ are kept tracked as a
-# curated public showcase of what a mature dreamcontext looks like. These
-# directories are internal working data — tracked locally so the tool keeps
-# working, but kept OUT of the public repo:
-#   marketing/ — scraped third-party competitor data (copyright/ToS) + strategy
-#   state/     — raw task PRDs / unreleased-roadmap working notes (+ ephemeral
-#                .sleep.json, .version-check.json, .session-digests/)
-#   council/   — internal decision debates
-_dream_context/marketing/
-_dream_context/state/
-_dream_context/council/
-# Ephemeral runtime scratch — images dropped into the in-app agent, etc. Never tracked.
-_dream_context/tmp/
+# This project's own brain lives in a separate PRIVATE repo (dreamcontext-brain) and
+# links this one as a code repo. Nothing under these folders may ever land here: this
+# repo is public. _agent_context/ is the brain's pre-rename name.
+_dream_context/
+_agent_context/
 # Repo-root scratch: where the verify scripts write their screenshots and where one-off
 # probes land. Anchored with a leading slash so it can never match a source `tmp/` folder.
 /tmp/
-# Secrets are never tracked, regardless of the above
-_dream_context/**/.env
-# Lab (analytics insights) credentials — insights + cache DO sync, only this doesn't
-_dream_context/lab/credentials.json
-_dream_context/lab/credentials.*
 # design-sync: staged converter scripts, build output, machine state (durable
 # inputs — config.json, NOTES.md, conventions.md, previews/, overrides/ — stay tracked)
 .ds-sync/
@@ -58,51 +45,14 @@ version-filter-sprint-aware.png
 _download/
 docs/
 
-# dreamcontext remote task backend (derived mirror + sync state)
-_dream_context/state/*.md
-_dream_context/state/.tasks-sync.lock
-_dream_context/state/.tasks-sync.json
-_dream_context/state/.tasks-queue.json
-_dream_context/state/.conflicts/
-_dream_context/state/.secrets.json
-
-# dreamcontext: machine-local agent session roster (Claude resume ids)
-_dream_context/state/.agent-sessions.json
-
-# dreamcontext: machine-local agent tab → live Claude session map (one file per tab)
-_dream_context/state/.agent-session-map/
-
-# dreamcontext: machine-local Claude conversation titles (Past chats)
-_dream_context/state/.session-titles.json
-
-# Working/scratch context — inbox is DARK BY DESIGN (not indexed, not recalled) and routinely holds
-# raw client data, drafts and exports. This repo is PUBLIC and skill-packs ships to npm, so inbox must
-# never be published. Promote a board into knowledge/ once it is genuinely shareable.
-_dream_context/inbox/
-_dream_context/tmp/
 
 # Generated example boards — build artifacts, fully derived from examples/*.js (run them to regenerate)
 skill-packs/excalidraw/examples/*.excalidraw.md
 
-# dreamcontext automations — machine-local run state (never commit)
-_dream_context/automations/cache/*.lock
-_dream_context/automations/cache/*.run.json
-_dream_context/automations/cache/*.run.json.tmp
-_dream_context/automations/*.md
-_dream_context/automations/cache/*.json
-_dream_context/automations/output/*/*
 
 # Scratch harness written by scripts/verify/project-chip-status.mjs. The script removes it
 # on the way out; this is the safety net for a run that was killed before it could.
 dashboard/.verify-harness/
 
-# dreamcontext pre-pull task mirror backups
-_dream_context/state/.pre-pull-*/
 *.tgz
-
-# dreamcontext: machine-local context-handoff nudge state + per-pane toggles
-_dream_context/state/.context-watch/
-
-# dreamcontext: machine-local context-handoff requests
-_dream_context/state/.handoff-requests/
 /npm-shrinkwrap.json

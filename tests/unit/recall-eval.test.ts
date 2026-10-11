@@ -5,14 +5,16 @@ import { fileURLToPath } from 'node:url';
 
 import { buildCorpus, docKey } from '../../src/lib/recall.js';
 import { loadGold, evaluate, formatReport } from '../../eval/harness.js';
+import { OWN_BRAIN } from '../helpers/own-brain.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = join(here, '../../_dream_context');
+// The gold set targets the project's own brain, which lives in a private repo.
+const root = OWN_BRAIN;
 const evalDir = join(here, '../../eval');
 const goldPath = process.env.GOLD_PATH ?? join(evalDir, 'gold.jsonl');
 
-describe('recall-eval harness', () => {
-  const corpus = buildCorpus(root);
+describe.skipIf(!root)('recall-eval harness', () => {
+  const corpus = root ? buildCorpus(root) : [];
   const gold = loadGold(goldPath);
   const report = evaluate(corpus, gold);
 
@@ -63,7 +65,8 @@ describe('gold integrity', () => {
     : [];
   const parked = new Set(quarantine.map((e) => `${e.id}|${e.key}`));
 
-  const present = new Set(buildCorpus(strictRoot ?? root).map(docKey));
+  const corpusRoot = strictRoot ?? root;
+  const present = new Set(corpusRoot ? buildCorpus(corpusRoot).map(docKey) : []);
 
   it('quarantine entries are complete', () => {
     for (const e of quarantine) {
@@ -81,7 +84,7 @@ describe('gold integrity', () => {
     }
   });
 
-  it('every expected and alt target of every gold file resolves to a real docKey', () => {
+  it.skipIf(!corpusRoot)('every expected and alt target of every gold file resolves to a real docKey', () => {
     const missing: string[] = [];
     for (const file of files) {
       for (const q of loadGold(file)) {

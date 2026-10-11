@@ -32,6 +32,7 @@ import { REGISTRY, pendingMigrations } from '../../src/migrations/index.js';
 import { detectFlatDiagramBoards, migrateDiagramsToFolders } from '../../src/lib/diagrams-migration.js';
 import { readLedger } from '../../src/lib/migration-ledger.js';
 import { existsSync, readFileSync as fsReadFileSync } from 'node:fs';
+import { OWN_BRAIN } from '../helpers/own-brain.js';
 
 // ─── Dashboard leafName pure logic (inlined to avoid React context) ───────────
 //
@@ -647,9 +648,9 @@ describe('dashboard excalidraw-grouping', () => {
 // ─── AC7: excalidraw-flat-regression ─────────────────────────────────────────
 
 describe('excalidraw-flat-regression', () => {
-  it('live flat knowledge/diagrams/*.excalidraw.md still indexes+recalls with extraction; index content JSON-free', () => {
-    // Use dreamcontext's own architecture.excalidraw.md as the regression fixture.
-    const CONTEXT_ROOT = join(__dirname, '..', '..', '_dream_context');
+  it.skipIf(!OWN_BRAIN)('live flat knowledge/diagrams/*.excalidraw.md still indexes+recalls with extraction; index content JSON-free', () => {
+    // Use dreamcontext's own architecture.excalidraw.md (in the private brain repo) as the regression fixture.
+    const CONTEXT_ROOT = OWN_BRAIN!;
     // Diagrams are foldered per-title and grouped under a category subfolder
     // (diagrams/<category>/<title>/<title>.excalidraw.md), so the index slug
     // carries the full containing path. architecture lives under the `system` category.

@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { OWN_BRAIN } from '../helpers/own-brain.js';
 
 const REPO_ROOT = join(__dirname, '..', '..');
 const PKG_PATH = join(REPO_ROOT, 'package.json');
-const POSITIONING_MD = join(REPO_ROOT, '_dream_context', 'knowledge', 'positioning.md');
-const SOUL_MD = join(REPO_ROOT, '_dream_context', 'core', '0.soul.md');
+// Both documents live in the project's private brain repo — skipped when it is absent.
+const POSITIONING_MD = join(OWN_BRAIN ?? '', 'knowledge', 'positioning.md');
+const SOUL_MD = join(OWN_BRAIN ?? '', 'core', '0.soul.md');
 
 function readPkg(): Record<string, unknown> {
   return JSON.parse(readFileSync(PKG_PATH, 'utf-8'));
@@ -21,7 +23,7 @@ function readSoul(): string {
 
 // ─── positioning.md existence and content rules ───────────────────────────────
 
-describe('positioning.md', () => {
+describe.skipIf(!OWN_BRAIN)('positioning.md', () => {
   it('exists at _dream_context/knowledge/positioning.md', () => {
     expect(existsSync(POSITIONING_MD)).toBe(true);
   });
@@ -69,7 +71,7 @@ describe('package.json description', () => {
     expect(description).not.toContain('autonomous');
   });
 
-  it('equals the Short variant string from positioning.md', () => {
+  it.skipIf(!OWN_BRAIN)('equals the Short variant string from positioning.md', () => {
     const content = readPositioning();
     // Extract the Short variant: the line(s) immediately after "## Short"
     const shortMatch = content.match(/##\s*Short[^\n]*\n+([^\n#]+)/);
@@ -112,7 +114,7 @@ describe('dreamcontextVersion()', () => {
 
 // ─── 0.soul.md Project Identity ───────────────────────────────────────────────
 
-describe('0.soul.md', () => {
+describe.skipIf(!OWN_BRAIN)('0.soul.md', () => {
   it('does NOT contain the word "autonomous" (case-insensitive)', () => {
     const content = readSoul();
     expect(content.toLowerCase()).not.toContain('autonomous');
