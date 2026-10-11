@@ -1,0 +1,1949 @@
+{
+ "label": "B0-raw-train",
+ "split": "train",
+ "mode": "raw",
+ "tier": null,
+ "denseOnly": null,
+ "rerankModel": null,
+ "injectK": 3,
+ "engineSha": "0ba4c25a",
+ "corpusFingerprint": "03d9ce95b568031c0c2e2b31baa2eb7f1e66c8b7106c751c2d43b9f2c9b1bc96",
+ "now": "2026-10-10T20:09:05.000Z",
+ "overall": {
+  "recall1": 41.11111111111111,
+  "recall3": 58.88888888888889,
+  "recall5": 65.55555555555556,
+  "mrr": 0.5119444444444445,
+  "ndcg10": 0.5650109993597614,
+  "n": 90,
+  "injectionRate": 100,
+  "effective5": 65.55555555555556
+ },
+ "byLang": {
+  "tr": {
+   "recall1": 20,
+   "recall3": 36.666666666666664,
+   "recall5": 43.333333333333336,
+   "mrr": 0.2928703703703704,
+   "ndcg10": 0.3570075334918338,
+   "n": 30,
+   "injectionRate": 100,
+   "effective5": 43.333333333333336,
+   "r5ci": [
+    27.37723743061511,
+    60.80299045459127
+   ]
+  },
+  "en": {
+   "recall1": 56.666666666666664,
+   "recall3": 80,
+   "recall5": 90,
+   "mrr": 0.705,
+   "ndcg10": 0.7540296815847559,
+   "n": 30,
+   "injectionRate": 100,
+   "effective5": 90,
+   "r5ci": [
+    74.37855868473339,
+    96.54007400402838
+   ]
+  },
+  "mixed": {
+   "recall1": 46.666666666666664,
+   "recall3": 60,
+   "recall5": 63.33333333333333,
+   "mrr": 0.5379629629629629,
+   "ndcg10": 0.5839957830026944,
+   "n": 30,
+   "injectionRate": 100,
+   "effective5": 63.33333333333333,
+   "r5ci": [
+    45.513246433604934,
+    78.12629779598231
+   ]
+  }
+ },
+ "byLangCategory": {
+  "tr": {
+   "field-match": {
+    "recall1": 40,
+    "recall3": 80,
+    "recall5": 80,
+    "mrr": 0.5533333333333333,
+    "ndcg10": 0.6578129652635776,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 80
+   },
+   "topical-adjacency": {
+    "recall1": 0,
+    "recall3": 0,
+    "recall5": 0,
+    "mrr": 0,
+    "ndcg10": 0,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 0
+   },
+   "paraphrase": {
+    "recall1": 12.5,
+    "recall3": 12.5,
+    "recall5": 25,
+    "mrr": 0.165625,
+    "ndcg10": 0.2127897105025338,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 25
+   },
+   "recency": {
+    "recall1": 16.666666666666664,
+    "recall3": 16.666666666666664,
+    "recall5": 33.33333333333333,
+    "mrr": 0.23611111111111108,
+    "ndcg10": 0.2978139575302359,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 33.33333333333333
+   },
+   "exact-term": {
+    "recall1": 33.33333333333333,
+    "recall3": 83.33333333333334,
+    "recall5": 83.33333333333334,
+    "mrr": 0.5462962962962963,
+    "ndcg10": 0.6553266248725732,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 83.33333333333334
+   }
+  },
+  "en": {
+   "topical-adjacency": {
+    "recall1": 60,
+    "recall3": 80,
+    "recall5": 100,
+    "mrr": 0.74,
+    "ndcg10": 0.8035565121611998,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "field-match": {
+    "recall1": 80,
+    "recall3": 80,
+    "recall5": 100,
+    "mrr": 0.85,
+    "ndcg10": 0.8861353116146786,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "recency": {
+    "recall1": 33.33333333333333,
+    "recall3": 66.66666666666666,
+    "recall5": 66.66666666666666,
+    "mrr": 0.5,
+    "ndcg10": 0.5436432511904858,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 66.66666666666666
+   },
+   "paraphrase": {
+    "recall1": 62.5,
+    "recall3": 75,
+    "recall5": 87.5,
+    "mrr": 0.7125,
+    "ndcg10": 0.7522228201007499,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 87.5
+   },
+   "exact-term": {
+    "recall1": 50,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 0.75,
+    "ndcg10": 0.8154648767857288,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 100
+   }
+  },
+  "mixed": {
+   "topical-adjacency": {
+    "recall1": 0,
+    "recall3": 60,
+    "recall5": 60,
+    "mrr": 0.2777777777777778,
+    "ndcg10": 0.446597948979884,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 60
+   },
+   "recency": {
+    "recall1": 66.66666666666666,
+    "recall3": 66.66666666666666,
+    "recall5": 83.33333333333334,
+    "mrr": 0.7083333333333334,
+    "ndcg10": 0.7384460930122322,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 83.33333333333334
+   },
+   "field-match": {
+    "recall1": 80,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 0.8666666666666668,
+    "ndcg10": 0.9,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "paraphrase": {
+    "recall1": 12.5,
+    "recall3": 12.5,
+    "recall5": 12.5,
+    "mrr": 0.14583333333333334,
+    "ndcg10": 0.16952589838850277,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 12.5
+   },
+   "exact-term": {
+    "recall1": 83.33333333333334,
+    "recall3": 83.33333333333334,
+    "recall5": 83.33333333333334,
+    "mrr": 0.8333333333333334,
+    "ndcg10": 0.8333333333333334,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 83.33333333333334
+   }
+  }
+ },
+ "latency": {
+  "meanMs": 12618.567963411111,
+  "p50Ms": 11979.542000000016,
+  "p90Ms": 22944.779042000067,
+  "p90ci": [
+   18018.78679199994,
+   27843.606625000015
+  ]
+ },
+ "perQuery": [
+  {
+   "id": "g2t-tr-001",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/agent-composer-add-folder-picker-to-files-button",
+    "changelog/changelog#2026-07-16-dashboard-445",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/peer-mail-cross-vault-agent-messaging",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "knowledge/desktop-beta-tauri-multivault",
+    "task/whiteboard-a-ajan-karti-eklenir-board-u-bilen-yalniz-kendi-board-una-yazan-ustune-birakilan-widget-i-soran-otomasyon-ajani",
+    "task/unified-dashboard-beta-multivault",
+    "knowledge/vault-registry-multivault",
+    "feature/chat-composer-shelf"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-002",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "whiteboard/control-panel",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "knowledge/sleep-debt.excalidraw",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-003",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 8,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "whiteboard/onboarding",
+    "task/chat-queued-messages-steer-into-the-running-turn-instead-of-waiting-for-it-to-end",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "knowledge/memory-upgrade-plan.excalidraw",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-004",
+   "category": "paraphrase",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": null,
+   "hits": [
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/jarvis-composer-bir-durum-rayi-canli-ses-olcer-ve-kelime-ustu-duzeltme-kazanir",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-005",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/licensing.excalidraw",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "knowledge/doctor-json-before-after.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-006",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "whiteboard/onboarding",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-007",
+   "category": "recency",
+   "lang": "tr",
+   "rank": 6,
+   "hits": [
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur",
+    "task/whiteboard-wiki-olur-sayfalar-board-dan-cikmadan-popup-ta-wiki-menusunde-ve-tuval-wiki-modunda-okunur",
+    "task/whiteboard-ikinci-tur-html-ustunde-kaydirma-calisir-web-blogu-yerel-dosya-acar-panel-tahtadaki-ajanlari-tanir-ajan-karti-sabit-boyda-gelir-tahtaya-gorsel-eklenir-ajana-birakma-ve-panel-ile-kart-iliskisi-netlesir",
+    "knowledge/default",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-008",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 3,
+   "hits": [
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "knowledge/context-ceiling-economics",
+    "task/turn-the-context-ceiling-research-into-the-article-level-report-the-owner-asked-for",
+    "knowledge/sleep-debt.excalidraw",
+    "changelog/changelog#2026-07-28-chat-316",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "changelog/changelog#2026-09-13-context-135",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "core/6.system_flow"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-009",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/hypotheses-ui-redesign-verdict-first-cards-list-board-toggle-seen-state-calm-detail-modal",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/sleep-stops-filing-junk-tasks-a-bar-for-what-deserves-a-task-and-the-right-model-per-specialist",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-010",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "whiteboard/onboarding",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-011",
+   "category": "exact-term",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": 3,
+   "hits": [
+    "task/task-statuses-become-project-declarable-data-with-a-semantic-kind-so-planned-cancelled-or-any-custom-status-syncs-to-github-and-clickup-without-a-code-change",
+    "knowledge/decision-github-task-backend",
+    "knowledge/parent-on-the-wire-child-in-a-sidecar",
+    "feature/task-management",
+    "changelog/changelog#2026-09-06-tasks-168",
+    "knowledge/settings-redesign.excalidraw",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/whiteboard-kartlari-cilalanir-sekme-yeniden-adlandirilir-insight-basligi-tekrarsiz-kartlar-dip-dibe-durur-karta-renk-verilir-html-kutusuna-sigar",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-012",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/pid-lockfile-concurrent-json",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "changelog/changelog#2026-06-29-sleep-571",
+    "feature/council-skill",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/enforce-mutual-exclusion-on-sleep-consolidation-lock",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-013",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "knowledge/licensing.excalidraw",
+    "whiteboard/onboarding",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-014",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 10,
+   "hits": [
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "feature/context-gate-and-goal-skill",
+    "feature/optional-skill-packs",
+    "feature/dreamcontext-skill-folder",
+    "task/update-refreshes-skills-and-agents-but-never-the-root-instruction-block-its-help-promises",
+    "feature/jev-verify-skill-pack",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "feature/multi-review-skill",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/decision-meta-marketing-skill-adoption"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-015",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "knowledge/settings-redesign.excalidraw",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-016",
+   "category": "recency",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": null,
+   "hits": [
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/sleep-stops-filing-junk-tasks-a-bar-for-what-deserves-a-task-and-the-right-model-per-specialist",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-017",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "whiteboard/onboarding",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-018",
+   "category": "recency",
+   "lang": "tr",
+   "rank": 4,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "knowledge/decision-jev-for-validator-browser-loops",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/sleep-stops-filing-junk-tasks-a-bar-for-what-deserves-a-task-and-the-right-model-per-specialist",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-019",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "whiteboard/onboarding",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-020",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 5,
+   "hits": [
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "whiteboard/onboarding",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/a-project-chip-says-how-many-chats-it-holds-and-how-many-are-working-one-counted-bubble-per-status",
+    "task/chat-queued-messages-steer-into-the-running-turn-instead-of-waiting-for-it-to-end",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "knowledge/sleep-debt.excalidraw",
+    "feature/project-tabs-one-window-multi-vault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-021",
+   "category": "recency",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-022",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 9,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "feature/doctor-machine-readable-diagnostics",
+    "knowledge/diagnostic-repair-loop",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-023",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 3,
+   "hits": [
+    "changelog/changelog#2026-10-02-lab-73",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/insights-v2-funnel-explorer-every-page-a-bindable-block-and-the-whole-explorer-as-one-interactive-page",
+    "whiteboard/control-panel",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/a-whiteboard-shows-a-funnel-as-its-explorer-any-lab-card-as-a-widget-and-the-date-window-on-the-card",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/insights-v2-boards-feel-finished-a-card-click-opens-its-detail-html-inside-a-card-is-clickable-a-v1-explorer-converts-and-auto-sync-is-bounded-and-visible"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-024",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "knowledge/sleep-debt.excalidraw",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/launcher-acilisi-9-5s-den-0-4s-ye-team-fetch-event-loop-disina-cli-path-cache-probe-memo-fontlar-bundle-da"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-025",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "whiteboard/control-panel",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "whiteboard/onboarding",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "knowledge/sleep-debt.excalidraw",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-026",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/hypotheses-ui-redesign-verdict-first-cards-list-board-toggle-seen-state-calm-detail-modal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-027",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/vendor-design-system-integration",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "changelog/changelog#2026-09-05-chat-176",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "task/insights-breakdown-contract-matrix-v1-native-reports-layer",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "changelog/changelog#2026-09-07-chat-166",
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-028",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-debt-counts-only-real-human-work-so-the-consolidation-warning-means-something-again",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "feature/context-gate-and-goal-skill",
+    "knowledge/board",
+    "task/hands-free-mode-moves-the-active-project-to-a-cloud-machine-the-phone-drives-it-through-a-link-and-password-and-return-brings-every-diff-and-session-back-to-the-laptop",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "feature/sleep-consolidation",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "task/agent-work-in-chat-reads-as-a-quest-party-characters-a-quest-map-a-team-log-and-the-r-d-in-plain-words"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-029",
+   "category": "field-match",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": 3,
+   "hits": [
+    "knowledge/settings-redesign.excalidraw",
+    "task/settings-dort-gruba-toplanir-tekrarlayan-metin-teklenir-ve-save-dugmesi-kalkar",
+    "knowledge/byte-surgical-section-editing",
+    "changelog/changelog#2026-07-27-automations-322",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/automations-learn-from-every-run-show-their-session-and-say-what-happened-in-the-notification",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models",
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-030",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/agents-page-round-one-leftovers-members-view-copy-empty-state-and-answer-route-messages-short-diagram-box-height-and-two-hardening-nits",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/agents-channel-after-first-real-use-answers-thread-under-your-ask-the-whole-report-lives-in-the-thread-and-diagrams-pdfs-and-clips-an-agent-posts-actually-render",
+    "task/chat-s-command-parser-reads-the-right-characters-after-a-heredoc-and-the-file-panel-drops-its-emoji-em-dashes-and-dead-css",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/whiteboard-ikinci-tur-html-ustunde-kaydirma-calisir-web-blogu-yerel-dosya-acar-panel-tahtadaki-ajanlari-tanir-ajan-karti-sabit-boyda-gelir-tahtaya-gorsel-eklenir-ajana-birakma-ve-panel-ile-kart-iliskisi-netlesir",
+    "task/train-me-mode-the-agent-learns-your-taste-through-swipe-and-a-b-cards-and-writes-what-it-learned-into-patterns",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/feat-sleep-versioned-migration-system-per-release-migration-registry-sleep-migration-agent-migration-ledger-report",
+    "knowledge/command-not-found-in-a-spawned-child"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-001",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/pre-publish-checklist-v0-26-1",
+    "task/pre-publish-checklist-v0-23-0",
+    "changelog/changelog#2026-08-02-release-272",
+    "knowledge/synthetic-fixtures-for-published-artifacts",
+    "feature/migration-system",
+    "knowledge/release-publish-checklist",
+    "task/pre-publish-checklist-v0-28-0",
+    "task/pre-publish-checklist-v0-24-0",
+    "task/heal-the-v0-24-1-release-record-npm-has-it-the-git-tag-and-announcement-do-not",
+    "task/pre-publish-checklist-v0-27-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-002",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/a-fresh-worktree-needs-two-npm-installs-automate-or-document-the-dashboard-deps",
+    "knowledge/release-publish-checklist",
+    "task/first-run-onboarding-detects-every-missing-piece-on-this-machine-and-installs-it-step-by-step-in-the-app-and-in-the-cli",
+    "core/4.tech_stack",
+    "feature/first-run-onboarding",
+    "task/pre-publish-checklist-v0-28-0",
+    "knowledge/build-and-propagate-pattern",
+    "task/register-the-connectors-command-so-the-shipped-clickup-pull-is-reachable-from-the-cli",
+    "task/hands-free-mode-moves-the-active-project-to-a-cloud-machine-the-phone-drives-it-through-a-link-and-password-and-return-brings-every-diff-and-session-back-to-the-laptop",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-003",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/4.tech_stack-dependencies-2026-h2",
+    "knowledge/memory-archive-2026-h1",
+    "knowledge/technical-decisions-archive",
+    "knowledge/control-plane-api",
+    "knowledge/2.memory-2026-h2",
+    "feature/context-gate-and-goal-skill",
+    "core/4.tech_stack",
+    "knowledge/0.soul-2026-h2",
+    "feature/optional-skill-packs",
+    "task/recall-dil-fark-etmeksizin-isabetli-olur-yerel-bulut-indeksli-ve-bulut-katmanlari-olculerek-gelir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-004",
+   "category": "recency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/doctor-s-over-limit-snapshot-warning-is-a-dead-end-when-no-single-core-file-is-the-culprit",
+    "task/snapshot-sections-per-section-char-breakdown-so-an-oversized-brain-is-diagnosable",
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "task/goal-skill-plan-v2-delta",
+    "task/goal-skill-plan-v1",
+    "feature/context-snapshot",
+    "task/goal-skill-plan-v3-delta",
+    "knowledge/budget-demotion-floor-prevents-blinding",
+    "task/goal-skill-plan-v4-delta",
+    "task/the-desktop-chat-surface-truncates-the-snapshot-to-a-2kb-preview-at-around-10k-chars"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-005",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 5,
+   "hits": [
+    "feature/in-app-agent-terminal",
+    "feature/dreamcontext-assistant",
+    "knowledge/every-store-key-needs-a-death",
+    "feature/jarvis-voice-mode",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/chat-answers-become-agent-written-html-typed-chart-page-retire-dream-html-renders-in-a-themed-sandbox",
+    "changelog/changelog#2026-07-26-agent-338",
+    "feature/claude-multi-account",
+    "feature/agent-browser-live-view",
+    "feature/automations-scheduled-headless-claude-jobs"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-006",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/orthogonal-encoding-channels",
+    "changelog/changelog#2026-08-29-chat-190",
+    "core/3.style_guide_and_branding",
+    "task/sleepy-acts-out-the-chat-mode-the-mascot-shows-plan-and-develop-not-just-status",
+    "feature/sleepy-notch-capture",
+    "task/every-agent-role-is-a-real-dreamcontext-character-its-own-body-colour-and-prop-told-apart-at-a-glance-not-an-emoticon",
+    "task/sleepy-notch-capture",
+    "feature/web-dashboard",
+    "knowledge/desktop-beta-tauri-multivault",
+    "knowledge/jarvis-mode-plan-v7"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-007",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/context-ceiling-economics",
+    "task/turn-the-context-ceiling-research-into-the-article-level-report-the-owner-asked-for",
+    "feature/opt-in-context-handoff",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "task/chat-stays-smooth-when-the-rail-folds-a-pane-is-focused-or-the-owner-scrolls-up-mid-stream",
+    "knowledge/jev-system-one-model",
+    "feature/chat-composer-shelf",
+    "feature/manifest-based-install-update",
+    "task/a-headless-builder-reads-as-a-live-teammate-in-chat-its-brief-its-steps-and-its-status-not-a-bare-shell-row"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-008",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/git-pinned-evidence",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "knowledge/jarvis-mode-plan-v7",
+    "knowledge/feature-integration-pattern",
+    "task/pre-publish-checklist-v0-26-1",
+    "task/whiteboard-a-ajan-karti-eklenir-board-u-bilen-yalniz-kendi-board-una-yazan-ustune-birakilan-widget-i-soran-otomasyon-ajani",
+    "knowledge/refuse-before-the-caller-cleans-up",
+    "feature/dreamcontext-assistant",
+    "knowledge/retire-shipped-capability-properly",
+    "knowledge/synthetic-fixtures-for-published-artifacts"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-009",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/quest-party-chat-ux-plan",
+    "knowledge/cli-derived-action-rows",
+    "knowledge/mutation-test-assertions",
+    "task/a-headless-builder-reads-as-a-live-teammate-in-chat-its-brief-its-steps-and-its-status-not-a-bare-shell-row",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "feature/dreamcontext-assistant",
+    "knowledge/jarvis-mode-plan-v7",
+    "task/pre-publish-checklist-v0-26-1",
+    "feature/sleep-consolidation"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-010",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/git-worktrees-split-the-brain-resolve-the-context-root-from-the-main-worktree",
+    "knowledge/sleep-debt.excalidraw",
+    "feature/sleep-consolidation",
+    "feature/migration-system",
+    "knowledge/worktrees-and-the-brain",
+    "feature/sleep-fanout-architecture",
+    "feature/context-snapshot",
+    "feature/web-dashboard",
+    "knowledge/release-publish-checklist",
+    "feature/launcher-quiz-onboarding"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-011",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/decision-github-task-backend",
+    "task/github-issue-task-format-and-presync-consolidation",
+    "task/a-merged-away-chore-gets-re-filed-as-an-empty-task-every-sleep-cycle",
+    "changelog/changelog#2026-06-21-tasks-626",
+    "knowledge/2.memory-2026-h2",
+    "feature/task-management",
+    "task/github-task-backend",
+    "knowledge/decision-sync-identity-and-reconciliation",
+    "feature/brain-repo-sync",
+    "knowledge/1.user-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-012",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/virtual-filter-tokens",
+    "feature/web-dashboard",
+    "feature/whiteboards",
+    "feature/in-app-agent-terminal",
+    "knowledge/synthetic-fixtures-for-published-artifacts",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "feature/lab-analytics-insights",
+    "task/score-the-content-sleep-writes-signal-to-noise-staleness-inference-vs-observation",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "task/agents-epic-finished-end-to-end-and-the-side-menu-gets-one-maturity-model-section-hues-and-honest-icons"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-013",
+   "category": "recency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/test-a-diagnosis-where-it-predicts-success",
+    "task/the-chronic-open-thesis-gate-can-never-fire-because-cycles-checked-only-counts-cycles-that-produced-evidence",
+    "feature/proactive-learning-layer",
+    "feature/project-tabs-one-window-multi-vault",
+    "task/captures-never-graduate-age-scratch-by-date-and-promote-what-recurs-into-knowledge",
+    "feature/claude-multi-account",
+    "thesis/test",
+    "feature/patterns-auto-injection",
+    "task/the-meeting-room-gets-its-own-byte-channel-so-a-dropped-or-pasted-file-reaches-every-agent",
+    "feature/chat-composer-shelf"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/automations-become-agents-every-automation-is-a-slack-like-thread-the-agent-posts-important-updates-to-and-the-user-replies-in",
+    "feature/calendar-integration",
+    "feature/hands-free-cloud-mode",
+    "feature/multi-product-support",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "task/captures-never-graduate-age-scratch-by-date-and-promote-what-recurs-into-knowledge",
+    "feature/memory-recall-bm25",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "knowledge/desktop-beta-tauri-multivault",
+    "knowledge/ask-the-subject-not-its-configuration"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-015",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/gantt-inflates-a-rollup-objective-s-finish-when-it-both-depends-on-sub-objectives-and-shares-their-member-tasks-phantom-slip-disagrees-with-cli-forecast",
+    "changelog/changelog#2026-07-09-roadmap-459",
+    "feature/okr-roadmap",
+    "changelog/changelog#2026-07-08-roadmap-469",
+    "task/roadmap-forecast-accuracy-effort-aware-envelope-clamped-cascade",
+    "changelog/changelog#2026-06-23-docs-603",
+    "task/feat-roadmap-task-derived-roadmap-auto-progress-sprint-timeline-from-tasks-features",
+    "task/interactive-roadmap-dashboard-forecast-timeline-cascade-editable-detail-panel",
+    "changelog/changelog#2026-07-02-roadmap-544",
+    "changelog/changelog#2026-07-14-roadmap-453"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-016",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 4,
+   "hits": [
+    "task/feat-roadmap-task-derived-roadmap-auto-progress-sprint-timeline-from-tasks-features",
+    "feature/okr-roadmap",
+    "task/roadmap-forecast-accuracy-effort-aware-envelope-clamped-cascade",
+    "knowledge/board",
+    "task/interactive-roadmap-dashboard-forecast-timeline-cascade-editable-detail-panel",
+    "changelog/changelog#2026-07-08-roadmap-469",
+    "task/gantt-inflates-a-rollup-objective-s-finish-when-it-both-depends-on-sub-objectives-and-shares-their-member-tasks-phantom-slip-disagrees-with-cli-forecast",
+    "knowledge/visual-first-board-ritual",
+    "changelog/changelog#2026-07-03-roadmap-542",
+    "changelog/changelog#2026-07-02-roadmap-544"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-017",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "feature/peer-mail",
+    "task/peer-mail-cross-vault-agent-messaging",
+    "feature/jarvis-voice-mode",
+    "task/a-dreamcontext-assistant-lives-in-the-notch-wakes-on-a-hotkey-and-drives-every-project-as-the-owner-s-replica",
+    "knowledge/federation-cross-vault",
+    "knowledge/component-reuse-over-reimplementation",
+    "feature/meeting-room",
+    "task/chat-density-shrink-chrome-and-demote-the-context-meter-so-more-conversation-fits",
+    "feature/in-app-agent-terminal",
+    "knowledge/jarvis-mode-plan-v7"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-018",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/the-desktop-chat-surface-truncates-the-snapshot-to-a-2kb-preview-at-around-10k-chars",
+    "knowledge/codex-cli-integration-feasibility",
+    "task/the-desktop-app-reaps-the-dev-servers-and-emulators-its-chat-tabs-agents-leave-running",
+    "feature/opt-in-context-handoff",
+    "feature/context-gate-and-goal-skill",
+    "feature/sleepy-notch-capture",
+    "feature/manifest-based-install-update",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session",
+    "knowledge/desktop-beta-tauri-multivault",
+    "feature/sleep-consolidation"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-019",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/canonical-form-delta",
+    "knowledge/decision-sync-identity-and-reconciliation",
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "task/clickup-sync-integrity-provenance-version-round-trip-consolidates-177-178-179",
+    "changelog/changelog#2026-07-08-doctor-466",
+    "knowledge/multi-reviewer-pattern",
+    "task/task-feature-objective-links-validated-assignment-bidirectional-maintenance",
+    "knowledge/decision-should-dreamcontext-0-20-2-be-published-to-npm-now-or-batched-with-more-features",
+    "knowledge/multi-session-checkout-safety",
+    "feature/manifest-based-install-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-020",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/jarvis-mode-plan-v7",
+    "feature/jarvis-voice-mode",
+    "changelog/changelog#2026-09-10-chat-160",
+    "feature/dreamcontext-assistant",
+    "knowledge/jev-system-one-model",
+    "knowledge/fail-open-toward-the-observable-state",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "feature/chat-composer-shelf",
+    "task/a-dreamcontext-assistant-lives-in-the-notch-wakes-on-a-hotkey-and-drives-every-project-as-the-owner-s-replica",
+    "knowledge/orthogonal-encoding-channels"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-021",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/a-delete-is-never-inferred-from-absence",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "feature/hands-free-cloud-mode",
+    "task/fix-automations-the-question-is-visible-on-the-card-open-chat-reaches-the-run-that-asked-and-a-run-needing-a-human-opens-itself",
+    "task/agents-step-1-the-agents-page-becomes-a-member-list-where-i-create-and-edit-agents-with-a-photo-a-mode-and-a-model",
+    "task/agents-epic-finished-end-to-end-and-the-side-menu-gets-one-maturity-model-section-hues-and-honest-icons",
+    "task/automations-become-agents-every-automation-is-a-slack-like-thread-the-agent-posts-important-updates-to-and-the-user-replies-in",
+    "task/automations-hitl-a-run-can-stop-and-ask-and-the-verdict-comes-back-from-wherever-you-are",
+    "task/agents-step-3-a-pushed-message-can-carry-a-question-with-options-a-structured-summary-several-files-and-a-board"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-022",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "feature/chat-composer-shelf",
+    "task/two-new-agent-actions-pinned-session-facts-that-stay-put-and-progress-read-from-the-task-file",
+    "task/highlighter-the-agent-can-mark-the-load-bearing-phrase-not-just-bold-it",
+    "task/the-shelf-states-the-checkout-once-follows-every-move-and-a-fresh-session-starts-on-the-default-branch",
+    "feature/context-snapshot",
+    "knowledge/surface-briefing-pattern",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit",
+    "task/the-shelf-follows-a-session-into-a-linked-code-repo-not-just-the-vault-s-own",
+    "task/session-facts-name-the-checkout-the-session-is-actually-in-and-the-worktree-brief-covers-basic-develop",
+    "task/goal-skill-plan-v2-delta"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-023",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 5,
+   "hits": [
+    "feature/migration-system",
+    "task/people-first-plan-v2-delta",
+    "feature/hands-free-cloud-mode",
+    "task/hands-free-mode-moves-the-active-project-to-a-cloud-machine-the-phone-drives-it-through-a-link-and-password-and-return-brings-every-diff-and-session-back-to-the-laptop",
+    "knowledge/project-origin-and-prd",
+    "task/automations-become-agents-every-automation-is-a-slack-like-thread-the-agent-posts-important-updates-to-and-the-user-replies-in",
+    "task/whiteboard-a-ajan-karti-eklenir-board-u-bilen-yalniz-kendi-board-una-yazan-ustune-birakilan-widget-i-soran-otomasyon-ajani",
+    "task/develop-mode-runs-like-goal-skill-waves-on-the-map-builders-build-each-wave-a-review-closes-every-wave-a-validator-closes-the-run",
+    "knowledge/desktop-beta-tauri-multivault",
+    "knowledge/0.soul-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-024",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/macos-launchd-scheduler-constraints",
+    "task/automations-scheduled-headless-claude-jobs",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "knowledge/command-not-found-in-a-spawned-child",
+    "knowledge/desktop-beta-tauri-multivault",
+    "task/fix-desktop-app-serves-stale-bundled-dist-find-global-cli-uses-lc-can-t-see-nvm-cli",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "changelog/changelog#2026-08-17-skill-228",
+    "changelog/changelog#2026-07-26-automations-353",
+    "feature/continuous-app-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-025",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/shared-local-config-split",
+    "knowledge/dashboard-server-security",
+    "task/the-notch-becomes-a-notification-center-and-the-assistant-decides-how-each-reply-is-shown",
+    "task/whiteboard-ikinci-tur-html-ustunde-kaydirma-calisir-web-blogu-yerel-dosya-acar-panel-tahtadaki-ajanlari-tanir-ajan-karti-sabit-boyda-gelir-tahtaya-gorsel-eklenir-ajana-birakma-ve-panel-ile-kart-iliskisi-netlesir",
+    "feature/chat-composer-shelf",
+    "task/two-new-agent-actions-pinned-session-facts-that-stay-put-and-progress-read-from-the-task-file",
+    "knowledge/synthetic-fixtures-for-published-artifacts",
+    "task/hands-free-mode-moves-the-active-project-to-a-cloud-machine-the-phone-drives-it-through-a-link-and-password-and-return-brings-every-diff-and-session-back-to-the-laptop",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "feature/web-dashboard"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-026",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/fix-install-skill-stale-hook-timeout-not-reconciled-on-reinstall",
+    "changelog/changelog#2026-07-01-cli-553",
+    "task/sleep-does-not-reconcile-within-its-own-remit-116-runs-passed-over-a-feature-stuck-at-planning-with-0-22-criteria-and-additive-only-writes-left-6-contradictory-current-tool-counts-in-one-file",
+    "task/automations-become-agents-every-automation-is-a-slack-like-thread-the-agent-posts-important-updates-to-and-the-user-replies-in",
+    "task/fix-recall-capture-stress-test-timeout",
+    "task/fix-77-78-stable-dcid-sync-reconciliation-tasks-rename-and-assignee-drift-heal-sync-reconcile",
+    "task/full-suite-runs-intermittently-fail-on-a-vitest-reporter-rpc-timeout-under-load",
+    "feature/hands-free-cloud-mode",
+    "knowledge/macos-launchd-scheduler-constraints",
+    "task/fix-desktop-sync-failed-reconnect-github-false-alarm-reconcile-global-auth-flag-from-all-sync-paths"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-027",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "feature/chat-composer-shelf",
+    "knowledge/chat-pinned-surface.excalidraw",
+    "feature/in-app-agent-terminal",
+    "task/a-dream-html-block-renders-where-it-was-written-and-grows-out-of-a-skeleton-in-its-own-slot",
+    "task/two-new-agent-actions-pinned-session-facts-that-stay-put-and-progress-read-from-the-task-file",
+    "feature/web-dashboard",
+    "feature/lab-analytics-insights",
+    "feature/claude-multi-account",
+    "task/run-progress-reads-as-a-live-checklist-not-two-lines-under-a-number-it-never-explains",
+    "task/chat-transcript-holds-an-unpinned-reader-s-place-when-history-loads-above-them"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-028",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "feature/hands-free-cloud-mode",
+    "feature/in-app-agent-terminal",
+    "task/a-claude-account-switch-reaches-the-sessions-already-open",
+    "task/the-notch-becomes-a-notification-center-and-the-assistant-decides-how-each-reply-is-shown",
+    "task/agents-step-2-a-finished-run-pushes-one-message-into-the-agents-feed-and-the-message-shape-is-the-design-to-approve",
+    "task/auto-switch-brings-the-session-home-when-the-preferred-account-s-window-reopens",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "feature/dreamcontext-assistant",
+    "task/agents-channel-after-first-real-use-answers-thread-under-your-ask-the-whole-report-lives-in-the-thread-and-diagrams-pdfs-and-clips-an-agent-posts-actually-render",
+    "task/pre-publish-checklist-v0-27-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-029",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "feature/lab-analytics-insights",
+    "task/the-agent-s-playwright-browser-runs-headless-and-shows-live-above-the-chat-composer-never-taking-the-screen",
+    "feature/in-app-agent-terminal",
+    "task/chat-interactive-views-plan-v2",
+    "feature/desktop-splash-screen",
+    "feature/jarvis-voice-mode",
+    "feature/agent-browser-live-view",
+    "feature/dreamcontext-assistant",
+    "feature/okr-roadmap",
+    "task/desktop-windows-move-and-resize-in-one-smooth-animation-instead-of-frame-by-frame-jumps"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-030",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/post-sleep-clickup-sync-rate-limit-headroom-retry-no-silent-fail",
+    "feature/dreamcontext-assistant",
+    "knowledge/sleep-debt.excalidraw",
+    "task/repointing-the-task-backend-at-a-different-list-silently-deletes-every-local-task-mirror",
+    "feature/sleep-consolidation",
+    "feature/project-tabs-one-window-multi-vault",
+    "task/the-notch-becomes-a-notification-center-and-the-assistant-decides-how-each-reply-is-shown",
+    "feature/sleepy-notch-capture",
+    "knowledge/decision-github-task-backend",
+    "feature/claude-multi-account"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-001",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 3,
+   "hits": [
+    "task/a-finished-sub-agent-s-report-becomes-a-collapsed-card-in-the-transcript-instead-of-a-wall-the-main-agent-re-types",
+    "task/chat-view-a-sub-agent-s-tool-calls-must-not-leak-into-the-main-transcript",
+    "task/agent-chat-redesign-12-state-native-chat-ui-per-corrected-design-brief",
+    "changelog/changelog#2026-07-24-agent-385",
+    "task/a-headless-builder-reads-as-a-live-teammate-in-chat-its-brief-its-steps-and-its-status-not-a-bare-shell-row",
+    "task/chat-view-shows-background-shells-read-live-output-and-stop-them",
+    "changelog/changelog#2026-08-01-chat-288",
+    "feature/in-app-agent-terminal",
+    "task/the-agent-s-playwright-browser-runs-headless-and-shows-live-above-the-chat-composer-never-taking-the-screen",
+    "changelog/changelog#2026-07-27-automations-326"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-002",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/agents-run-across-my-devices-sessions-sync-every-question-and-answer-pushes-immediately-and-a-refresh-button-pulls-now",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/whiteboard-sekmeleri-chrome-gibi-yan-yana-durur-renkli-gruplara-ayrilir",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/the-desktop-app-opens-with-its-own-logo-animation-and-sound-instead-of-a-blank-wait"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-003",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "feature/doctor-machine-readable-diagnostics",
+    "knowledge/diagnostic-repair-loop",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-004",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/a-coalesced-mention-must-still-reach-an-agent-whose-run-is-already-in-flight",
+    "feature/meeting-room",
+    "task/meeting-room-addressing-is-not-summoning-a-thread-you-can-read-is-a-thread-you-can-answer-and-an-agent-may-wait",
+    "task/a-fresh-worktree-needs-two-npm-installs-automate-or-document-the-dashboard-deps",
+    "feature/sleep-fanout-architecture",
+    "task/announcements-carry-no-personal-data-and-cover-every-release",
+    "feature/sleep-consolidation",
+    "task/pre-publish-checklist-v0-26-1",
+    "task/pre-publish-checklist-v0-25-0",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-005",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 4,
+   "hits": [
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "feature/claude-multi-account"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-006",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 2,
+   "hits": [
+    "task/lab-custom-scripts-run-in-a-fresh-child-process-so-an-edited-shared-lib-is-never-stale",
+    "task/lab-sync-transitive-esm-imports-are-never-cache-busted-edits-to-lab-scripts-lib-mjs-are-silently-ignored-until-the-host-process-restarts",
+    "changelog/changelog#2026-07-28-lab-319",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-007",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 6,
+   "hits": [
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/the-desktop-app-opens-with-its-own-logo-animation-and-sound-instead-of-a-blank-wait",
+    "feature/continuous-app-update",
+    "knowledge/build-and-propagate-pattern",
+    "knowledge/licensing.excalidraw",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "knowledge/release-publish-checklist",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-008",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 3,
+   "hits": [
+    "knowledge/sleep-debt.excalidraw",
+    "knowledge/3.style-guide-2026-h2",
+    "knowledge/0.soul-2026-h2",
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "knowledge/1.user-2026-h2",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-009",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/desktop-sync-failed-reconnect-real-cause-askpass-helper-cannot-find-node-under-the-app-s-minimal-gui-path-misclassified-as-auth",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "knowledge/dashboard-server-security",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/cloud-sync-stale-per-project-token-shadowing-auto-heal-fallback-to-global",
+    "task/cloud-sync-reports-false-sync-failed-github-sign-in-expired-while-git-is-fully-in-sync-and-settings-shows-a-valid-session",
+    "changelog/changelog#2026-07-25-agent-373",
+    "task/agent-surface-polish-unified-chrome-composer-redesign-slash-menu-inline-images-reveal-endpoint"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-010",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/memory-archive-2026-h1",
+    "feature/council-skill",
+    "knowledge/decision-should-dreamcontext-0-20-2-be-published-to-npm-now-or-batched-with-more-features",
+    "knowledge/1.user-2026-h2",
+    "changelog/changelog#2026-06-06-dashboard-729",
+    "task/council-skill",
+    "feature/web-dashboard",
+    "task/council-v2-the-chamber",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "knowledge/technical-decisions-archive"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-011",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/clickup-sync-integrity-provenance-version-round-trip-consolidates-177-178-179",
+    "task/repointing-the-task-backend-at-a-different-list-silently-deletes-every-local-task-mirror",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "changelog/changelog#2026-07-19-cloud-sync-419",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/a-lab-report-cannot-choose-its-measurement-window-so-it-silently-composes-7-day-and-30-day-tiles-side-by-side-and-aligning-them-corrupts-objective-krs",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "feature/opt-in-context-handoff",
+    "task/enforce-mutual-exclusion-on-sleep-consolidation-lock",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-012",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 9,
+   "hits": [
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "knowledge/surface-briefing-pattern",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-013",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/whiteboard-sayfasi-kaldigin-yerden-acilir-board-ajani-sayfalar-arasi-canli-kalan-yan-panelde-yasar-sag-alttaki-ajan-dock-u-whiteboard-da-gorunmez",
+    "feature/whiteboards",
+    "task/whiteboard-a-ajan-karti-eklenir-board-u-bilen-yalniz-kendi-board-una-yazan-ustune-birakilan-widget-i-soran-otomasyon-ajani",
+    "task/announcements-whats-new",
+    "changelog/changelog#2026-07-18-announcements-434",
+    "knowledge/decision-github-task-backend",
+    "knowledge/parent-on-the-wire-child-in-a-sidecar",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "knowledge/shared-local-config-split"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-014",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "whiteboard/control-panel",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-015",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "knowledge/sleep-debt.excalidraw",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-016",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/a-lab-report-cannot-choose-its-measurement-window-so-it-silently-composes-7-day-and-30-day-tiles-side-by-side-and-aligning-them-corrupts-objective-krs",
+    "task/insights-real-components-for-dimensional-data-and-reports-that-carry-their-own-window-and-band",
+    "task/reports-become-a-branded-dreamcontext-template-window-honest-items-designed-sections-native-export",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/the-desktop-app-opens-with-its-own-logo-animation-and-sound-instead-of-a-blank-wait",
+    "task/lab-request-budget-an-upstream-freshness-gate-so-insights-and-reports-stop-re-querying-data-that-has-not-changed",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/neonbi-request-diyeti-source-freshness-aware-sync-insight-report",
+    "feature/lab-analytics-insights"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-017",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/author-the-0-28-0-what-s-new-story-before-the-cut-leaves-this-machine",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "changelog/changelog#2026-09-10-announcements-150",
+    "knowledge/release-publish-checklist",
+    "task/announcements-carry-no-personal-data-and-cover-every-release",
+    "task/pre-publish-checklist-v0-28-0",
+    "task/heal-the-v0-24-1-release-record-npm-has-it-the-git-tag-and-announcement-do-not",
+    "knowledge/synthetic-fixtures-for-published-artifacts",
+    "task/the-0-30-0-release-is-announced-by-a-narrated-video-instead-of-a-screenshot-page",
+    "feature/continuous-app-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-018",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 3,
+   "hits": [
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/unified-dashboard-beta-multivault",
+    "changelog/changelog#2026-06-13-desktop-700",
+    "knowledge/vault-registry-multivault",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "whiteboard/onboarding",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-019",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "whiteboard/control-panel",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-020",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/mutation-test-assertions",
+    "task/bookmark-auto-capture-misclassifies-sub-agent-notifications-skill-loader-text-as-user-correction",
+    "knowledge/dashboard-build-verification",
+    "task/no-way-to-remove-a-single-bookmark-bookmark-clear-is-all-or-nothing-so-noise-cannot-be-pruned-without-losing-real-signal",
+    "knowledge/neuroscience.excalidraw",
+    "core/6.system_flow",
+    "task/memory-uplift-handoff",
+    "task/agents-channel-after-first-real-use-answers-thread-under-your-ask-the-whole-report-lives-in-the-thread-and-diagrams-pdfs-and-clips-an-agent-posts-actually-render",
+    "task/goal-skill-plan-v4-delta",
+    "knowledge/context-ceiling-economics"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-021",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/goal-skill-plan-v1",
+    "task/goal-skill-plan-v2-delta",
+    "task/goal-skill-plan-v3-delta",
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "changelog/changelog#2026-07-28-snapshot-309",
+    "feature/context-snapshot",
+    "task/doctor-s-over-limit-snapshot-warning-is-a-dead-end-when-no-single-core-file-is-the-culprit",
+    "task/the-desktop-chat-surface-truncates-the-snapshot-to-a-2kb-preview-at-around-10k-chars",
+    "task/goal-skill-plan-v4-delta",
+    "changelog/changelog#2026-07-22-snapshot-411"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-022",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-023",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/github-login-mapping-not-consulted-by-issue-assignee-sync",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "knowledge/decision-github-task-backend",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "feature/task-management",
+    "whiteboard/control-panel",
+    "task/taxonomy-audit-reports-person-slug-tags-as-orphans-but-the-facet-allowlist-rejects-declaring-person",
+    "task/a-lab-report-cannot-choose-its-measurement-window-so-it-silently-composes-7-day-and-30-day-tiles-side-by-side-and-aligning-them-corrupts-objective-krs",
+    "task/assignee-sync-is-push-only-clickup-ui-assignments-are-never-pulled-back-to-local-snapshot-doesn-t-track-assignees"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-024",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/split-at-write-validation-must-cover-all-paths",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/opt-in-context-handoff-the-agent-is-told-at-200k-that-it-may-move-its-state-into-the-task-and-continue-in-a-fresh-session",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-025",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 9,
+   "hits": [
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/a-compaction-in-chat-shows-its-summary-instead-of-silently-swallowing-the-conversation",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/feat-knowledge-excalidraw-boards-as-first-class-knowledge-index-extracted-text-never-the-scene-json-per-diagram-folders-generators-dark-to-memory-dashboard",
+    "knowledge/jarvis-mode-plan-v7",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "knowledge/cli-derived-action-rows",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-026",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "knowledge/settings-redesign.excalidraw",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver",
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-027",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging",
+    "task/whiteboard-wiki-olur-sayfalar-board-dan-cikmadan-popup-ta-wiki-menusunde-ve-tuval-wiki-modunda-okunur",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "whiteboard/control-panel",
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/whiteboard-ikinci-tur-html-ustunde-kaydirma-calisir-web-blogu-yerel-dosya-acar-panel-tahtadaki-ajanlari-tanir-ajan-karti-sabit-boyda-gelir-tahtaya-gorsel-eklenir-ajana-birakma-ve-panel-ile-kart-iliskisi-netlesir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-028",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/forward-compatible-field-cast",
+    "changelog/changelog#2026-06-22-dashboard-625",
+    "changelog/changelog#2026-06-23-tasks-624",
+    "task/tasks-clearable-due-dates-start-end-date-ranges-reliably-synced-to-backend",
+    "task/task-management-views-timeline-gantt-calendar-and-activity-heatmap",
+    "knowledge/unrecognized-shape-returns-null",
+    "task/insights-breakdown-contract-matrix-v1-native-reports-layer",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "feature/continuous-app-update",
+    "knowledge/split-at-write-validation-must-cover-all-paths"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-029",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/j-a-r-v-i-s-mode-konusarak-sor-sesli-cevap-al-yapiyi-ekranda-gor",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/composer-da-excalidraw-cizim-defteri-kullanici-cizer-mesaja-png-ve-board-olarak-ilistirilir",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/ajan-bir-whiteboard-un-ekran-goruntusunu-alip-bakarak-iterasyon-yapabilir",
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "whiteboard/onboarding",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-030",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/yanan-pencereyi-harcayan-ve-eve-donen-akilli-secim",
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "task/composer-in-kullanim-paneli-mod-gostergesi-ve-baglam-halkasi-premium-bir-tasarima-gecer",
+    "task/openui-deneysel-bir-sohbet-modu-olur-ajan-bilesen-yazar-bayrak-varsayilan-kapali",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743"
+   ],
+   "injected": true
+  }
+ ]
+}

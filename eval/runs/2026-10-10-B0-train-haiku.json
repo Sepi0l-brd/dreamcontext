@@ -1,0 +1,1172 @@
+{
+ "label": "B0-train-haiku",
+ "split": "train",
+ "mode": "haiku",
+ "tier": null,
+ "denseOnly": null,
+ "rerankModel": null,
+ "injectK": 5,
+ "engineSha": "0ba4c25a",
+ "corpusFingerprint": "03d9ce95b568031c0c2e2b31baa2eb7f1e66c8b7106c751c2d43b9f2c9b1bc96",
+ "now": "2026-10-10T20:09:05.000Z",
+ "overall": {
+  "recall1": 57.77777777777777,
+  "recall3": 62.22222222222222,
+  "recall5": 62.22222222222222,
+  "mrr": 0.5981481481481481,
+  "ndcg10": 0.6043643251190486,
+  "n": 90,
+  "injectionRate": 78.88888888888889,
+  "effective5": 62.22222222222222
+ },
+ "byLang": {
+  "tr": {
+   "recall1": 50,
+   "recall3": 53.333333333333336,
+   "recall5": 53.333333333333336,
+   "mrr": 0.5166666666666667,
+   "ndcg10": 0.5210309917857152,
+   "n": 30,
+   "injectionRate": 76.66666666666667,
+   "effective5": 53.333333333333336,
+   "r5ci": [
+    36.142013281525045,
+    69.76787277587178
+   ]
+  },
+  "en": {
+   "recall1": 53.333333333333336,
+   "recall3": 60,
+   "recall5": 60,
+   "mrr": 0.5611111111111112,
+   "ndcg10": 0.5710309917857153,
+   "n": 30,
+   "injectionRate": 66.66666666666666,
+   "effective5": 60,
+   "r5ci": [
+    42.32005249827384,
+    75.40960567391659
+   ]
+  },
+  "mixed": {
+   "recall1": 70,
+   "recall3": 73.33333333333333,
+   "recall5": 73.33333333333333,
+   "mrr": 0.7166666666666667,
+   "ndcg10": 0.7210309917857153,
+   "n": 30,
+   "injectionRate": 93.33333333333333,
+   "effective5": 73.33333333333333,
+   "r5ci": [
+    55.551697955688304,
+    85.81750444608937
+   ]
+  }
+ },
+ "byLangCategory": {
+  "tr": {
+   "field-match": {
+    "recall1": 100,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 1,
+    "ndcg10": 1,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "topical-adjacency": {
+    "recall1": 0,
+    "recall3": 20,
+    "recall5": 20,
+    "mrr": 0.1,
+    "ndcg10": 0.1261859507142915,
+    "n": 5,
+    "injectionRate": 80,
+    "effective5": 20
+   },
+   "paraphrase": {
+    "recall1": 37.5,
+    "recall3": 37.5,
+    "recall5": 37.5,
+    "mrr": 0.375,
+    "ndcg10": 0.375,
+    "n": 8,
+    "injectionRate": 62.5,
+    "effective5": 37.5
+   },
+   "recency": {
+    "recall1": 16.666666666666664,
+    "recall3": 16.666666666666664,
+    "recall5": 16.666666666666664,
+    "mrr": 0.16666666666666666,
+    "ndcg10": 0.16666666666666666,
+    "n": 6,
+    "injectionRate": 50,
+    "effective5": 16.666666666666664
+   },
+   "exact-term": {
+    "recall1": 100,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 1,
+    "ndcg10": 1,
+    "n": 6,
+    "injectionRate": 100,
+    "effective5": 100
+   }
+  },
+  "en": {
+   "topical-adjacency": {
+    "recall1": 20,
+    "recall3": 40,
+    "recall5": 40,
+    "mrr": 0.3,
+    "ndcg10": 0.3261859507142915,
+    "n": 5,
+    "injectionRate": 60,
+    "effective5": 40
+   },
+   "field-match": {
+    "recall1": 100,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 1,
+    "ndcg10": 1,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "recency": {
+    "recall1": 50,
+    "recall3": 50,
+    "recall5": 50,
+    "mrr": 0.5,
+    "ndcg10": 0.5,
+    "n": 6,
+    "injectionRate": 50,
+    "effective5": 50
+   },
+   "paraphrase": {
+    "recall1": 75,
+    "recall3": 75,
+    "recall5": 75,
+    "mrr": 0.75,
+    "ndcg10": 0.75,
+    "n": 8,
+    "injectionRate": 75,
+    "effective5": 75
+   },
+   "exact-term": {
+    "recall1": 16.666666666666664,
+    "recall3": 33.33333333333333,
+    "recall5": 33.33333333333333,
+    "mrr": 0.2222222222222222,
+    "ndcg10": 0.25,
+    "n": 6,
+    "injectionRate": 50,
+    "effective5": 33.33333333333333
+   }
+  },
+  "mixed": {
+   "topical-adjacency": {
+    "recall1": 60,
+    "recall3": 80,
+    "recall5": 80,
+    "mrr": 0.7,
+    "ndcg10": 0.7261859507142916,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 80
+   },
+   "recency": {
+    "recall1": 66.66666666666666,
+    "recall3": 66.66666666666666,
+    "recall5": 66.66666666666666,
+    "mrr": 0.6666666666666666,
+    "ndcg10": 0.6666666666666666,
+    "n": 6,
+    "injectionRate": 83.33333333333334,
+    "effective5": 66.66666666666666
+   },
+   "field-match": {
+    "recall1": 100,
+    "recall3": 100,
+    "recall5": 100,
+    "mrr": 1,
+    "ndcg10": 1,
+    "n": 5,
+    "injectionRate": 100,
+    "effective5": 100
+   },
+   "paraphrase": {
+    "recall1": 62.5,
+    "recall3": 62.5,
+    "recall5": 62.5,
+    "mrr": 0.625,
+    "ndcg10": 0.625,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 62.5
+   },
+   "exact-term": {
+    "recall1": 66.66666666666666,
+    "recall3": 66.66666666666666,
+    "recall5": 66.66666666666666,
+    "mrr": 0.6666666666666666,
+    "ndcg10": 0.6666666666666666,
+    "n": 6,
+    "injectionRate": 83.33333333333334,
+    "effective5": 66.66666666666666
+   }
+  }
+ },
+ "latency": {
+  "meanMs": 23238.762385222235,
+  "p50Ms": 21738.056917000096,
+  "p90Ms": 32595.595417000004,
+  "p90ci": [
+   30262.739249999868,
+   39004.73975000001
+  ]
+ },
+ "perQuery": [
+  {
+   "id": "g2t-tr-001",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/agent-composer-add-folder-picker-to-files-button",
+    "task/desktop-file-picker-crash-fixed-by-moving-to-native-nsopenpanel-handling"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-002",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/j-a-r-v-i-s-sesi-duyulur-olsun-duck-kendi-sesini-kismasin-cumleler-birbirini-kirpmasin-konusulan-cumle-vurgulansin-dikte-gercekten-local-whisper-kalitesinde-olsun",
+    "task/jarvis-konusurken-muzik-kendiliginden-susar-ve-cevap-bitince-geri-gelir",
+    "task/chat-teki-komutlar-macos-automation-izni-alamiyor-1743"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-003",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/memory-upgrade-plan.excalidraw",
+    "knowledge/memory-uplift-comparison.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-004",
+   "category": "paraphrase",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": null,
+   "hits": [
+    "feature/dreamcontext-assistant",
+    "task/a-dreamcontext-assistant-lives-in-the-notch-wakes-on-a-hotkey-and-drives-every-project-as-the-owner-s-replica"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-005",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/licensing.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-006",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-007",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "feature/whiteboards",
+    "task/insights-breakdown-contract-matrix-v1-native-reports-layer",
+    "task/a-whiteboard-shows-a-funnel-as-its-explorer-any-lab-card-as-a-widget-and-the-date-window-on-the-card"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-008",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/turn-the-context-ceiling-research-into-the-article-level-report-the-owner-asked-for",
+    "knowledge/context-ceiling-economics"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-009",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-010",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "changelog/changelog#2026-07-01-desktop-558",
+    "task/fix-desktop-orphaned-dashboard-server-processes-leak-on-window-close"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-011",
+   "category": "exact-term",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": 1,
+   "hits": [
+    "knowledge/parent-on-the-wire-child-in-a-sidecar",
+    "knowledge/decision-github-task-backend",
+    "task/task-statuses-become-project-declarable-data-with-a-semantic-kind-so-planned-cancelled-or-any-custom-status-syncs-to-github-and-clickup-without-a-code-change"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-012",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/pid-lockfile-concurrent-json",
+    "changelog/changelog#2026-06-29-sleep-571"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-013",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-014",
+   "category": "field-match",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-meta-marketing-skill-adoption"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-015",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-016",
+   "category": "recency",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": null,
+   "hits": [
+    "knowledge/sleep-federation-agent-retired"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-017",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "feature/first-run-onboarding",
+    "whiteboard/onboarding"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-018",
+   "category": "recency",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-jev-for-validator-browser-loops",
+    "task/validator-larin-tarayici-adim-dongusu-jev-ile-hizlaniyor-mu-olc-bir-validasyonu-jev-ile-tekrar-kos-karar-ver"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-019",
+   "category": "topical-adjacency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-020",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/a-project-chip-says-how-many-chats-it-holds-and-how-many-are-working-one-counted-bubble-per-status",
+    "feature/project-tabs-one-window-multi-vault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-021",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-022",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/diagnostic-repair-loop",
+    "knowledge/doctor-json-before-after.excalidraw",
+    "feature/doctor-machine-readable-diagnostics"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-023",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/insights-v2-funnel-explorer-every-page-a-bindable-block-and-the-whole-explorer-as-one-interactive-page",
+    "changelog/changelog#2026-10-09-lab-5"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-024",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-025",
+   "category": "paraphrase",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-026",
+   "category": "recency",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-tr-027",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/vendor-design-system-integration"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-028",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/sleep-debt-counts-only-real-human-work-so-the-consolidation-warning-means-something-again",
+    "changelog/changelog#2026-09-29-sleep-83"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-029",
+   "category": "field-match",
+   "lang": "tr",
+   "variant": "ascii",
+   "rank": 1,
+   "hits": [
+    "knowledge/byte-surgical-section-editing",
+    "changelog/changelog#2026-07-27-automations-322"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-tr-030",
+   "category": "exact-term",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "task/agents-page-round-one-leftovers-members-view-copy-empty-state-and-answer-route-messages-short-diagram-box-height-and-two-hardening-nits"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-001",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-002",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-003",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/4.tech_stack-dependencies-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-004",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/snapshot-sections-per-section-char-breakdown-so-an-oversized-brain-is-diagnosable",
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "task/soul-becomes-constitution-only-and-always-loads-verbatim-while-conditionals-move-to-keyword-prioritized-patterns-across-the-whole-system"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-005",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/chat-depiction-becomes-a-built-board-dream-html-stops-being-the-default-for-structure",
+    "task/chat-answers-become-agent-written-html-typed-chart-page-retire-dream-html-renders-in-a-themed-sandbox",
+    "feature/in-app-agent-terminal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-006",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/orthogonal-encoding-channels",
+    "task/sleepy-acts-out-the-chat-mode-the-mascot-shows-plan-and-develop-not-just-status",
+    "changelog/changelog#2026-08-29-chat-190"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-007",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/context-ceiling-economics",
+    "task/turn-the-context-ceiling-research-into-the-article-level-report-the-owner-asked-for"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-008",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/git-pinned-evidence"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-009",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/cli-derived-action-rows",
+    "knowledge/quest-party-chat-ux-plan"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-010",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/git-worktrees-split-the-brain-resolve-the-context-root-from-the-main-worktree",
+    "knowledge/worktrees-and-the-brain"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-011",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-012",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/virtual-filter-tokens"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-013",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/the-chronic-open-thesis-gate-can-never-fire-because-cycles-checked-only-counts-cycles-that-produced-evidence"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-015",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/gantt-inflates-a-rollup-objective-s-finish-when-it-both-depends-on-sub-objectives-and-shares-their-member-tasks-phantom-slip-disagrees-with-cli-forecast",
+    "changelog/changelog#2026-07-09-roadmap-459",
+    "changelog/changelog#2026-07-08-roadmap-469"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-016",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/board",
+    "task/roadmap-forecast-accuracy-effort-aware-envelope-clamped-cascade",
+    "task/gantt-inflates-a-rollup-objective-s-finish-when-it-both-depends-on-sub-objectives-and-shares-their-member-tasks-phantom-slip-disagrees-with-cli-forecast"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-017",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 3,
+   "hits": [
+    "knowledge/component-reuse-over-reimplementation",
+    "changelog/changelog#2026-08-23-chat-217",
+    "task/peer-mail-cross-vault-agent-messaging"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-018",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/the-desktop-chat-surface-truncates-the-snapshot-to-a-2kb-preview-at-around-10k-chars",
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "knowledge/surface-briefing-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-019",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/canonical-form-delta"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-020",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-021",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-022",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "feature/chat-composer-shelf",
+    "task/agents-get-less-but-correct-instructions-a-budgeted-sub-agent-briefing-a-small-agent-core-skill-and-no-retired-or-contradictory-rules",
+    "knowledge/surface-briefing-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-023",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/only-the-system-may-write-control-bearing-frontmatter-pinned-federated-id-type-date",
+    "feature/migration-system",
+    "feature/tag-taxonomy"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-024",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-025",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-026",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/fix-install-skill-stale-hook-timeout-not-reconciled-on-reinstall",
+    "changelog/changelog#2026-07-01-cli-553"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-027",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/chat-pinned-surface.excalidraw"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-en-028",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-029",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-en-030",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/post-sleep-clickup-sync-rate-limit-headroom-retry-no-silent-fail"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-001",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/chat-view-a-sub-agent-s-tool-calls-must-not-leak-into-the-main-transcript",
+    "task/a-finished-sub-agent-s-report-becomes-a-collapsed-card-in-the-transcript-instead-of-a-wall-the-main-agent-re-types",
+    "feature/in-app-agent-terminal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-002",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/automations-redesign-the-flow-graph-is-the-manifest-the-run-asks-in-chat-and-the-queue-never-loses-a-fire",
+    "feature/automations-scheduled-headless-claude-jobs",
+    "feature/hands-free-cloud-mode"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-003",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/doctor-json-before-after.excalidraw",
+    "feature/doctor-machine-readable-diagnostics"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-004",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/a-coalesced-mention-must-still-reach-an-agent-whose-run-is-already-in-flight",
+    "task/meeting-room-addressing-is-not-summoning-a-thread-you-can-read-is-a-thread-you-can-answer-and-an-agent-may-wait"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-005",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-mixed-006",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/lab-sync-transitive-esm-imports-are-never-cache-busted-edits-to-lab-scripts-lib-mjs-are-silently-ignored-until-the-host-process-restarts",
+    "task/lab-custom-scripts-run-in-a-fresh-child-process-so-an-edited-shared-lib-is-never-stale"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-007",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/build-and-propagate-pattern",
+    "knowledge/release-publish-checklist",
+    "task/desktop-release-ci"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-008",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/0.soul-2026-h2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-009",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/desktop-sync-failed-reconnect-real-cause-askpass-helper-cannot-find-node-under-the-app-s-minimal-gui-path-misclassified-as-auth",
+    "knowledge/command-not-found-in-a-spawned-child",
+    "task/cloud-sync-reports-false-sync-failed-github-sign-in-expired-while-git-is-fully-in-sync-and-settings-shows-a-valid-session"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-010",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/memory-archive-2026-h1"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-011",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/clickup-sync-integrity-provenance-version-round-trip-consolidates-177-178-179",
+    "changelog/changelog#2026-07-19-cloud-sync-419",
+    "task/repointing-the-task-backend-at-a-different-list-silently-deletes-every-local-task-mirror"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-012",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/surface-briefing-pattern",
+    "changelog/changelog#2026-07-25-agent-372"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-013",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/whiteboard-sayfasi-kaldigin-yerden-acilir-board-ajani-sayfalar-arasi-canli-kalan-yan-panelde-yasar-sag-alttaki-ajan-dock-u-whiteboard-da-gorunmez",
+    "feature/whiteboards",
+    "task/whiteboard-a-ajan-karti-eklenir-board-u-bilen-yalniz-kendi-board-una-yazan-ustune-birakilan-widget-i-soran-otomasyon-ajani"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-014",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/agents-step-4-replying-in-a-thread-or-mentioning-an-agent-resumes-its-session-or-calls-it-and-the-answer-comes-back-as-a-post",
+    "task/telefon-cebe-girince-oturum-olmesin-kopan-soket-yeniden-baglansin-ve-canli-tur-devam-etsin",
+    "task/chat-yuzeyi-telefonda-calisir-mobil-algilaninca-sadece-chat-acilir-oturumlar-sol-cekmeceden-secilir"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-015",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/sir-girme-ve-komut-calistirma-sohbetin-icinde-olur-satir-ici-secret-karti-ve-oynat-dugmeli-canli-terminal"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-016",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/a-lab-report-cannot-choose-its-measurement-window-so-it-silently-composes-7-day-and-30-day-tiles-side-by-side-and-aligning-them-corrupts-objective-krs",
+    "changelog/changelog#2026-09-30-lab-75"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-017",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/author-the-0-28-0-what-s-new-story-before-the-cut-leaves-this-machine",
+    "knowledge/synthetic-fixtures-for-published-artifacts"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-018",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 2,
+   "hits": [
+    "knowledge/desktop-beta-tauri-multivault",
+    "task/unified-dashboard-beta-multivault",
+    "knowledge/vault-registry-multivault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-019",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/goal-skill-builders-run-foreground-checks-end-with-a-sentinel-report-and-leave-heavy-gates-to-the-orchestrator"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-020",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "g2t-mixed-021",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "knowledge/budget-demotion-floor-prevents-blinding"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-022",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/per-session-live-state-files"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-023",
+   "category": "recency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/github-login-mapping-not-consulted-by-issue-assignee-sync",
+    "knowledge/decision-sync-identity-and-reconciliation",
+    "task/multi-assignee-via-person-tags"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-024",
+   "category": "field-match",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/split-at-write-validation-must-cover-all-paths"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-025",
+   "category": "topical-adjacency",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/cli-derived-action-rows"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-026",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-session-checkout-safety"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-027",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/whiteboard-modulu-her-board-ajanin-ve-kullanicinin-birlikte-cizdigi-canli-widget-tasiyan-bir-excalidraw-kontrol-paneli-olur",
+    "feature/whiteboards"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-028",
+   "category": "exact-term",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/forward-compatible-field-cast"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-029",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/pack-badge-false-positive-declined-optional-packs-show-as-new-forever",
+    "changelog/changelog#2026-07-09-cli-457"
+   ],
+   "injected": true
+  },
+  {
+   "id": "g2t-mixed-030",
+   "category": "paraphrase",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/multi-account-connect-several-claude-accounts-pick-one-per-session-auto-switch-before-a-limit-lands",
+    "task/agents-hesap-paneli-okunur-olur-her-hesabin-iki-limiti-surukle-birak-oncelik-ve-yenile",
+    "task/auto-switch-iki-mod-agirlikli-puan-ve-sirayla-tuketme"
+   ],
+   "injected": true
+  }
+ ]
+}

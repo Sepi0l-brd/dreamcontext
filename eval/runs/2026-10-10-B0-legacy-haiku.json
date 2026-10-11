@@ -1,0 +1,1135 @@
+{
+ "label": "B0-legacy-haiku",
+ "split": "legacy",
+ "mode": "haiku",
+ "tier": null,
+ "denseOnly": null,
+ "rerankModel": null,
+ "injectK": 5,
+ "engineSha": "0ba4c25a",
+ "corpusFingerprint": "03d9ce95b568031c0c2e2b31baa2eb7f1e66c8b7106c751c2d43b9f2c9b1bc96",
+ "now": "2026-10-10T20:09:05.000Z",
+ "overall": {
+  "recall1": 60,
+  "recall3": 74.44444444444444,
+  "recall5": 74.44444444444444,
+  "mrr": 0.6685185185185186,
+  "ndcg10": 0.6882247476587338,
+  "n": 90,
+  "injectionRate": 87.77777777777777,
+  "effective5": 74.44444444444444
+ },
+ "byLang": {
+  "en": {
+   "recall1": 61.29032258064516,
+   "recall3": 75.80645161290323,
+   "recall5": 75.80645161290323,
+   "mrr": 0.6827956989247311,
+   "ndcg10": 0.7023780327188978,
+   "n": 62,
+   "injectionRate": 90.32258064516128,
+   "effective5": 75.80645161290323,
+   "r5ci": [
+    63.847255746754946,
+    84.75423631905147
+   ]
+  },
+  "tr": {
+   "recall1": 55.55555555555556,
+   "recall3": 72.22222222222221,
+   "recall5": 72.22222222222221,
+   "mrr": 0.6296296296296297,
+   "ndcg10": 0.6534366392857175,
+   "n": 18,
+   "injectionRate": 83.33333333333334,
+   "effective5": 72.22222222222221,
+   "r5ci": [
+    49.12692245380548,
+    87.50043085364452
+   ]
+  },
+  "mixed": {
+   "recall1": 60,
+   "recall3": 70,
+   "recall5": 70,
+   "mrr": 0.65,
+   "ndcg10": 0.6630929753571457,
+   "n": 10,
+   "injectionRate": 80,
+   "effective5": 70,
+   "r5ci": [
+    39.67732199795652,
+    89.2210712513788
+   ]
+  }
+ },
+ "byLangCategory": {
+  "en": {
+   "exact-term": {
+    "recall1": 68.75,
+    "recall3": 75,
+    "recall5": 75,
+    "mrr": 0.71875,
+    "ndcg10": 0.7269331095982161,
+    "n": 16,
+    "injectionRate": 100,
+    "effective5": 75
+   },
+   "paraphrase": {
+    "recall1": 75,
+    "recall3": 85,
+    "recall5": 85,
+    "mrr": 0.8,
+    "ndcg10": 0.8130929753571458,
+    "n": 20,
+    "injectionRate": 85,
+    "effective5": 85
+   },
+   "recency": {
+    "recall1": 37.5,
+    "recall3": 50,
+    "recall5": 50,
+    "mrr": 0.4375,
+    "ndcg10": 0.4538662191964322,
+    "n": 8,
+    "injectionRate": 87.5,
+    "effective5": 50
+   },
+   "field-match": {
+    "recall1": 75,
+    "recall3": 87.5,
+    "recall5": 87.5,
+    "mrr": 0.8125,
+    "ndcg10": 0.8288662191964322,
+    "n": 8,
+    "injectionRate": 100,
+    "effective5": 87.5
+   },
+   "topical-adjacency": {
+    "recall1": 30,
+    "recall3": 70,
+    "recall5": 70,
+    "mrr": 0.4833333333333333,
+    "ndcg10": 0.5392789260714373,
+    "n": 10,
+    "injectionRate": 80,
+    "effective5": 70
+   }
+  },
+  "tr": {
+   "turkish": {
+    "recall1": 55.55555555555556,
+    "recall3": 72.22222222222221,
+    "recall5": 72.22222222222221,
+    "mrr": 0.6296296296296297,
+    "ndcg10": 0.6534366392857175,
+    "n": 18,
+    "injectionRate": 83.33333333333334,
+    "effective5": 72.22222222222221
+   }
+  },
+  "mixed": {
+   "mixed": {
+    "recall1": 60,
+    "recall3": 70,
+    "recall5": 70,
+    "mrr": 0.65,
+    "ndcg10": 0.6630929753571457,
+    "n": 10,
+    "injectionRate": 80,
+    "effective5": 70
+   }
+  }
+ },
+ "latency": {
+  "meanMs": 16392.650538000005,
+  "p50Ms": 14713.731083000002,
+  "p90Ms": 25287.20775000006,
+  "p90ci": [
+   21138.713541999925,
+   28484.245250000036
+  ]
+ },
+ "perQuery": [
+  {
+   "id": "q001",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "knowledge/recall-engine-v2",
+    "feature/memory-recall-bm25"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q002",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "task/haiku-recall-extraction",
+    "changelog/changelog#2026-05-26-recall-757"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q003",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "knowledge/dashboard-server-security",
+    "task/server-security-hardening"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q004",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/dashboard-server-security",
+    "task/server-security-hardening"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q005",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault",
+    "task/v06-control-plane-backend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q006",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-control-plane-backend",
+    "task/disable-claude-native-memory"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q007",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/rice-prioritization",
+    "changelog/changelog#2026-05-09-tasks-789"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q008",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q009",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/three-reviewer-parallel-mandates-pattern",
+    "knowledge/decision-mem0-vs-bm25-recall"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q010",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "changelog/changelog#2026-08-01-dashboard-287",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q011",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/goal-skill-and-related-skills-recall",
+    "changelog/changelog#2026-07-17-goal-skill-437",
+    "task/goal-skill-v2-fork-resume"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q012",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "task/v06-install-update-hardening",
+    "feature/manifest-based-install-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q013",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/decision-embedding-layer",
+    "knowledge/recall-engine-v2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "q015",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/dashboard-server-security",
+    "task/a-website-the-owner-visits-cannot-open-a-project-chat-or-terminal-websocket",
+    "task/server-security-hardening"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q016",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "task/haiku-recall-extraction",
+    "changelog/changelog#2026-05-26-recall-757"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q017",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/council-skill",
+    "task/council-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q018",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/v06-install-update-hardening",
+    "knowledge/manifest-bootstrap-safety-pattern",
+    "feature/manifest-based-install-update"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q019",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/rice-prioritization",
+    "task/rice-prioritization",
+    "changelog/changelog#2026-08-24-planning-213"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q020",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-consolidation",
+    "feature/sleep-fanout-architecture",
+    "task/memory-engine-360-roadmap"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q021",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/positioning",
+    "changelog/changelog#2026-07-19-readme-415"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q022",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "task/memory-engine-360-roadmap"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q023",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-fanout-architecture",
+    "task/sleep-fanout-architecture",
+    "feature/sleep-consolidation"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q024",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/a-notification-lands-you-in-the-exact-chat-a-dreamcontext-url-scheme-and-an-app-sent-turn-done-banner",
+    "knowledge/vault-registry-multivault",
+    "knowledge/desktop-beta-tauri-multivault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q025",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/decision-embedding-layer"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q026",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "knowledge/recall-engine-v2",
+    "knowledge/decision-embedding-layer"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q027",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "q028",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/rescale-sleep-debt-scoring-weighted-sum-token-signal",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q029",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "feature/rice-prioritization",
+    "task/rice-prioritization",
+    "changelog/changelog#2026-05-09-tasks-789"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q030",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/positioning",
+    "changelog/changelog#2026-07-19-readme-415"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q031",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "feature/context-snapshot",
+    "feature/memory-recall-bm25"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q032",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault",
+    "knowledge/desktop-beta-tauri-multivault",
+    "feature/project-tabs-one-window-multi-vault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q033",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "q034",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-control-plane-backend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q035",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q036",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q037",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 2,
+   "hits": [
+    "knowledge/release-publish-checklist",
+    "knowledge/publish-checklist",
+    "task/pre-publish-checklist-v0-30-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q038",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [
+    "task/goal-skill-pack-headless-permission-flags-and-report-vs-work-gate"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q039",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "q040",
+   "category": "recency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit",
+    "knowledge/haiku-recall-architecture",
+    "knowledge/decision-embedding-layer"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q041",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-fanout-architecture"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q042",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/memory-uplift-handoff",
+    "task/recall-context-uplift-v07",
+    "task/memory-engine-360-roadmap"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q043",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-embedding-layer",
+    "task/finish-the-hybrid-recall-rollout-doctor-check-user-docs-npm-files-audit"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q044",
+   "category": "recency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "changelog/changelog#2026-05-26-multi-review-758"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q045",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/v06-control-panel-polish",
+    "task/v06-control-panel-vaults-tauri"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q046",
+   "category": "recency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/v06-dashboard-pack-install",
+    "task/pack-badge-false-positive-declined-optional-packs-show-as-new-forever"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q047",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-snapshot",
+    "task/the-sessionstart-snapshot-busts-the-harness-limit-even-fully-demoted-so-the-brain-arrives-as-a-2kb-blind-preview",
+    "task/optional-local-context-compression-layer-to-cut-snapshot-recall-token-latency-cost"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q048",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q049",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/competitive-analysis-ecc",
+    "task/ecc-inspired-roadmap"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q050",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-control-plane-backend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q051",
+   "category": "field-match",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "knowledge/release-publish-checklist",
+    "task/pre-publish-checklist-v0-30-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q052",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/manifest-based-install-update",
+    "task/install-manifest-gains-a-hash-and-an-owner-no-silent-overwrites-no-silent-pack-collisions",
+    "task/v06-install-update-hardening"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q053",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/server-security-hardening",
+    "knowledge/dashboard-server-security",
+    "changelog/changelog#2026-05-31-server-753"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q054",
+   "category": "field-match",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/multi-product-support",
+    "feature/project-initialization"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q055",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 3,
+   "hits": [
+    "task/feat-embedding-ab-eval-harness-bm25-vs-hybrid-vs-dense-on-frozen-gold-set",
+    "task/recall-context-uplift-v07",
+    "knowledge/recall-engine-v2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q056",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/recall-engine-v2",
+    "feature/memory-recall-bm25",
+    "thesis/hybrid-recall-beats-bm25f"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q057",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "q058",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "changelog/changelog#2026-06-13-cli-699"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q059",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "knowledge/6.system_flow-neuroscience-2026-h2",
+    "task/memory-engine-360-roadmap"
+   ],
+   "injected": true
+  },
+  {
+   "id": "q060",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/code-quality-hooks",
+    "knowledge/competitive-analysis-ecc"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h001",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "changelog/changelog#2026-05-31-server-753",
+    "task/server-security-hardening"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h002",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/decision-mem0-vs-bm25-recall",
+    "knowledge/decision-embedding-layer"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h003",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h004",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "feature/sleep-consolidation",
+    "changelog/changelog#2026-09-10-sleep-161",
+    "task/sleep-settings-become-tunable-debt-thresholds-and-per-specialist-models"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h005",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 3,
+   "hits": [
+    "knowledge/recall-tokenizer-turkish-ascii-limitation",
+    "task/patterns-tetiklenir-hale-gelir-otomatik-tetik-turetme-deterministik-kapi-ve-slash-girisleri",
+    "knowledge/recall-engine-v2"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h006",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/vault-registry-multivault"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h007",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h008",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 1,
+   "hits": [
+    "knowledge/positioning"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h009",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": null,
+   "hits": [
+    "task/sleep-umbrella-tunable-settings-a-bar-against-junk-tasks-and-background-auto-sleep-with-two-writer-safety",
+    "task/sleep-runs-itself-in-the-background-when-debt-is-high-instead-of-nagging"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h010",
+   "category": "turkish",
+   "lang": "tr",
+   "rank": 2,
+   "hits": [
+    "knowledge/release-publish-checklist",
+    "knowledge/publish-checklist",
+    "task/pre-publish-checklist-v0-28-0"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h011",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h012",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/context-snapshot",
+    "feature/project-initialization"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h013",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/haiku-recall-architecture",
+    "task/haiku-recall-extraction",
+    "changelog/changelog#2026-05-26-recall-757"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h014",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "task/reflection-engine"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h015",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/three-reviewer-parallel-mandates-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h016",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "feature/council-skill",
+    "changelog/changelog#2026-07-23-council-394",
+    "task/council-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h017",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h018",
+   "category": "paraphrase",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/data-structures-migration-ownership"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h019",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/disable-claude-native-memory"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h020",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h021",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "task/mermaid-render-fix"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h022",
+   "category": "mixed",
+   "lang": "mixed",
+   "rank": 1,
+   "hits": [
+    "feature/optional-skill-packs",
+    "task/optional-skill-packs"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h023",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/control-plane-api",
+    "task/v06-control-plane-backend"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h024",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "changelog/changelog#2026-08-01-dashboard-287",
+    "changelog/changelog#2026-09-10-sleep-161"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h025",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/multi-reviewer-pattern",
+    "feature/multi-review-skill",
+    "task/multi-review-skill"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h026",
+   "category": "exact-term",
+   "lang": "en",
+   "rank": null,
+   "hits": [
+    "task/snapshot-pinned-preview",
+    "changelog/changelog#2026-05-23-snapshot-767",
+    "changelog/changelog#2026-02-25-snapshot-844"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h027",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/fix-update-project-assets-go-stale-after-cli-upgrade-setupversion-drift-is-never-detected-add-sessionstart-self-heal-directive",
+    "feature/manifest-based-install-update",
+    "knowledge/manifest-bootstrap-safety-pattern"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h028",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": null,
+   "hits": [],
+   "injected": false
+  },
+  {
+   "id": "h029",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 2,
+   "hits": [
+    "task/feat-dashboard-redesign-tasks-board-saved-views-with-shared-local-persistence",
+    "task/web-dashboard",
+    "changelog/changelog#2026-06-28-dashboard-579"
+   ],
+   "injected": true
+  },
+  {
+   "id": "h030",
+   "category": "topical-adjacency",
+   "lang": "en",
+   "rank": 1,
+   "hits": [
+    "knowledge/sub-agent-iterative-reviewer-pattern",
+    "knowledge/three-reviewer-parallel-mandates-pattern"
+   ],
+   "injected": true
+  }
+ ]
+}
