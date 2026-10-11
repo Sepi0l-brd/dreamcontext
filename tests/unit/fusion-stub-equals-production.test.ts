@@ -36,6 +36,10 @@ describe('the SPIKE fusion constants ARE today\'s production constants (nothing 
 });
 
 describe('the tuned FUSION_BY_TIER (T6b) keeps the tier contract', () => {
+  it('keeps the local tier on the adaptive constants (e5 train tuning moved no axis; localSearch reads this entry)', () => {
+    expect(FUSION_BY_TIER.local).toEqual(SPIKE_FUSION.local);
+  });
+
   it('reranks only on cloud, within the 40-candidate budget, with an explicit pool', () => {
     expect(FUSION_BY_TIER.local.rerank).toBeNull();
     expect(FUSION_BY_TIER['cloud-index'].rerank).toBeNull();

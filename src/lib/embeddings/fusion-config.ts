@@ -70,6 +70,8 @@ const VOYAGE_CORE: FusionParams = {
 };
 
 export const FUSION_BY_TIER: Record<RecallTier, FusionParams> = {
+  // Local e5: train tuning (eval/runs/2026-10-11-tune-train-local.json) found no axis or dense gate that beats
+  // the adaptive constants (worst-language train r@5 stays 50; every gate lost hits), so they stay. localSearch reads this entry.
   local: { ...PRODUCTION },
   'cloud-index': { ...VOYAGE_CORE },
   // Rerank: voyage rerank-2.5-lite over the BM25-top-20 + dense-top-20 union (<= 40), blended 0.7 rerank / 0.3 fused.

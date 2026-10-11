@@ -243,22 +243,6 @@ function fallbackSnippet(doc: CorpusDoc): string {
 
 // ── fusion v3: parameterised, shared by the legacy adaptive path and the tiers ──
 
-/** Today's adaptive constants as a FusionParams — what the default local path runs. */
-const LEGACY_PARAMS: FusionParams = {
-  rawCutoff: ADAPTIVE_RAW_CUTOFF,
-  rrfK: RRF_K,
-  rrfBm25Weight: ADAPTIVE_RRF_BM25_WEIGHT,
-  relativeLambda: ADAPTIVE_RELATIVE_LAMBDA,
-  pinMargin: ADAPTIVE_PIN_MARGIN,
-  aggregation: 'max',
-  secondWeight: 0,
-  priorGamma: 0,
-  changelogFactor: CHANGELOG_RANK_FACTOR,
-  denseGate: null,
-  langWeights: null,
-  rerank: null,
-};
-
 /**
  * Dense ranking with a choice of doc aggregation: 'max' is `denseRank`; 'max+second' adds
  * `secondWeight` × the doc's second-best chunk similarity (a doc with two relevant sections beats
@@ -465,7 +449,7 @@ export interface HybridOptions extends Bm25Options {
   home?: string;
   /** Honoured ONLY with evalConsent under the frozen dir; real roots use the vault's consented model. */
   rerankModel?: RerankModel;
-  /** Fusion parameters. Default: the legacy adaptive path (local) or FUSION_BY_TIER[tier] (cloud tiers). */
+  /** Fusion parameters. Default: FUSION_BY_TIER[tier] (local: the adaptive constants). */
   fusionParams?: FusionParams;
   /** A precomputed query vector (eval); skips the query-side embedding. */
   queryVec?: Float32Array;
@@ -764,8 +748,9 @@ async function localSearch(
       opts.denseWeight,
     ), byKey);
   } else {
-    // Adaptive (default): the legacy constants, unless the caller supplies tuned parameters.
-    const params = opts.fusionParams ?? { ...LEGACY_PARAMS, pinMargin: opts.pinMargin ?? ADAPTIVE_PIN_MARGIN };
+    // Adaptive (default): the shipped local-tier constants (FUSION_BY_TIER.local), unless the caller supplies parameters.
+    const local = FUSION_BY_TIER.local;
+    const params = opts.fusionParams ?? { ...local, pinMargin: opts.pinMargin ?? local.pinMargin };
     if (shouldSkipDense(bm25Hits, params.denseGate)) return bm25Hits.slice(0, topK);
     fused = fuseCandidates(bm25Hits, denseHits, params, { byKey, now: opts.now ?? new Date(), queryLang: opts.queryLang });
   }
