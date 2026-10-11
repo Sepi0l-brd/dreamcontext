@@ -9,7 +9,7 @@
  },
  "snapshot": "dc-20261010",
  "injectK": 5,
- "status": "HELDOUT COMPLETE for local, cloud-index, cloud and B0 raw / hybrid-e5 / haiku (T10c validator, 2026-10-11). Latency and cost sections written by T10c.",
+ "status": "HELDOUT COMPLETE for local, cloud-index, cloud and B0 raw / hybrid-e5 / haiku (T10c validator, 2026-10-11). Latency and cost sections written by T10c (latency measured on a loaded machine).",
  "heldout": {
   "B0-raw": {
    "tr": {
@@ -471,7 +471,7 @@
   "cloud-index vs raw [pooled]": {
    "wins": 23,
    "losses": 2,
-   "p": 0.00001943
+   "p": 1.943e-05
   },
   "cloud vs haiku [tr]": {
    "wins": 11,
@@ -491,10 +491,10 @@
   "cloud vs raw [pooled]": {
    "wins": 24,
    "losses": 1,
-   "p": 0.00000155
+   "p": 1.55e-06
   }
  },
- "evalLedgerUsd": 0.3054,
+ "evalLedgerUsd": 0.4837192,
  "tests": {
   "tsc": "clean",
   "files3": "3 files, 49 tests passed",
@@ -699,12 +699,12 @@
       "raw": {
        "wins": 16,
        "losses": 0,
-       "p": 0.00003052
+       "p": 3.052e-05
       },
       "hybrid-e5": {
        "wins": 17,
        "losses": 0,
-       "p": 0.00001526
+       "p": 1.526e-05
       },
       "haiku": {
        "wins": 11,
@@ -809,23 +809,23 @@
      "paired": {
       "wins": 23,
       "losses": 2,
-      "p": 0.00001943
+      "p": 1.943e-05
      },
      "pairedVsEach": {
       "raw": {
        "wins": 23,
        "losses": 2,
-       "p": 0.00001943
+       "p": 1.943e-05
       },
       "hybrid-e5": {
        "wins": 26,
        "losses": 2,
-       "p": 0.000003032
+       "p": 3.032e-06
       },
       "haiku": {
        "wins": 27,
        "losses": 2,
-       "p": 0.000001624
+       "p": 1.624e-06
       }
      }
     }
@@ -966,23 +966,23 @@
      "paired": {
       "wins": 24,
       "losses": 1,
-      "p": 0.00000155
+      "p": 1.55e-06
      },
      "pairedVsEach": {
       "raw": {
        "wins": 24,
        "losses": 1,
-       "p": 0.00000155
+       "p": 1.55e-06
       },
       "hybrid-e5": {
        "wins": 27,
        "losses": 1,
-       "p": 2.161e-7
+       "p": 2.161e-07
       },
       "haiku": {
        "wins": 28,
        "losses": 1,
-       "p": 1.118e-7
+       "p": 1.118e-07
       }
      }
     }
@@ -1199,7 +1199,8 @@
  "caveats": [
   "n is 72 (23/25/24) not 75; per-language verdicts at n~25 are directional, pooled is primary",
   "cloud-index held-out ran on engine ba736f4f before the fallback guard (no per-query querySource/fallback field recorded); local on 8ed3a6d8; cloud on c274d18f; B0 on 0ba4c25a",
-  "held-out run latencies in the sealed files were recorded under machine load and are not AC-L evidence; AC-L comes from scripts/hook-latency.ts"
+  "held-out run latencies in the sealed files were recorded under machine load and are not AC-L evidence; AC-L comes from scripts/hook-latency.ts",
+  "latency was measured with machine load 14-34 on 8 cores: AC-L1/L3 failures for local, cloud-index, raw are load-confounded and must be re-measured on a quiet machine"
  ],
  "exactTermByLang": {
   "raw": {
@@ -1286,5 +1287,194 @@
     "r1": 4
    }
   }
+ },
+ "latency": {
+  "floor": {
+   "n": 50,
+   "promptsKept": 66,
+   "wallP50Ms": 1184,
+   "wallP90Ms": 1988,
+   "wallP90ci": [
+    1819,
+    2279
+   ],
+   "meanMs": 1131,
+   "headers": {},
+   "headerOk": true,
+   "loadAverages": "17.26 start -> 26.05 end (09:36-09:38)"
+  },
+  "raw": {
+   "n": 50,
+   "promptsKept": 66,
+   "wallP50Ms": 1793,
+   "wallP90Ms": 2787,
+   "wallP90ci": [
+    2415,
+    3378
+   ],
+   "meanMs": 1913,
+   "headers": {
+    "BM25": 50
+   },
+   "headerOk": true,
+   "loadAverages": "26.05 -> 18.78 (09:38-09:41)",
+   "overheadP50Ms": 609,
+   "overheadP90Ms": 799,
+   "overheadP90ci_approx": [
+    427,
+    1390
+   ]
+  },
+  "local": {
+   "n": 50,
+   "promptsKept": 66,
+   "wallP50Ms": 6072,
+   "wallP90Ms": 10708,
+   "wallP90ci": [
+    8162,
+    10873
+   ],
+   "meanMs": 6476,
+   "headers": {
+    "Hybrid \u00b7 local": 50
+   },
+   "headerOk": true,
+   "loadAverages": "18.78 -> 26.11 (09:41-09:49)",
+   "overheadP50Ms": 4888,
+   "overheadP90Ms": 8720,
+   "overheadP90ci_approx": [
+    6174,
+    8885
+   ]
+  },
+  "cloud-index": {
+   "n": 50,
+   "promptsKept": 66,
+   "wallP50Ms": 5772,
+   "wallP90Ms": 13070,
+   "wallP90ci": [
+    10022,
+    19894
+   ],
+   "meanMs": 6810,
+   "headers": {
+    "Hybrid \u00b7 cloud-index": 50
+   },
+   "headerOk": true,
+   "loadAverages": "26.11 -> 33.78 mid-run (09:49-~09:55)",
+   "overheadP50Ms": 4588,
+   "overheadP90Ms": 11082,
+   "overheadP90ci_approx": [
+    8034,
+    17906
+   ]
+  },
+  "cloud": {
+   "n": 50,
+   "promptsKept": 66,
+   "wallP50Ms": 2434,
+   "wallP90Ms": 3412,
+   "wallP90ci": [
+    2750,
+    3905
+   ],
+   "meanMs": 2487,
+   "headers": {
+    "Hybrid \u00b7 cloud": 50
+   },
+   "headerOk": true,
+   "loadAverages": "ended 10:00 with load 14.20 (1m) / 21.92 (5m)",
+   "overheadP50Ms": 1250,
+   "overheadP90Ms": 1424,
+   "overheadP90ci_approx": [
+    762,
+    1917
+   ]
+  },
+  "method": "scripts/hook-latency.ts --dist engines/8ed3a6d8/dist/index.js --prompts eval/gold-v2/train.jsonl --n 50 (51 runs, first discarded), scratch copy of dc-20261010; overhead = tier wall minus floor wall (same stat); CI = tier bootstrap CI minus floor p90 point estimate (approximate)",
+  "machineLoad": "NOT QUIET: 8 cores, load averages 14-34 across runs; absolute numbers are inflated (floor = bare node + hook with recall off = 1184 ms p50)",
+  "verdicts": {
+   "AC-L1 (p90<=5000 ms each tier)": {
+    "raw": "PASS (wall 2787 / overhead 799)",
+    "cloud": "PASS (wall 3412 / overhead 1424)",
+    "local": "FAIL as measured (wall 10708 / overhead 8720), load-confounded",
+    "cloud-index": "FAIL as measured (wall 13070 / overhead 11082), load-confounded",
+    "overall": "FAIL as measured; needs a quiet-machine re-measure"
+   },
+   "AC-L2 (vs 1.5 s p90 overhead)": {
+    "raw": "meets (799)",
+    "cloud": "meets on overhead (1424), misses on wall (3412)",
+    "local": "misses (8720; expected to meet on a quiet machine, unverified)",
+    "cloud-index": "misses (11082; expected)"
+   },
+   "AC-L3 (raw p50<=400 ms)": "FAIL as measured (overhead p50 609, wall 1793); floor alone 1184 shows the machine, not recall, dominates; no --cpu-prof fix attempted",
+   "AC-L4": "NOT MEASURED (offline-cloud / breaker case not run in this validation) - counts as unmet"
+  }
+ },
+ "cost": {
+  "AC-C1": {
+   "result": {
+    "embedded": 6597,
+    "reused": 0,
+    "evicted": 3,
+    "spentUsd": 0.1590114600000001,
+    "aborted": null
+   },
+   "corpusDocs": 1585,
+   "evalLedgerBeforeUsd": 0.3247077400000001,
+   "evalLedgerAfterUsd": 0.48371919999999996,
+   "deltaUsd": 0.159011,
+   "seconds": 241.441,
+   "unseeded": true,
+   "cap": 0.5,
+   "verdict": "PASS"
+  },
+  "AC-C3": {
+   "E0Usd": 0.011422,
+   "TSUsd": 0.042169,
+   "evalLedgerUsd": 0.48371919999999996,
+   "T10RealConsentLatencyUsd": 0.0115977,
+   "sumUsd": 0.548908,
+   "cap": 5.0,
+   "verdict": "PASS",
+   "note": "E0+TS+eval ledger = 0.537310; adding the real-consent latency spend (vaultUsd of the scratch cloud run, 46 billed queries) = 0.549"
+  },
+  "AC-C2 (informational)": {
+   "latencyRunUsd": 0.0115977,
+   "billedQueries": 46,
+   "usdPer1kQueries": 0.252,
+   "cap": 1.0
+  }
+ },
+ "costs": {
+  "AC-C1": {
+   "method": "buildCloudIndex(root,voyage-4,stableCorpus,{evalConsent:true,trigger:eval}), no seedVectors, scratch copy without .embeddings, DREAMCONTEXT_EVAL_MAX_USD=2.90",
+   "corpusDocs": 1585,
+   "embedded": 6597,
+   "reused": 0,
+   "evicted": 3,
+   "aborted": null,
+   "ledgerBeforeUsd": 0.3247077,
+   "ledgerAfterUsd": 0.4837192,
+   "deltaUsd": 0.1590115,
+   "seconds": 241.4,
+   "verdict": "PASS (<= $0.50)"
+  },
+  "AC-C2": {
+   "real_consent_latency_spend_usd": 0.0116,
+   "queries": 46,
+   "usdPer1000Queries_approx": 0.252,
+   "verdict": "PASS (<= $1.00 per 1,000), rough: 46 cloud queries incl. rerank"
+  },
+  "AC-C3": {
+   "E0_usd": 0.01142,
+   "TS_usd": 0.04217,
+   "evalLedger_usd": 0.48372,
+   "T10_real_consent_latency_usd": 0.0116,
+   "sum_usd": 0.54891,
+   "cap_usd": 5,
+   "verdict": "PASS"
+  },
+  "evalLedgerAfterC1Usd": 0.4837192
  }
 }
