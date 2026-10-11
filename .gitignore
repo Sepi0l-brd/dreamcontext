@@ -18,8 +18,8 @@ marketing/
 # This project's own brain lives in a separate PRIVATE repo (dreamcontext-brain) and
 # links this one as a code repo. Nothing under these folders may ever land here: this
 # repo is public. _agent_context/ is the brain's pre-rename name.
-_dream_context/
-_agent_context/
+/_dream_context
+/_agent_context
 # Repo-root scratch: where the verify scripts write their screenshots and where one-off
 # probes land. Anchored with a leading slash so it can never match a source `tmp/` folder.
 /tmp/
