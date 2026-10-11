@@ -281,24 +281,24 @@ describe('modeBriefing', () => {
     expect(brief).toContain('dreamcontext tasks log');
   });
 
-  // ── The review + validate contract (2026-09-02; per-wave 2026-09-26; v2 2026-10-11) ───
+  // ── The review + validate contract (2026-09-02; per-wave 2026-09-26; lead builds 2026-10-11) ──
   // The mirror of the Plan briefing's step 4. 2026-09-02 added ONE clean review after the
-  // last wave; 2026-09-26 put one after EVERY wave. 2026-10-11 (measured): a reviewer closes
-  // only contract and hot-path waves, in parallel with their tests, and ONE end review reads
-  // everything no wave reviewer read. The author still never judges its own work.
-  it('develop: a clean reviewer on contract/hot-path waves and one at the end — it does not self-approve', () => {
+  // last wave; 2026-09-26 put one after EVERY wave; v2 (2026-10-11 morning) reviewed only
+  // contract and hot-path waves plus one end review. Measured the same day, the lead building
+  // alone matched fan-out on quality for less: the lead builds, and ONE clean reviewer on
+  // Opus reads every path it changed, at the end. The author still never judges its own work.
+  it('develop: ONE clean Opus reviewer after the last wave, over every changed path — it does not self-approve', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).toMatch(/you\s+do not sign off on your own work/i);
-    expect(brief).toContain('`reviewer`');
-    expect(brief).toMatch(/ONE clean `reviewer` on a contract or hot-path wave, in\s+parallel with its tests/);
-    expect(brief).toMatch(/ONE at the end over everything no wave reviewer read/);
-    // The 2026-09-26 "reviewer closes every wave" must not creep back.
+    expect(brief).toMatch(/after the last wave, ONE clean `reviewer` \(model opus\)\s+over every path you changed, in parallel with the final check/);
+    // Neither the 2026-09-26 per-wave review nor v2's contract-wave review creeps back.
     expect(brief).not.toMatch(/reviewer\s+on that wave's files and criteria/);
+    expect(brief).not.toMatch(/contract or hot-path wave/);
     // The judge fetches its own changes — a pasted diff is the author choosing what gets read.
-    expect(brief).toMatch(/git diff[^\n]*ITSELF/);
+    expect(brief).toMatch(/git diff[^\n]*\n?[^\n]*ITSELF/);
     expect(brief).toMatch(/never paste a diff/i);
     // The verdict lands before the run moves on, or the map loses it.
-    expect(brief).toMatch(/verdict\s+before the next phase/);
+    expect(brief).toMatch(/verdict before the next phase/);
   });
 
   it('develop closes every wave with ONE check run whose real output is shown', () => {
@@ -306,22 +306,24 @@ describe('modeBriefing', () => {
     expect(brief).toMatch(/Close every wave with evidence/);
     expect(brief).toContain('`dreamcontext builder test`');
     expect(brief).toMatch(/SHOWING the command and its real output/);
-    expect(brief).toMatch(/A failure resumes the owning builder with exactly that output/);
+    expect(brief).toMatch(/Fix a failure, then re-run only what failed/);
   });
 
-  it('develop never ends its turn while a child it started runs', () => {
+  it('develop never stops between waves to ask, and never ends its turn while a judge runs', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
-    expect(brief).toMatch(/Never end your turn while a builder or judge you started runs/);
-    expect(brief).toContain('`dreamcontext builder wait`');
+    expect(brief).toMatch(/Never stop between waves to ask whether to go on, and never end your turn while a judge\s+you started runs/);
     expect(brief).toMatch(/The owner is not your scheduler/);
   });
 
-  it('develop: builders build, the lead writes no product code', () => {
+  it('develop: the lead builds every wave; builder fan-out is opt-in only', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
-    expect(brief).toMatch(/Builders build every wave, never you/);
-    expect(brief).toMatch(/You write no product code/);
-    expect(brief).toMatch(/Builders fork from one\s+base, write their lane's tests and run none/);
-    expect(brief).toMatch(/owned\s+files changed on disk/);
+    expect(brief).toMatch(/You LEAD the run, and you write the code/);
+    expect(brief).toMatch(/You build every wave yourself\*\*, its tests with it/);
+    expect(brief).toMatch(/Only work that cannot fit this session, or the owner\s+asking for builders, goes to `dreamcontext goal-live recipe fan-out`/);
+    // The v2 "builders build, never you" contract must not creep back.
+    expect(brief).not.toMatch(/You write no product code/);
+    expect(brief).not.toMatch(/Builders build every wave/);
+    expect(brief).not.toContain('`dreamcontext builder wait`');
   });
 
   it('develop sends the lead to the recipe, and says what to do when the CLI is too old', () => {
@@ -331,12 +333,11 @@ describe('modeBriefing', () => {
     expect(brief).toContain('dreamcontext goal-live start --goal <slug> --mode develop || true');
   });
 
-  it('develop writes the wave map before any code: max 3 lanes, disjoint files, Plan\'s map unchanged', () => {
+  it('develop writes the wave map before any code; Plan\'s map is used unchanged, its lanes built in turn', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
-    expect(brief).toMatch(/Write one before any code/);
-    expect(brief).toMatch(/max\s+3 lanes a wave/);
-    expect(brief).toMatch(/disjoint files/);
-    expect(brief).toMatch(/A map from Plan mode is used unchanged/);
+    expect(brief).toMatch(/Write one\s+before any code/);
+    expect(brief).toMatch(/one wave is fine/);
+    expect(brief).toMatch(/A map\s+from Plan mode is used unchanged: its lanes are groups of files you build in turn/);
   });
 
   it('plan asks for the wave map in the file-by-file draft', () => {
@@ -369,7 +370,7 @@ describe('modeBriefing', () => {
   it('develop writes its own map with as few waves as the dependencies allow', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).toMatch(/Work in waves, as few as the dependencies allow/);
-    expect(brief).toMatch(/a\s+file two criteria share means one lane, not a new wave/);
+    expect(brief).toMatch(/criteria grouped by what one check can prove/);
   });
 
   it('develop iterates on review findings, and escalates one that survives a fix', () => {

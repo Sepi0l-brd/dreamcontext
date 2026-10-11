@@ -460,7 +460,7 @@ not paste a raw diff into its prompt.
 
 Run `dreamcontext builder load --reap` first and dispatch on `quiet` (the same bounded
 wait as the final gate): the validator runs the heavy steps the final gate left to it.
-Dispatch **one** `goal-validator` (sonnet, clean context). It runs the **user-chosen
+Dispatch **one** `goal-validator` (opus, clean context). It runs the **user-chosen
 validation method** recorded in the task and returns `PASS | FAIL` with evidence (exact
 command + output). A FAIL that is a timeout under a `busy` load line is re-run on a quiet
 machine before it is routed to anyone.

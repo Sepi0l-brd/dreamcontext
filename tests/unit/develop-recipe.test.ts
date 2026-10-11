@@ -9,13 +9,122 @@
  * What v1 pinned in recipe TEXT (the env strip, the spawn flags, the registry line shape,
  * liveness by kill -0 + ps) is now CODE in `dreamcontext builder` and is pinned by
  * tests/unit/builder-spawn.test.ts; here only the calls and when to make them remain.
+ *
+ * 2026-10-11 (owner decision on measurement-report-r3.md): `develop` is the lead-builds recipe
+ * (D, first block below); the v2 builder fan-out moved unchanged to `fan-out` (R, every block
+ * after it), opt-in for work that cannot fit one lead session.
  */
 import { describe, it, expect } from 'vitest';
-import { DEVELOP_RECIPE as R } from '../../src/lib/develop-recipe.js';
+import { DEVELOP_RECIPE as D, FAN_OUT_RECIPE as R, GOAL_LIVE_RECIPES } from '../../src/lib/develop-recipe.js';
 
 const lines = R.split('\n');
 const goalLiveLines = lines.filter((l) => /dreamcontext goal-live\b|(?:^|\s|`)goal-live (?:actor|state|phase|start|clear)\b/.test(l));
 const section = (from: string, to: string) => R.slice(R.indexOf(from), R.indexOf(to));
+
+describe('develop: the lead builds, checks each wave, and ONE clean reviewer judges the run', () => {
+  const dLines = D.split('\n');
+  const dSection = (from: string, to: string) => D.slice(D.indexOf(from), D.indexOf(to));
+
+  it('goal-live recipe knows develop and fan-out, and develop is the lead-builds one', () => {
+    expect(GOAL_LIVE_RECIPES.develop).toBe(D);
+    expect(GOAL_LIVE_RECIPES['fan-out']).toBe(R);
+    expect(D).toMatch(/You are the LEAD and you write the code: build each wave yourself, check it yourself/);
+  });
+
+  it('starts no builder: no builder session command outside the opt-in pointer', () => {
+    expect(D).not.toMatch(/dreamcontext builder (?:base|fork|spawn|resume|wait)\b/);
+    expect(D).not.toMatch(/claude -p/);
+    const optIn = dSection('## 5.', '## 6.');
+    expect(optIn).toMatch(/only\s+when the work cannot fit this session/);
+    expect(optIn).toMatch(/`dreamcontext goal-live recipe\s+fan-out`/);
+    expect(optIn).toMatch(/tell the owner once why/);
+  });
+
+  it('never ends its turn on a running judge, and never stops between waves to ask', () => {
+    expect(D.indexOf('ABOVE EVERY OTHER RULE')).toBeLessThan(D.indexOf('## 0.'));
+    expect(D).toMatch(/never end your turn while a judge you started is still running/);
+    expect(D).toMatch(/never stop between waves to ask whether to go on/);
+    for (const l of dLines.filter((x) => x.includes('run_in_background'))) expect(l).toMatch(/Never/);
+  });
+
+  it('takes ONE start snapshot per run and diffs it at the end, NUL-separated', () => {
+    expect(D).toContain('IDX="$(git rev-parse --absolute-git-dir)/dc-$S.idx"');
+    expect(D).toContain('[ -f "$REAL" ] && cp "$REAL" "$IDX"');
+    expect(D).toContain('dreamcontext tasks log "$S" "run start tree $START"');
+    expect(D).toContain('git -c core.quotePath=false diff-tree -r -z --name-status "$START" "$NOW"');
+    expect(D).toMatch(/A path you did not change is another session's work/);
+  });
+
+  it('a Plan-mode map is used unchanged, its lanes built one after another', () => {
+    const map = dSection('## 1.', '## 2.');
+    expect(map).toMatch(/A map from Plan mode is used unchanged: its lanes are groups of files to you/);
+    expect(map).toMatch(/as FEW waves as the\s+dependencies allow, and one wave is fine/);
+    expect(map).toMatch(/never in\s+a test wave/);
+  });
+
+  it('each wave: build it, check it ONCE through builder test, fix and re-run only what failed', () => {
+    const wave = dSection('## 2.', '## 3.');
+    expect(wave).toMatch(/Build the wave yourself, its tests with it/);
+    expect(wave).toContain('dreamcontext builder test "$S" --wave N --related <every path you changed> --also <also-run tests>');
+    expect(wave).toMatch(/SHOW its\s+output/);
+    expect(wave).toContain('dreamcontext builder test "$S" --wave N --failed --related <files the fix changed>');
+    expect(wave).toMatch(/`FAILED 2x` after\s+a second fix = STOP and put it to the owner/);
+    expect(wave).toMatch(/timeout under load is the machine/);
+    expect(wave).toMatch(/Tick that wave's criteria \(only what is demonstrably true\)/);
+    expect(wave).toMatch(/a plan that\s+turns out to be wrong = STOP/);
+  });
+
+  it('ONE end reviewer on Opus over every changed path by name, in parallel with the final check', () => {
+    const end = dSection('## 3.', '## 4.');
+    expect(end).toMatch(/The end review and the final check run\s+at the same time, dispatched in ONE message/);
+    expect(end).toMatch(/ONE `reviewer` sub-agent \(Agent tool, model opus, not in the background\)/);
+    expect(end).toMatch(/every path you changed, enumerated by name, with START and NOW, never a\s+bare `git diff` against a ref/);
+    expect(end).toMatch(/never paste a diff/);
+    expect(end).toMatch(/Record the verdict BEFORE anything else/);
+    expect(end).toMatch(/fix exactly the findings\s+or the failure and nothing else/);
+    expect(end).toContain('dreamcontext goal-live actor end-reviewer --kind fresh --role reviewer --round 2 || true');
+    expect(end).toMatch(/The SAME finding twice = STOP and put it to the owner/);
+    expect(end).toMatch(/You never sign off on your own work/);
+    expect(end).toMatch(/The\s+full suite runs only when the Validation method names it/);
+  });
+
+  it('closes by the Validation method; the validator only on the owner\'s request, never after an unreviewed fix', () => {
+    const end = dSection('## 3.', '## 4.');
+    expect(end).toMatch(/A command that passed: .*phase done/);
+    expect(end).toMatch(/A manual or browser check: `dreamcontext tasks status "\$S" in_review/);
+    expect(end).toMatch(/It runs ONLY when the owner asks for it/);
+    const at = D.indexOf('goal-live phase validate');
+    expect(at).toBeGreaterThan(0);
+    expect(D.slice(at)).not.toMatch(/goal-live phase (?:impl|codereview)/);
+    expect(D).toMatch(/VALIDATOR: "[^"]*screenshots and a video/);
+    expect(D).toMatch(/never\s+re-validate an unreviewed fix/);
+  });
+
+  it('a red final check goes back through review like a reviewer FAIL: nothing closes on an unread fix', () => {
+    const end = dSection('## 3.', '## 4.');
+    expect(end).toMatch(/A reviewer FAIL or a red final check takes the same path/);
+    expect(end).toMatch(/and the final check runs again/);
+    expect(end).toMatch(/Nothing closes on a fix no reviewer has read/);
+  });
+
+  it('a reopened run that used builders is handed to the fan-out recipe, never rebuilt by the lead', () => {
+    const reopen = D.slice(D.indexOf('## 6.'));
+    expect(reopen).toMatch(/A run that used builders is NOT reopened by this recipe/);
+    expect(reopen).toContain('dreamcontext builder status "$S"');
+    expect(reopen).toMatch(/`wN start tree` lines/);
+    expect(reopen).toMatch(/section 6 of `dreamcontext goal-live recipe fan-out`/);
+    expect(reopen.indexOf('NOT reopened')).toBeLessThan(reopen.indexOf('`start` adopted the run'));
+  });
+
+  it('every goal-live command ends in || true, alone on its line', () => {
+    const commands = dLines.filter((l) => /^\s+dreamcontext goal-live /.test(l));
+    expect(commands.length).toBeGreaterThanOrEqual(8);
+    for (const l of commands) {
+      expect(l, l).toMatch(/\|\| true\s*$/);
+      expect(l.slice(l.indexOf('goal-live')), l).not.toContain('&&');
+    }
+  });
+});
 
 describe('builders are started by the CLI, never by a hand-written claude -p', () => {
   it('no line launches claude itself', () => {
@@ -32,13 +141,15 @@ describe('builders are started by the CLI, never by a hand-written claude -p', (
     expect(R).toMatch(/Over 150k tokens .*\n?.*--remint/);
   });
 
-  it('the first fork of a wave is the canary; a miss switches the rest to fresh builders', () => {
+  it('every fork of a wave starts at once; a cache miss switches the next waves to fresh builders', () => {
     const forks = lines.filter((l) => /^\s+dreamcontext builder fork "\$S" wN-[A-Z] --owns /.test(l));
     expect(forks).toHaveLength(2);
-    expect(forks[0]).toMatch(/--canary$/);
-    expect(forks[1]).not.toContain('--canary');
+    // a blocking canary held the other lanes for the fork's whole first turn (3 min measured)
+    for (const f of forks) expect(f).not.toContain('--canary');
     for (const f of forks) expect(f).toMatch(/--prompt-file "\$ROOT\/tmp\/develop\/\$S\/wN-[A-Z]\.md"/);
-    expect(R).toMatch(/Exit 6 = a cache miss: start the other lanes with\s+`dreamcontext builder spawn`/);
+    expect(R).toMatch(/Fork every lane of the wave at once/);
+    expect(R).toMatch(/never wait for one fork before starting the next/);
+    expect(R).toMatch(/CACHE MISS = start the next waves' lanes\s+with `dreamcontext builder spawn`/);
   });
 
   it('never starts anything with run_in_background', () => {

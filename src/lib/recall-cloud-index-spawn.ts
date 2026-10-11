@@ -49,7 +49,6 @@ export function cloudIndexChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   delete out[RECALL_KEY_ENV];
   delete out.DREAMCONTEXT_TAB_SESSION;
   delete out.CLAUDE_CODE_SESSION_ID;
-  delete out.DREAMCONTEXT_DEVELOP_LEAD;
   return out;
 }
 

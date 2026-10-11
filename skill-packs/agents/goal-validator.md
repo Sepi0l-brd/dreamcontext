@@ -16,7 +16,7 @@ description: >
   without proof.
   </commentary>
   </example>
-model: sonnet
+model: opus
 tools:
   - Read
   - Glob

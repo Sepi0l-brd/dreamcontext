@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEVELOP_RECIPE, GOAL_LIVE_RECIPES } from '../../src/lib/develop-recipe.js';
+import { FAN_OUT_RECIPE, GOAL_LIVE_RECIPES } from '../../src/lib/develop-recipe.js';
 import { BUILDER_BRIEF, BUILDER_CHECK_RULES, DEVELOP_BUILDER_RULES } from '../../src/lib/builder-brief.js';
 import { BUILDER_NO_BACKGROUND_ENV } from '../../src/lib/builder-tools.js';
 import { modeBriefing } from '../../src/server/chat-modes.js';
@@ -255,7 +255,7 @@ describe('goal-implementer: the agent file says what the brief says', () => {
   });
 });
 
-describe('Develop mode: builders run no checks, the lead checks once per wave', () => {
+describe('Develop fan-out (opt-in since 2026-10-11): builders run no checks, the lead checks once per wave', () => {
   it('the briefing\'s wave check is type-checks + the wave\'s tests, heavy steps once at the end', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).not.toMatch(/build\s*\+\s*test/i);
@@ -264,7 +264,7 @@ describe('Develop mode: builders run no checks, the lead checks once per wave', 
   });
 
   it('its builder brief carries the no-check rules verbatim and the sentinel', () => {
-    const builder = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('BUILDER: "'), DEVELOP_RECIPE.indexOf('REVIEWER: "'));
+    const builder = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('BUILDER: "'), FAN_OUT_RECIPE.indexOf('REVIEWER: "'));
     expect(builder).toContain(DEVELOP_BUILDER_RULES);
     expect(builder).not.toContain(BUILDER_CHECK_RULES);
     expect(builder).toMatch(/starts with the exact heading '## wN-L report'/);
@@ -281,17 +281,17 @@ describe('Develop mode: builders run no checks, the lead checks once per wave', 
   });
 
   it('an exited builder that did not report is resumed once; wait says so', () => {
-    expect(DEVELOP_RECIPE).toContain('dreamcontext builder wait "$S"');
-    expect(DEVELOP_RECIPE).toMatch(/`unfinished` \(no report\) = resume it ONCE/);
+    expect(FAN_OUT_RECIPE).toContain('dreamcontext builder wait "$S"');
+    expect(FAN_OUT_RECIPE).toMatch(/`unfinished` \(no report\) = resume it ONCE/);
   });
 
   it('load-aware waves, one check through the lock, the final check before closing', () => {
-    expect(DEVELOP_RECIPE).not.toMatch(/Build \+ test/);
-    const wave = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('### 2c.'), DEVELOP_RECIPE.indexOf('Per lane L'));
+    expect(FAN_OUT_RECIPE).not.toMatch(/Build \+ test/);
+    const wave = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('### 2c.'), FAN_OUT_RECIPE.indexOf('Per lane L'));
     expect(wave).toContain('dreamcontext builder load --reap');
     expect(wave).toMatch(/at most 1-2 lanes at a time/);
-    expect(DEVELOP_RECIPE).toMatch(/through\s+the heavy lock/);
-    const final = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('## 3.'), DEVELOP_RECIPE.indexOf('## 4.'));
+    expect(FAN_OUT_RECIPE).toMatch(/through\s+the heavy lock/);
+    const final = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('## 3.'), FAN_OUT_RECIPE.indexOf('## 4.'));
     expect(final.indexOf('dreamcontext builder load --reap')).toBeGreaterThan(-1);
     expect(final.indexOf('dreamcontext builder load --reap')).toBeLessThan(final.indexOf('goal-live phase done'));
     expect(final).toMatch(/for at most 15 min/);

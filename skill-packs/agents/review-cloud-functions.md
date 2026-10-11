@@ -19,7 +19,7 @@ description: >
   scope vs runtime, billing-runaway patterns.
   </commentary>
   </example>
-model: sonnet
+model: opus
 color: blue
 tools:
   - Read

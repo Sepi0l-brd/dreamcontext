@@ -20,7 +20,7 @@ description: >
   writes — patterns no single domain specialist owns end-to-end.
   </commentary>
   </example>
-model: sonnet
+model: opus
 color: yellow
 tools:
   - Read

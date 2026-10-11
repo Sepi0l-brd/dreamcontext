@@ -20,7 +20,7 @@ description: >
   unbounded re-renders.
   </commentary>
   </example>
-model: sonnet
+model: opus
 color: green
 tools:
   - Read

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DREAMCONTEXT_AUTO_MODE, autoModeSettings } from '../../src/lib/auto-mode-rules.js';
-import { DEVELOP_RECIPE } from '../../src/lib/develop-recipe.js';
+import { FAN_OUT_RECIPE } from '../../src/lib/develop-recipe.js';
 import { builderArgv, builderEnv } from '../../src/lib/builder-spawn.js';
 
 describe('dreamcontext auto-mode carve-outs', () => {
@@ -11,11 +11,12 @@ describe('dreamcontext auto-mode carve-outs', () => {
 
   // Drift guard: the carve-out names the builder launch by its marks — if the recipe stops
   // using one, the rule describes a shape nobody launches and the classifier blocks again.
+  // Builders are launched only by the opt-in fan-out recipe since 2026-10-11 (the lead builds).
   it.each(['dreamcontext builder', 'DREAMCONTEXT_SPAWNED=develop', 'acceptEdits', '--allowedTools', 'tmp/develop/', 'claude -p', '--resume'])(
-    'the rule and the Develop recipe share the mark %s',
+    'the rule and the Develop fan-out recipe share the mark %s',
     (mark) => {
       expect(DREAMCONTEXT_AUTO_MODE.allow[1]).toContain(mark);
-      expect(DEVELOP_RECIPE).toContain(mark);
+      expect(FAN_OUT_RECIPE).toContain(mark);
     },
   );
 

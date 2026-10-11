@@ -2,27 +2,210 @@ import { BUILDER_BRIEF, DEVELOP_BUILDER_RULES } from './builder-brief.js';
 import { BUILDER_NO_BACKGROUND_ENV } from './builder-tools.js';
 
 /**
- * The Develop-mode run recipe, printed by `dreamcontext goal-live recipe develop`.
+ * The Develop-mode run recipes, printed by `dreamcontext goal-live recipe develop|fan-out`.
  *
  * The Develop chat briefing (src/server/chat-modes.ts DEVELOP_BRIEFING) carries only the
  * contract; every procedural step lives here. It ships inside the CLI on purpose: the server
  * that renders the briefing and the CLI that prints the recipe are the same install, so the
  * two can never drift the way a skill/references file in a not-yet-updated project could.
  *
- * v2 (2026-10-11, task every-piece-of-work-gets-the-lightest-process-…, harness-plan-v2.md):
- * the lead no longer hand-writes `claude -p` lines. `dreamcontext builder base|fork|spawn|
- * resume|wait|test|status` (src/cli/commands/builder-sessions.ts) start every builder with one
- * argv, keep the registry and do liveness, so the recipe shrinks to WHEN to call them.
- * Builders fork from one base and run no checks; the lead checks once per wave; a failure
- * resumes the owning lane; per-wave review only on contract/hot-path waves, one end review for
- * the rest; the validator only on the owner's request. The per-wave tree snapshot and the
- * diff-tree classification are kept from v1 (plan-review rules R4-R11).
- * tests/unit/develop-recipe.test.ts pins the load-bearing lines.
+ * ── 2026-10-11: the lead builds (owner decision on a measured report) ─────────────────
+ * Task every-piece-of-work-gets-the-lightest-process-…, assets/measurement-report-r3.md: on
+ * two real tasks, blind-graded, the lead building the plan alone scored the same as builder
+ * fan-out (t4 7 vs 6-7, tk2 6 vs 6) for 0.7-1.0 fewer units a task, and fan-out missed every
+ * speed and parallelism gate. So `develop` is now the lead-builds recipe: the lead implements
+ * each wave, checks it with `builder test`, and ONE clean end reviewer judges the whole change.
+ * The v2 fan-out recipe (base + forks, builders run no checks, per-wave review on contract and
+ * hot-path waves) is kept unchanged as `fan-out`, opt-in for work that cannot fit one lead
+ * session. The lead-edit guard that enforced "the lead writes no product code" is retired.
+ *
+ * v2 (2026-10-11, harness-plan-v2.md), now FAN_OUT_RECIPE: the lead no longer hand-writes
+ * `claude -p` lines. `dreamcontext builder base|fork|spawn|resume|wait|test|status`
+ * (src/cli/commands/builder-sessions.ts) start every builder with one argv, keep the registry
+ * and do liveness, so the recipe shrinks to WHEN to call them. The per-wave tree snapshot and
+ * the diff-tree classification are kept from v1 (plan-review rules R4-R11).
+ * tests/unit/develop-recipe.test.ts pins the load-bearing lines of both.
  */
 export const DEVELOP_RECIPE = `# Develop run recipe
 
+You are the LEAD and you write the code: build each wave yourself, check it yourself, then
+hand the whole change to ONE clean reviewer. Measured on two real tasks (blind-graded): the
+lead building the plan alone matched builder fan-out on quality for about 60% of its cost.
+Builders are opt-in, for work that cannot fit this session (section 5).
+
+ABOVE EVERY OTHER RULE: never end your turn while a judge you started is still running, and
+never stop between waves to ask whether to go on: the owner is not your scheduler.
+
+Every goal-live call is telemetry, never a gate: end each one with \`|| true\`, never chain
+work after it with \`&&\`, and put it on its own line.
+
+EACH BASH CALL IS A FRESH SHELL: only the working directory carries over, never a variable.
+Start every block below with its own \`S=<task-slug>; ROOT="$(git rev-parse --show-toplevel
+2>/dev/null || pwd)"\`, run each block as ONE call, and carry a value to a later block (the
+run's START tree) by pasting the literal value printed earlier, or by reading it back from the
+task log. Give every \`dreamcontext builder\` call the Bash tool's \`timeout: 600000\`: a check
+blocks for up to 9 minutes. Never start anything with the Bash tool's run_in_background.
+
+## 0. Set up
+
+  S=<task-slug>
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  mkdir -p "$ROOT/tmp/develop/$S"      # check logs and failure state live here, never in OS /tmp
+  dreamcontext goal-live start --goal "$S" --mode develop || true
+
+\`start\` ADOPTS this task's unfinished Develop run (this pane's, or any pane's idle 10+ min),
+so a reopen or handoff keeps the map, the reviewed count and the receipt. "another chat is
+running this goal" = two Develop chats on one task: stop and tell the owner.
+
+Then the run's start snapshot, so the end reviewer reads exactly this run's changes even in a
+checkout other sessions share:
+
+  IDX="$(git rev-parse --absolute-git-dir)/dc-$S.idx"
+  REAL="$(git rev-parse --git-path index)"
+  [ -f "$REAL" ] && cp "$REAL" "$IDX"
+  START="$(GIT_INDEX_FILE="$IDX" git add -A && GIT_INDEX_FILE="$IDX" git write-tree)"
+  dreamcontext tasks log "$S" "run start tree $START"
+
+Seed from the real index (an empty one drops tracked files that match .gitignore). Not a git
+repo: tell the owner once that there is no net, and keep your own list of changed paths.
+
+## 1. The wave map is your order of work
+
+A map from Plan mode is used unchanged: its lanes are groups of files to you, built one after
+another. No map in the task: write one before any code:
+
+  dreamcontext tasks insert "$S" technical_details -- "WAVE MAP: W1 (a.ts, b.ts: AC1, AC2) | W2 ... | also run: <tests>"
+
+A wave ends where a check can prove something, so the map has as FEW waves as the
+dependencies allow, and one wave is fine. Tests are written with the code they test, never in
+a test wave. "also run": test files that read a changed file by path (fixtures, manifests,
+docs checks), which a related-tests run cannot find.
+
+## 2. Each wave N
+
+  dreamcontext goal-live phase impl --wave N --waves M || true
+
+1. Build the wave yourself, its tests with it. Stay inside the task's criteria; a plan that
+   turns out to be wrong = STOP and say so.
+2. Check it ONCE, through the heavy lock (it never fights another session's tests):
+
+  dreamcontext builder test "$S" --wave N --related <every path you changed> --also <also-run tests>
+
+   It type-checks each touched package and runs the tests that import your changes; SHOW its
+   output. Exit 0 = GREEN, except a "NOT GREEN: no test covers" line: add that test with
+   --also, or record that it is untested. 1 = failures (\`FAIL: <key>\`): fix them, then re-run
+   only what failed plus what the fix changed:
+
+  dreamcontext builder test "$S" --wave N --failed --related <files the fix changed>
+
+   75 = a check did not run: run it again. A red that is a timeout under load is the machine:
+   record the load line and re-run it before you change code. A key marked \`FAILED 2x\` after
+   a second fix = STOP and put it to the owner.
+3. Tick that wave's criteria (only what is demonstrably true) and log it:
+
+  dreamcontext tasks log "$S" "wN green: <what landed>; <the check's summary line>"
+
+## 3. After the last wave: one end review, the final check, then close
+
+Take the snapshot again as NOW (the same three commands, into the same $IDX), then list the
+run's paths:
+
+  git -c core.quotePath=false diff-tree -r -z --name-status "$START" "$NOW"
+
+Parse it NUL-separated. A path you did not change is another session's work in this
+checkout: leave it out of the review and log it once. The end review and the final check run
+at the same time, dispatched in ONE message:
+
+  dreamcontext goal-live phase codereview || true
+  dreamcontext goal-live actor end-reviewer --kind fresh --role reviewer || true
+
+- ONE \`reviewer\` sub-agent (Agent tool, model opus, not in the background) with the reviewer
+  brief (section 4): every path you changed, enumerated by name, with START and NOW, never a
+  bare \`git diff\` against a ref. It fetches its own changes; never paste a diff.
+- The final check: \`dreamcontext builder load --reap\` first; \`busy\` = check again every
+  ~60 s, for at most 15 min; still busy = run anyway, with at most 2 test workers, and record
+  the load line. Then, each through \`dreamcontext builder heavy --\`, the task's Validation
+  method when it is a command, and the builds and generator scripts the change needs. The
+  full suite runs only when the Validation method names it.
+
+Record the verdict BEFORE anything else: \`dreamcontext goal-live state end-reviewer=PASS || true\`
+(or FAIL). A reviewer FAIL or a red final check takes the same path: fix exactly the findings
+or the failure and nothing else, check the fix with \`builder test "$S" --wave final --related
+<files the fix changed>\`, then a fresh reviewer re-checks only the previous findings and the
+fix, and the final check runs again. Nothing closes on a fix no reviewer has read:
+
+  dreamcontext goal-live actor end-reviewer --kind fresh --role reviewer --round 2 || true
+
+The SAME finding twice = STOP and put it to the owner. You never sign off on your own work.
+
+Close by the task's Validation method:
+- A command that passed: \`dreamcontext goal-live phase done || true\`, then \`dreamcontext
+  tasks status "$S" completed "<what shipped + the command and its result>"\`.
+- A manual or browser check: \`dreamcontext tasks status "$S" in_review "<what to look at>"\`
+  and offer the validator. It runs ONLY when the owner asks for it: a clean
+  \`goal-validator\` that drives the real app and proves the result with screenshots and a video.
+
+When the owner asks:
+
+  dreamcontext goal-live phase validate || true
+  dreamcontext goal-live actor validator --kind fresh --role validator || true
+
+Dispatch ONE \`goal-validator\` (model opus) with the validator brief. Log every verdict:
+\`dreamcontext tasks log "$S" "validator PASS"\` or \`"validator FAIL: <what>"\`, and record it
+with \`goal-live state validator=PASS|FAIL || true\`. FAIL: the phase STAYS validate. Never
+call \`phase impl\` or \`phase codereview\` after \`phase validate\`. Fix the failure, check it,
+then ONE fresh reviewer of the fix, then the validator again:
+
+  dreamcontext goal-live actor final-fix-reviewer --kind fresh --role reviewer || true
+  dreamcontext goal-live state final-fix-reviewer=PASS || true
+  dreamcontext goal-live actor validator --kind fresh --role validator --round 2 || true
+
+PASS: \`dreamcontext goal-live phase done || true\` and \`dreamcontext tasks status "$S"
+completed "<what shipped + the evidence>"\`.
+
+## 4. Briefs
+
+REVIEWER: "Review the run of <slug> against criteria <list>. Start tree <START>, current tree
+<NOW>. Scope (read these yourself with git diff <START> <NOW> -- <path>): <files>. Files with
+status A are new: read them whole. First line PASS or FAIL."
+
+VALIDATOR: "Validate task <slug> by its 'Validation method:' criterion, in the real app.
+Prove it with screenshots and a video of the flow (give their paths). Report PASS or FAIL with
+the exact commands and output. Flaky or skipped is FAIL."
+
+## 5. When builders pay: the fan-out recipe
+
+Builders cost more than you building and wrote no better code when measured. Use them only
+when the work cannot fit this session (many waves of large, independent lanes), or when the
+owner asks for builders. Then tell the owner once why, run \`dreamcontext goal-live recipe
+fan-out\`, and follow it instead of sections 2 and 3.
+
+## 6. Reopen or handoff
+
+A run that used builders is NOT reopened by this recipe: when \`dreamcontext builder status "$S"\`
+lists sessions, or the task log has \`wN start tree\` lines (a fan-out run, or a run started
+before builders became opt-in), follow section 6 of \`dreamcontext goal-live recipe fan-out\`
+instead, since a builder may still be writing its files.
+
+\`start\` adopted the run. The last \`run start tree\` line in the task log is START; ticked
+criteria and \`wN green\` lines say which waves are done. A \`test-wN.json\` in tmp/develop/$S/
+holds the failures still open: \`builder test "$S" --wave N --failed\`. A validator FAIL newer
+than any final-fix-reviewer PASS = fix it, then final-fix-reviewer, then the validator: never
+re-validate an unreviewed fix.
+`;
+
+/**
+ * The v2 builder fan-out (2026-10-11), opt-in since the same day: the default recipe sends the
+ * lead here only for work that cannot fit one lead session, or when the owner asks for builders.
+ */
+export const FAN_OUT_RECIPE = `# Develop fan-out recipe (opt-in)
+
+Follow this only when the default recipe (\`dreamcontext goal-live recipe develop\`, section 5)
+sent you here: the work cannot fit one lead session, or the owner asked for builders.
+
 You are the LEAD. Builders write the product code and its tests; you run the checks, route
-failures and dispatch the judges. Your Edit/Write tools only reach _dream_context/ and tmp/.
+failures and dispatch the judges. In a fan-out run you write no product code: every file
+belongs to a lane.
 
 ABOVE EVERY OTHER RULE: never end your turn while a builder or judge you started is still
 running. Block on \`dreamcontext builder wait\` (2d): the owner is not your scheduler.
@@ -127,13 +310,15 @@ start as those finish. Every builder shares one machine with whatever else is ru
 Per lane L (ids are wave-qualified: \`wN-L\`, never a bare lane name), write its brief to
 $ROOT/tmp/develop/$S/wN-L.md (section 5, BUILDER), then:
 
-  dreamcontext builder fork "$S" wN-A --owns <files...> --prompt-file "$ROOT/tmp/develop/$S/wN-A.md" --name "<what it builds>" --canary
+  dreamcontext builder fork "$S" wN-A --owns <files...> --prompt-file "$ROOT/tmp/develop/$S/wN-A.md" --name "<what it builds>"
   dreamcontext builder fork "$S" wN-B --owns <files...> --prompt-file "$ROOT/tmp/develop/$S/wN-B.md" --name "<what it builds>"
 
-The first fork of a wave carries \`--canary\`: it waits for the fork's first call and says
-whether the base came from the cache. Exit 6 = a cache miss: start the other lanes with
-\`dreamcontext builder spawn\` (same flags, no --canary), since a fork that misses costs more
-than a fresh builder. A single-lane run: \`dreamcontext builder spawn "$S" w1-A --owns ...
+Fork every lane of the wave at once: forks of one base read it from the cache side by side.
+A fork's first turn can take minutes (it plans its whole lane from what it inherited), so
+never wait for one fork before starting the next. \`builder wait\` and \`builder status\` show
+each fork's first-call cache read; a line marked CACHE MISS = start the next waves' lanes
+with \`dreamcontext builder spawn\` (same flags) and tell the owner once, since a fork that
+misses costs more than a fresh builder. A single-lane run: \`dreamcontext builder spawn "$S" w1-A --owns ...
 --prompt-file ... --name ...\`. Builders run at medium effort (measured: xhigh took 2.4x the
 time for no better code); \`--effort high\` on \`base\` or \`spawn\` only for a lane whose
 design is still open.
@@ -326,5 +511,6 @@ sessions never take over this chat's own conversation id.
 /** Every recipe `goal-live recipe <name>` knows. */
 export const GOAL_LIVE_RECIPES: Readonly<Record<string, string>> = {
   develop: DEVELOP_RECIPE,
+  'fan-out': FAN_OUT_RECIPE,
   'builder-brief': BUILDER_BRIEF,
 };

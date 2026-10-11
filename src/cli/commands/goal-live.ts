@@ -297,7 +297,7 @@ export function registerGoalLiveCommand(program: Command, deps: GoalLiveDeps = D
   cmd
     .command('recipe')
     .argument('<name>', Object.keys(GOAL_LIVE_RECIPES).join('|'))
-    .description('Print the step-by-step procedure a chat mode follows (develop)')
+    .description('Print the step-by-step procedure a chat mode follows (develop; fan-out = the opt-in builder recipe)')
     .action((name: string) => runQuietly(() => goalLiveRecipe(name)));
 
   cmd

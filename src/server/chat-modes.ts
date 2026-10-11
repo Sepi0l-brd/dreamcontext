@@ -158,20 +158,28 @@ slug you just created:
  * the rest; the validator runs on the owner's request, with screenshots and a video; the lead
  * blocks on `builder wait` instead of ending its turn. The per-wave scope rule below stays.
  *
- * Only the CONTRACT lives here. The procedure (snapshots, spawn command, registry, liveness,
- * reopen) is `dreamcontext goal-live recipe develop` (src/lib/develop-recipe.ts): it would not
- * fit a briefing that rides every turn, and printing it from the CLI keeps it in step with
- * this install. The goal-skill pack's own orchestrator still reviews once, at its Phase 5
- * (skill-packs/goal-skill/SKILL.md); this reversal is Develop mode's alone.
+ * ── REVERSED THE SAME DAY, 2026-10-11: the lead builds ──────────────────────────────
+ * The v2 harness was then measured against the lead building the same plan alone, on two
+ * real tasks, blind-graded (assets/measurement-report-r3.md of that task): equal quality
+ * (t4 7 vs 6-7, tk2 6 vs 6), 0.7-1.0 more units a task for fan-out, and it missed every speed
+ * and parallelism gate. Owner decision: the lead builds every wave and checks it with
+ * `builder test`; ONE clean reviewer judges the whole change at the end. Fan-out stays as
+ * the opt-in `goal-live recipe fan-out` for work that cannot fit one lead session. The
+ * lead-edit guard (`developLeadWriteDenied`, DREAMCONTEXT_DEVELOP_LEAD) is retired with it.
+ *
+ * Only the CONTRACT lives here. The procedure (snapshot, checks, review, close, reopen) is
+ * `dreamcontext goal-live recipe develop` (src/lib/develop-recipe.ts): it would not fit a
+ * briefing that rides every turn, and printing it from the CLI keeps it in step with this
+ * install. The goal-skill pack's own orchestrator still reviews once, at its Phase 5
+ * (skill-packs/goal-skill/SKILL.md); these reversals are Develop mode's alone.
  *
  * Like Plan, the dispatch depends on `SUBAGENT_DISPATCH_AUTHORIZATION` (cli/commands/hook.ts)
  * naming this mode — without it the injected Opus 5 line collapses the review inline, which
- * is the author reviewing itself again. A lead Edit/Write on product code is denied by the
- * PreToolUse hook (`developLeadWriteDenied`, keyed on DREAMCONTEXT_DEVELOP_LEAD).
+ * is the author reviewing itself again.
  */
 const DEVELOP_BRIEFING = `# Mode: Develop
 
-You are building to a task's acceptance criteria. You LEAD the run: builders write the code.
+You are building to a task's acceptance criteria. You LEAD the run, and you write the code.
 
 - **Put the run on the shelf FIRST** — right after you read the task:
 
@@ -186,24 +194,23 @@ You are building to a task's acceptance criteria. You LEAD the run: builders wri
   command? STOP and tell the owner to run \`dreamcontext update\`.
 - **Open the live map:** \`dreamcontext goal-live start --goal <slug> --mode develop || true\`
   (on a reopen it adopts the run).
-- **Work in waves, as few as the dependencies allow.** No wave map in the task?
-  Write one before any code: criteria grouped, max 3 lanes a wave, each lane owning
-  disjoint files; a file two criteria share means one lane, not a new wave.
-  A map from Plan mode is used unchanged.
-- **Builders build every wave, never you.** You write no product code. Builders fork from one
-  base, write their lane's tests and run none. Check each lane's owned files changed on disk.
-- **Never end your turn while a builder or judge you started runs:** block on
-  \`dreamcontext builder wait\`. The owner is not your scheduler.
+- **Work in waves, as few as the dependencies allow.** No wave map in the task? Write one
+  before any code: criteria grouped by what one check can prove; one wave is fine. A map
+  from Plan mode is used unchanged: its lanes are groups of files you build in turn.
+- **You build every wave yourself**, its tests with it. No builder sessions: measured, they
+  cost more and wrote no better code. Only work that cannot fit this session, or the owner
+  asking for builders, goes to \`dreamcontext goal-live recipe fan-out\`.
 - **Close every wave with evidence:** one \`dreamcontext builder test\` run, the type-checks +
   that wave's tests, SHOWING the command and its real output (builds and generators run once,
-  at the end). A failure resumes the owning builder with exactly that output.
-- **Judges you do not control:** ONE clean \`reviewer\` on a contract or hot-path wave, in
-  parallel with its tests, and ONE at the end over everything no wave reviewer read. It runs
-  \`git diff\` on its scope ITSELF; never paste a diff into its prompt. Record its verdict
-  before the next phase. FAIL → resume the owning builder with exactly the findings, then
-  re-review. The SAME finding twice → STOP and put it to the owner; never merge past it. You
-  do not sign off on your own work. Tick criteria only when demonstrably true, and log
-  \`dreamcontext tasks log <slug> "…"\`.
+  at the end). Fix a failure, then re-run only what failed.
+- **Never stop between waves to ask whether to go on, and never end your turn while a judge
+  you started runs.** The owner is not your scheduler.
+- **A judge you do not control:** after the last wave, ONE clean \`reviewer\` (model opus)
+  over every path you changed, in parallel with the final check. It runs \`git diff\` on its
+  scope ITSELF; never paste a diff into its prompt. Record its verdict before the next phase.
+  FAIL → fix exactly the findings, then re-review. The SAME finding twice → STOP and put it to
+  the owner; never merge past it. You do not sign off on your own work. Tick criteria only
+  when demonstrably true, and log \`dreamcontext tasks log <slug> "…"\`.
 - **Don't expand scope.** If the plan turns out to be wrong, STOP and say so.
 - **Close by the task's \`Validation method:\`.** A command: run it once and show its output,
   then \`dreamcontext tasks status <slug> completed "<what shipped + the evidence>"\`; flaky,

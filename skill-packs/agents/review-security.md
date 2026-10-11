@@ -19,7 +19,7 @@ description: >
   Critical/Major findings only. No nits.
   </commentary>
   </example>
-model: sonnet
+model: opus
 color: red
 tools:
   - Read

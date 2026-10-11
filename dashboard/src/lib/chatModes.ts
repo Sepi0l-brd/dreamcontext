@@ -61,7 +61,7 @@ export interface ChatModeRow {
 export const CHAT_MODE_ROWS: readonly ChatModeRow[] = [
   { id: 'basic', name: 'Basic', insight: 'Plain Claude. No mode enabled.' },
   { id: 'plan', name: 'Plan', insight: 'Asks, drafts, gets reviewed, ends with a task.' },
-  { id: 'develop', name: 'Develop', insight: 'Builds in waves, reviewed and validated.' },
+  { id: 'develop', name: 'Develop', insight: 'Builds in waves, checks each one, then a clean review.' },
   { id: 'train', name: 'Train Me', insight: 'Learns your taste from swipes and picks, then writes a pattern.', maturity: 'ALPHA' },
 ];
 

@@ -1273,21 +1273,16 @@ describe('hook pre-tool-use (integration)', () => {
     expect(reason).toContain('saving thousands of tokens');
   });
 
-  it('a Develop lead is denied product-code writes, whatever its session id; any other session is not', () => {
-    // DREAMCONTEXT_SERVER_PID = this test process: the nested-claude walk stops here, so the
-    // verdict never depends on whether the suite itself runs under a claude.
-    const env = (lead: string) => ({ ...process.env, DREAMCONTEXT_DEVELOP_LEAD: lead, DREAMCONTEXT_SERVER_PID: String(process.pid) });
-    const write = (file: string, sessionId: string) => JSON.stringify({
-      session_id: sessionId, tool_name: 'Write', tool_input: { file_path: file, content: 'x' },
+  it('a Develop lead writes product code: the lead-edit guard is retired (2026-10-11), even under an older server\'s env', () => {
+    // An older server still sets DREAMCONTEXT_DEVELOP_LEAD=1 on a Develop chat. Since the lead
+    // builds, nothing may deny its Write on that flag. DREAMCONTEXT_SERVER_PID = this test
+    // process, so the verdict never depends on whether the suite runs under a claude.
+    const env = { ...process.env, DREAMCONTEXT_DEVELOP_LEAD: '1', DREAMCONTEXT_SERVER_PID: String(process.pid) };
+    const write = JSON.stringify({
+      session_id: '11111111-1111-1111-1111-111111111111', tool_name: 'Write',
+      tool_input: { file_path: join(tmpDir, 'src', 'new', 'x.ts'), content: 'x' },
     });
-    const product = join(tmpDir, 'src', 'new', 'x.ts');
-    for (const sid of ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222']) {
-      const parsed = JSON.parse(runWithStdin('hook pre-tool-use', write(product, sid), tmpDir, env('1')));
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain('builder that owns this file');
-    }
-    expect(runWithStdin('hook pre-tool-use', write(join(ctx, 'state', 't.md'), 'a'), tmpDir, env('1')).trim()).toBe('');
-    expect(runWithStdin('hook pre-tool-use', write(product, 'a'), tmpDir, env('')).trim()).toBe('');
+    expect(runWithStdin('hook pre-tool-use', write, tmpDir, env).trim()).toBe('');
   });
 
   it('blocks Edit on _dream_context/marketing/.env', () => {

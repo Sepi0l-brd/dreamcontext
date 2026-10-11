@@ -2,8 +2,8 @@
  * Auto-mode classifier carve-outs for dreamcontext's OWN orchestration.
  *
  * Claude Code's auto mode refuses to let a session launch another agent headless — which is
- * exactly what the Develop recipe does for its builders: `dreamcontext builder fork|spawn|
- * resume` runs `claude -p … --permission-mode acceptEdits` (src/lib/builder-spawn.ts).
+ * exactly what the opt-in Develop fan-out recipe does for its builders: `dreamcontext builder
+ * fork|spawn|resume` runs `claude -p … --permission-mode acceptEdits` (src/lib/builder-spawn.ts).
  * Classifier rules are honoured ONLY from user, flag (`--settings`) or managed settings: a repo's `.claude/settings.json` / `settings.local.json` is ignored as
  * repo-controllable. So the carve-out rides on the `--settings` of every session the app
  * spawns — scoped to dreamcontext sessions, never written into the user's global settings.

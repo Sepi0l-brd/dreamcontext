@@ -25,7 +25,7 @@ description: >
   missing error handling on critical paths, breaking API changes.
   </commentary>
   </example>
-model: sonnet
+model: opus
 tools:
   - Read
   - Glob

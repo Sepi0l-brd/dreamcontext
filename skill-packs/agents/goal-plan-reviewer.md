@@ -16,7 +16,7 @@ description: >
   no inventing problems to look thorough.
   </commentary>
   </example>
-model: sonnet
+model: opus
 tools:
   - Read
   - Glob

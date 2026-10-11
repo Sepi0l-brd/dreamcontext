@@ -1425,7 +1425,7 @@ export function startChatSession(
     }
   } catch { /* an unseeded pane falls back to the vault default — never a failed spawn */ }
 
-  const childEnv = { PATH: claudeAwarePath(), ...CHAT_QUESTION_ENV, ...tabEnv, ...deferredEnv, DREAMCONTEXT_DEVELOP_LEAD: mode === 'develop' ? '1' : '', DREAMCONTEXT_CHAT_TAB: isAssistant || card ? '' : '1', ...(isAssistant ? opts.assistantEnv ?? {} : {}), ...recallEnv, ...(envelope?.env ?? {}) } as Record<string, string | undefined>;
+  const childEnv = { PATH: claudeAwarePath(), ...CHAT_QUESTION_ENV, ...tabEnv, ...deferredEnv, DREAMCONTEXT_CHAT_TAB: isAssistant || card ? '' : '1', ...(isAssistant ? opts.assistantEnv ?? {} : {}), ...recallEnv, ...(envelope?.env ?? {}) } as Record<string, string | undefined>;
   // The cloud spawns every agent as dcuser through the one worker chokepoint: an allow-listed
   // env (never the server's own, so no DC_HF_*, transfer secret or GitHub token), only THIS
   // account's CLAUDE_CONFIG_DIR, and bash (the image has no zsh). Its own process group either
@@ -1445,11 +1445,9 @@ export function startChatSession(
     // claude-aware PATH: `claude` installs into ~/.local/bin, which no default PATH
     // contains — without this the login shell 127s whenever the install's `export
     // PATH` echo never reached the user's rc. See src/lib/claude-path.ts.
-    // DREAMCONTEXT_DEVELOP_LEAD arms the hook's lead-edit backstop (lib/develop-lead-guard.ts)
-    // for a Develop chat's lead only. ALWAYS set, to '1' or '', so a value the server itself
-    // inherited can never leak into another mode. DREAMCONTEXT_CHAT_TAB (same rule) arms the
-    // UserPromptSubmit reminder to name the tab (lib/chat-tab-title-nudge.ts); the Assistant
-    // has no tab to name.
+    // DREAMCONTEXT_CHAT_TAB arms the UserPromptSubmit reminder to name the tab
+    // (lib/chat-tab-title-nudge.ts). ALWAYS set, to '1' or '', so a value the server itself
+    // inherited can never leak into another mode; the Assistant has no tab to name.
     env: { ...process.env, ...childEnv, ...accountEnv } as NodeJS.ProcessEnv,
   });
 

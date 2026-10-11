@@ -1318,7 +1318,7 @@
     },
     {
       "path": "goal-live recipe",
-      "desc": "Print the step-by-step procedure a chat mode follows (develop)",
+      "desc": "Print the step-by-step procedure a chat mode follows (develop; fan-out = the opt-in builder recipe)",
       "args": [
         "<name>"
       ]
