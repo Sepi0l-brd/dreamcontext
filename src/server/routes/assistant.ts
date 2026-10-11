@@ -8,7 +8,7 @@ import { isDesktop } from '../desktop.js';
 import { isLoopback } from './agent-spawn-shared.js';
 import {
   ASSISTANT_VAULT, assistantContextRoot, assistantExists, assistantProjectRoot, isAssistantVault,
-  readAssistantConfig, writeAssistantConfig, sanitizeConfigPatch,
+  readAssistantConfig, writeAssistantConfig, sanitizeConfigPatch, notchOnlyPatch,
 } from '../../lib/assistant/home.js';
 import { checkAssistantToken, isTainted, markTainted } from '../../lib/assistant/session-state.js';
 import { decide, wrapUntrusted, type AssistantVerb } from '../../lib/assistant/autonomy.js';
@@ -537,6 +537,9 @@ export async function handleAssistantStatus(req: IncomingMessage, res: ServerRes
     config: exists ? readAssistantConfig() : null,
     avatar: exists && findAvatar() ? '/api/assistant/avatar' : null,
     proposals: listProposals().length,
+    // The notch is on screen (`notch_wanted` in desktop/src-tauri/src/assistant.rs): with an
+    // assistant this is its on/off switch, without one it is the notifications-only notch's.
+    notch: readAssistantConfig()?.enabled !== false,
   });
 }
 
@@ -785,11 +788,14 @@ export async function createAssistant(
   const root = assistantProjectRoot(home);
   const { mkdirSync } = await import('node:fs');
   mkdirSync(root, { recursive: true });
-  if (!assistantExists(home)) {
+  const fresh = !assistantExists(home);
+  if (fresh) {
     await runner(['init', '--yes', '--platforms', 'claude', '--name', input.name, '--description', `${input.name} — the owner's dreamcontext Assistant`], root);
     await runner(['setup', '--defaults', '--platforms', 'claude'], root);
   }
-  const config = writeAssistantConfig(sanitizeConfigPatch({ name: input.name, autonomy: input.autonomy }), home);
+  // A new assistant starts on, even when the notifications-only notch was switched off before
+  // it existed (that switch is the same `enabled`).
+  const config = writeAssistantConfig(sanitizeConfigPatch({ name: input.name, autonomy: input.autonomy, ...(fresh ? { enabled: true } : {}) }), home);
   // Re-running create on an existing Assistant may change its autonomy under a live session.
   notifyAssistantAutonomy(config.autonomy);
   if (input.character?.trim()) writeCharacter(input.character.slice(0, 4000), home);
@@ -825,8 +831,15 @@ export async function handleAssistantProfileGet(req: IncomingMessage, res: Serve
 /** POST /api/assistant/profile {…config patch, character?} */
 export async function handleAssistantProfileSet(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!ownerGate(req, res)) return;
-  if (!assistantExists()) { sendError(res, 404, 'no_assistant', 'The dreamcontext Assistant has not been created yet.'); return; }
   const body = (await parseJsonBody(req)) ?? {};
+  if (!assistantExists()) {
+    // No assistant: the notch still notifies, and `enabled` alone is its off switch (owner,
+    // 2026-10-11: not everyone wants it). Everything else needs the assistant.
+    const patch = notchOnlyPatch(body);
+    if (!patch) { sendError(res, 404, 'no_assistant', 'The dreamcontext Assistant has not been created yet.'); return; }
+    sendJson(res, 200, { config: writeAssistantConfig(patch) });
+    return;
+  }
   const config = writeAssistantConfig(sanitizeConfigPatch(body));
   // Autonomy is argv on the live session (permission mode, --allowedTools): a change respawns
   // it in place with --resume before its next turn. A no-op when it did not change.

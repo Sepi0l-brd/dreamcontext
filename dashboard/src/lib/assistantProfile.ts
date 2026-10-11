@@ -32,6 +32,9 @@ export interface AssistantStatus {
   avatar: string | null;
   /** Pending proposals waiting on the owner. */
   proposals: number;
+  /** The notch is switched on (with no assistant: the notifications-only notch). Absent from
+   *  an older server = on. */
+  notch?: boolean;
 }
 
 export interface AssistantProfile {

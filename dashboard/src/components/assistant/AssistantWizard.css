@@ -54,6 +54,17 @@
   white-space: nowrap;
 }
 
+/* The notifications-only notch's switch, labelled in sight (no assistant yet). */
+.aw-entry-switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
 .aw-entry-hint {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);

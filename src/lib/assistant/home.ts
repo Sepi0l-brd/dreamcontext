@@ -58,7 +58,8 @@ export interface AssistantConfig {
   autonomy: Autonomy;
   autostart: boolean;
   /** The owner's off switch. Off: no notch, no hotkey, no Login Item; the vault and the
-   *  conversation are kept, so switching back on resumes where it was. */
+   *  conversation are kept, so switching back on resumes where it was. Before an assistant
+   *  exists it is the notifications-only notch's switch (see {@link notchOnlyPatch}). */
   enabled: boolean;
   /** The one long-lived conversation the notch resumes on every summon. */
   conversationId: string | null;
@@ -130,6 +131,16 @@ export function sanitizeConfigPatch(raw: unknown): Partial<AssistantConfig> {
     if (code && mods.length > 0) out.hotkey = { code, mods: [...new Set(mods)], mode };
   }
   return out;
+}
+
+/**
+ * The one patch accepted before the assistant exists: `{ enabled }`, the notifications-only
+ * notch's off switch (owner, 2026-10-11). Anything else, or anything more, is null.
+ */
+export function notchOnlyPatch(raw: unknown): Pick<AssistantConfig, 'enabled'> | null {
+  const patch = sanitizeConfigPatch(raw);
+  const keys = Object.keys(patch);
+  return keys.length === 1 && typeof patch.enabled === 'boolean' ? { enabled: patch.enabled } : null;
 }
 
 export function readAssistantConfig(home: string = homedir()): AssistantConfig | null {

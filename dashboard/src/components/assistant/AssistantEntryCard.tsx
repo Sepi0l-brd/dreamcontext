@@ -18,6 +18,7 @@ const STATUS_KEY = ['assistant-status'] as const;
  * created → "Create dreamcontext Assistant"; created → its face, its name and "Assistant
  * settings". Both open the same wizard. Once created it also carries the off switch: off
  * hides the notch, releases the hotkey and drops the Login Item, and keeps everything else.
+ * Not created, the same switch turns off the notifications-only notch (owner, 2026-10-11).
  *
  * `space` floats over the sky (so it carries `surface-night`, like the sky itself); `list`
  * is a plain band above the project grid.
@@ -41,7 +42,7 @@ export function AssistantEntryCard({ variant }: { variant: 'space' | 'list' }) {
   const exists = !!status.data?.exists;
   const name = status.data?.config?.name ?? '';
   const avatar = status.data?.avatar ? `${status.data.avatar}?v=${status.dataUpdatedAt}` : null;
-  const enabled = status.data?.config?.enabled !== false;
+  const enabled = status.data?.notch ?? status.data?.config?.enabled !== false;
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: STATUS_KEY }); };
 
   // Config first, then the shell: the shell re-reads config.json to decide what to register.
@@ -64,7 +65,7 @@ export function AssistantEntryCard({ variant }: { variant: 'space' | 'list' }) {
   if (localOnly) hint = t('assistant.card.desktopOnly');
   else if (status.error) hint = fillCopy(t('assistant.card.loadFailed'), { error: status.error instanceof Error ? status.error.message : String(status.error) });
   else if (switchFailure !== null) hint = fillCopy(t('assistant.card.switchFailed'), { error: switchFailure });
-  else if (exists && !enabled) hint = t('assistant.card.offHint');
+  else if (!enabled) hint = exists ? t('assistant.card.offHint') : t('assistant.card.notchOffHint');
   else hint = exists ? t('assistant.card.createdHint') : t('assistant.card.createHint');
 
   return (
@@ -87,6 +88,13 @@ export function AssistantEntryCard({ variant }: { variant: 'space' | 'list' }) {
         </span>
         {exists && !localOnly && !status.error && (
           <Toggle label={t('assistant.card.onOff')} checked={enabled} disabled={switching} onChange={(on) => void toggleEnabled(on)} />
+        )}
+        {/* Not created, the switch is the notch's, not an assistant's: it says so in sight. */}
+        {!exists && !localOnly && !status.error && (
+          <label className="aw-entry-switch">
+            <span>{t('assistant.card.notchShort')}</span>
+            <Toggle label={t('assistant.card.notchOnOff')} checked={enabled} disabled={switching} onChange={(on) => void toggleEnabled(on)} />
+          </label>
         )}
         <button
           type="button"

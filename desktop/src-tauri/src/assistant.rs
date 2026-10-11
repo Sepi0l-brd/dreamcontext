@@ -139,12 +139,13 @@ pub fn assistant_enabled() -> bool {
     assistant_exists() && read_cfg().ok().flatten().map(|c| c.enabled).unwrap_or(true)
 }
 
-/// The notch is on screen: the assistant is on, OR it was never created. Without an assistant
-/// the notch is still the notification center (finished chats, permissions, automation posts,
-/// account notices), just with no conversation and no hotkey (owner, 2026-10-08). Only the
-/// owner's off switch on an assistant they created takes it away.
+/// The notch is on screen unless the owner switched it off. Without an assistant the notch is
+/// still the notification center (finished chats, permissions, automation posts, account
+/// notices), just with no conversation and no hotkey (owner, 2026-10-08); the same `enabled`
+/// switch turns that off too, since not everyone wants it (owner, 2026-10-11). Absent or
+/// malformed config counts as on.
 pub fn notch_wanted() -> bool {
-    !assistant_exists() || assistant_enabled()
+    read_cfg().ok().flatten().map(|c| c.enabled).unwrap_or(true)
 }
 
 /// Parse the config's physical `KeyboardEvent.code` + modifier names into a Shortcut.
@@ -547,6 +548,7 @@ pub fn assistant_set_autostart<R: Runtime>(app: AppHandle<R>, enabled: bool) -> 
 /// the next launch never builds it), the chord is released so the keys go back to other apps,
 /// and the Login Item is removed (a login that opens nothing is worse than none). On: seat the
 /// notch and register the chord again. The Login Item stays off; the wizard's step turns it on.
+/// With no assistant created it switches the notifications-only notch (there is no chord).
 #[tauri::command]
 pub fn assistant_set_enabled<R: Runtime>(app: AppHandle<R>, enabled: bool) -> Result<HotkeyStatus, String> {
     // Told first, so a seat change already in flight in the webview cannot show it again.
