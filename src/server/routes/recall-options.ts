@@ -5,12 +5,13 @@ import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import { recallCloudKeyInfo } from '../../lib/recall-cloud-config.js';
 import { RECALL_MEASUREMENTS } from '../../lib/recall-measurements.js';
 import {
-  languageMixOf,
   machineClassOf,
   recommendRecall,
   turkishShareOf,
+  turkishShareOfPrompts,
   type RecallSignals,
 } from '../../lib/recall-recommendation.js';
+import { recentUserPrompts } from '../../lib/recent-prompts.js';
 import { sendError, sendJson } from '../middleware.js';
 import { requireLocalDashboardRead } from './recall-cloud.js';
 import { isCloud } from '../cloud-mode.js';
@@ -20,17 +21,20 @@ import { isCloud } from '../cloud-mode.js';
  * numbers of every option (one source, `lib/recall-measurements`) and the personal recommendation.
  * Read-only, and guarded exactly like the cloud-recall status route it sits beside
  * ({@link requireLocalDashboardRead}). It reports whether a key EXISTS (a boolean inside the
- * signals), never the key, and it never carries a document's text: only the language share.
+ * signals), never the key, and it never carries a document's or a prompt's text: only language shares.
  */
 
 export interface RecallOptionsRouteDeps {
   home?: string;
   loadCorpus: (root: string) => CorpusDoc[];
+  /** The person's recent prompts in this vault (read locally, reduced to a share here). */
+  loadPrompts: (root: string) => string[];
   hardware: () => { totalMemBytes: number; cpuCount: number; modelName: string | null };
 }
 
 const defaultDeps = (): RecallOptionsRouteDeps => ({
   loadCorpus: (root) => buildCorpusCached(root),
+  loadPrompts: (root) => recentUserPrompts(root),
   // The Apple marketing name ("Air") is not cheap to learn (a system_profiler call is seconds);
   // memory and core count carry the same "light machine" signal.
   hardware: () => ({ totalMemBytes: totalmem(), cpuCount: cpus().length, modelName: null }),
@@ -58,17 +62,26 @@ export function createRecallOptionsRoutes(overrides: Partial<RecallOptionsRouteD
       // No honest language reading: the recommendation then keeps the default. Class and code only, never a message.
       console.error(`[recall-options] corpus read failed: ${err instanceof Error ? err.name : 'unexpected error'}`);
     }
+    let promptTurkishShare: number | null = null;
+    try {
+      promptTurkishShare = turkishShareOfPrompts(d.loadPrompts(root));
+    } catch (err) {
+      console.error(`[recall-options] prompt read failed: ${err instanceof Error ? err.name : 'unexpected error'}`);
+    }
     const signals: RecallSignals = {
       turkishShare,
+      promptTurkishShare,
       ...d.hardware(),
       keyPresent: recallCloudKeyInfo(d.home ?? homedir()).present,
     };
+    const recommendation = recommendRecall(signals);
     sendJson(res, 200, {
       measurements: RECALL_MEASUREMENTS,
-      recommendation: recommendRecall(signals),
+      recommendation,
       signals: {
-        languageMix: languageMixOf(signals.turkishShare),
+        languageMix: recommendation.languageMix,
         turkishSharePct: signals.turkishShare === null ? null : Math.round(signals.turkishShare * 100),
+        promptTurkishSharePct: signals.promptTurkishShare === null ? null : Math.round(signals.promptTurkishShare * 100),
         machineClass: machineClassOf(signals),
         keyPresent: signals.keyPresent,
       },

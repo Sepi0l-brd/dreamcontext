@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  combineMix,
   languageMixOf,
   looksTurkish,
   machineClassOf,
   recommendRecall,
   turkishShareOf,
+  turkishShareOfPrompts,
   type RecallSignals,
 } from '../../src/lib/recall-recommendation.js';
 
 const GIB = 1024 ** 3;
-const BIG: RecallSignals = { turkishShare: null, totalMemBytes: 32 * GIB, cpuCount: 10, modelName: null, keyPresent: false };
+const BIG: RecallSignals = { turkishShare: null, promptTurkishShare: null, totalMemBytes: 32 * GIB, cpuCount: 10, modelName: null, keyPresent: false };
 
 const TURKISH = 'Kullanıcı ayarlarını değiştirdiğinde panel yeniden yüklenir ve işlem sırasında hiçbir veri dışarı gönderilmez. Öğrenciler için güvenli bir çözüm.';
 const ENGLISH = 'When the user changes a setting the dashboard reloads and nothing is sent anywhere while it happens. A safe default for everyone involved here.';
@@ -39,6 +41,25 @@ describe('turkishShareOf', () => {
   });
 });
 
+describe('turkishShareOfPrompts', () => {
+  it('judges short prompts that a document threshold would skip', () => {
+    expect(turkishShareOfPrompts(['neden fast keyword önerildi, bunu düzelt', 'why is fast keyword recommended here'])).toBe(0.5);
+  });
+  it('skips prompts too short to carry a language, and is null when none are left', () => {
+    expect(turkishShareOfPrompts(['ok', 'devam'])).toBeNull();
+    expect(turkishShareOfPrompts([])).toBeNull();
+  });
+});
+
+describe('combineMix', () => {
+  it('takes the more Turkish reading, unknown only when both are', () => {
+    expect(combineMix('english', 'turkish')).toBe('turkish');
+    expect(combineMix('mixed', 'english')).toBe('mixed');
+    expect(combineMix('unknown', 'english')).toBe('english');
+    expect(combineMix('unknown', 'unknown')).toBe('unknown');
+  });
+});
+
 describe('languageMixOf and machineClassOf', () => {
   it('buckets the share', () => {
     expect(languageMixOf(null)).toBe('unknown');
@@ -60,10 +81,10 @@ describe('languageMixOf and machineClassOf', () => {
 describe('recommendRecall', () => {
   it('a Turkish brain gets the best-accuracy cloud tier, and a pointer to private queries on a capable machine', () => {
     const r = recommendRecall({ ...BIG, turkishShare: 0.9 });
-    expect(r).toMatchObject({ option: 'cloud', reason: 'turkish-brain', note: 'private-query-available', languageMix: 'turkish', machineClass: 'standard' });
+    expect(r).toMatchObject({ option: 'cloud', reason: 'multi-language', note: 'private-query-available', languageMix: 'turkish', machineClass: 'standard' });
   });
   it('a mixed brain gets the same recommendation', () => {
-    expect(recommendRecall({ ...BIG, turkishShare: 0.3 })).toMatchObject({ option: 'cloud', reason: 'turkish-brain', languageMix: 'mixed' });
+    expect(recommendRecall({ ...BIG, turkishShare: 0.3 })).toMatchObject({ option: 'cloud', reason: 'multi-language', languageMix: 'mixed' });
   });
   it('on a light machine it does not point at the local-embedding tier', () => {
     const r = recommendRecall({ ...BIG, turkishShare: 0.9, totalMemBytes: 8 * GIB });
@@ -74,8 +95,18 @@ describe('recommendRecall', () => {
     expect(recommendRecall({ ...BIG, turkishShare: 0.9, keyPresent: false }).keyPresent).toBe(false);
   });
   it('an English-only brain gets keyword search, key or no key', () => {
-    expect(recommendRecall({ ...BIG, turkishShare: 0.02 })).toMatchObject({ option: 'raw', reason: 'english-brain', note: null });
+    expect(recommendRecall({ ...BIG, turkishShare: 0.02 })).toMatchObject({ option: 'raw', reason: 'english-only', note: null });
     expect(recommendRecall({ ...BIG, turkishShare: 0, keyPresent: true }).option).toBe('raw');
+  });
+  it('English documents prompted in Turkish are multi-language, not English only', () => {
+    const r = recommendRecall({ ...BIG, turkishShare: 0.02, promptTurkishShare: 0.9 });
+    expect(r).toMatchObject({ option: 'cloud', reason: 'multi-language', docsMix: 'english', promptsMix: 'turkish', languageMix: 'turkish' });
+  });
+  it('English documents and English prompts stay English only', () => {
+    expect(recommendRecall({ ...BIG, turkishShare: 0.02, promptTurkishShare: 0.05 })).toMatchObject({ option: 'raw', reason: 'english-only' });
+  });
+  it('prompts alone are enough to read the language', () => {
+    expect(recommendRecall({ ...BIG, promptTurkishShare: 0.5 })).toMatchObject({ option: 'cloud', docsMix: 'unknown', promptsMix: 'mixed' });
   });
   it('no language signal keeps the default', () => {
     expect(recommendRecall(BIG)).toMatchObject({ option: 'haiku', reason: 'no-language-signal', languageMix: 'unknown' });

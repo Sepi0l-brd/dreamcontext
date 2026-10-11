@@ -40,8 +40,9 @@ let tmp: string;
 let home: string;
 let root: string;
 
-const routesWith = (docs: CorpusDoc[], hw = { totalMemBytes: 32 * GIB, cpuCount: 10, modelName: null as string | null }) =>
-  createRecallOptionsRoutes({ home, loadCorpus: () => docs, hardware: () => hw });
+const routesWith = (docs: CorpusDoc[], hw = { totalMemBytes: 32 * GIB, cpuCount: 10, modelName: null as string | null }, prompts: string[] = []) =>
+  createRecallOptionsRoutes({ home, loadCorpus: () => docs, loadPrompts: () => prompts, hardware: () => hw });
+const ENGLISH = 'When the user changes a setting the dashboard reloads and nothing is sent anywhere while it happens. A safe default for everyone involved here.';
 
 beforeEach(() => {
   for (const k of ENV) vi.stubEnv(k, '');
@@ -84,19 +85,28 @@ describe('the answer', () => {
     const r = await call(routesWith([doc(TURKISH), doc(TURKISH)]).options, get(), root);
     expect(r.status).toBe(200);
     expect(r.json.measurements).toEqual(RECALL_MEASUREMENTS);
-    expect(r.json.recommendation).toMatchObject({ option: 'cloud', reason: 'turkish-brain', keyPresent: false });
+    expect(r.json.recommendation).toMatchObject({ option: 'cloud', reason: 'multi-language', keyPresent: false });
     expect(r.json.signals).toMatchObject({ languageMix: 'turkish', turkishSharePct: 100, machineClass: 'standard', keyPresent: false });
   });
   it('keeps the default when the corpus cannot be read', async () => {
     const routes = createRecallOptionsRoutes({
       home,
       loadCorpus: () => { throw new Error('/secret/path'); },
+      loadPrompts: () => { throw new Error('/secret/prompt'); },
       hardware: () => ({ totalMemBytes: 32 * GIB, cpuCount: 10, modelName: null }),
     });
     const r = await call(routes.options, get(), root);
     expect(r.status).toBe(200);
     expect(r.json.recommendation).toMatchObject({ option: 'haiku', reason: 'no-language-signal' });
     expect(r.text).not.toContain('/secret/path');
+    expect(r.text).not.toContain('/secret/prompt');
+  });
+  it('an English brain prompted in Turkish is multi-language, and no prompt text comes back', async () => {
+    const prompt = 'neden hızlı kelime arama önerildi, bunu düzeltelim lütfen';
+    const r = await call(routesWith([doc(ENGLISH)], undefined, [prompt, prompt]).options, get(), root);
+    expect(r.json.recommendation).toMatchObject({ option: 'cloud', reason: 'multi-language', docsMix: 'english', promptsMix: 'turkish' });
+    expect(r.json.signals).toMatchObject({ languageMix: 'turkish', turkishSharePct: 0, promptTurkishSharePct: 100 });
+    expect(r.text).not.toContain('kelime arama');
   });
   it('says a key exists without ever returning it', async () => {
     setRecallCloudKey(KEY, 'manual', home);
