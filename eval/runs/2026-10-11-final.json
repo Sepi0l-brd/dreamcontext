@@ -2,13 +2,14 @@
  "label": "T10-final",
  "date": "2026-10-11",
  "engineSha": {
+  "local": "8ed3a6d8",
   "cloud-index": "ba736f4f (run before the fallback guard existed)",
   "cloud": "c274d18f (with the fallback guard; passed)",
   "B0": "0ba4c25a"
  },
  "snapshot": "dc-20261010",
  "injectK": 5,
- "status": "HELDOUT COMPLETE for cloud, cloud-index, B0 raw, B0 haiku (T10b, 2026-10-11). Local tier and B0 hybrid-e5 NOT measured (hybrid-e5 e5 snapshot index incomplete).",
+ "status": "HELDOUT COMPLETE for local, cloud-index, cloud and B0 raw / hybrid-e5 / haiku (T10c validator, 2026-10-11). Latency and cost sections written by T10c.",
  "heldout": {
   "B0-raw": {
    "tr": {
@@ -16,6 +17,9 @@
     "r1": 2,
     "r3": 7,
     "r5": 7,
+    "r1pct": 8.7,
+    "r3pct": 30.4,
+    "r5pct": 30.4,
     "mrr": 0.191,
     "r5ci": [
      15.6,
@@ -30,6 +34,9 @@
     "r1": 19,
     "r3": 22,
     "r5": 22,
+    "r1pct": 76,
+    "r3pct": 88,
+    "r5pct": 88,
     "mrr": 0.813,
     "r5ci": [
      70,
@@ -44,6 +51,9 @@
     "r1": 11,
     "r3": 13,
     "r5": 18,
+    "r1pct": 45.8,
+    "r3pct": 54.2,
+    "r5pct": 75,
     "mrr": 0.548,
     "r5ci": [
      55.1,
@@ -58,6 +68,9 @@
     "r1": 32,
     "r3": 42,
     "r5": 47,
+    "r1pct": 44.4,
+    "r3pct": 58.3,
+    "r5pct": 65.3,
     "mrr": 0.526,
     "r5ci": [
      53.8,
@@ -68,12 +81,85 @@
     "effectiveR5": 47
    }
   },
+  "B0-hybrid-e5": {
+   "tr": {
+    "n": 23,
+    "r1": 2,
+    "r3": 5,
+    "r5": 6,
+    "r1pct": 8.7,
+    "r3pct": 21.7,
+    "r5pct": 26.1,
+    "mrr": 0.171,
+    "r5ci": [
+     12.5,
+     46.5
+    ],
+    "injected": 23,
+    "injectionRatePct": 100,
+    "effectiveR5": 6
+   },
+   "en": {
+    "n": 25,
+    "r1": 18,
+    "r3": 22,
+    "r5": 22,
+    "r1pct": 72,
+    "r3pct": 88,
+    "r5pct": 88,
+    "mrr": 0.793,
+    "r5ci": [
+     70,
+     95.8
+    ],
+    "injected": 25,
+    "injectionRatePct": 100,
+    "effectiveR5": 22
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 11,
+    "r3": 13,
+    "r5": 16,
+    "r1pct": 45.8,
+    "r3pct": 54.2,
+    "r5pct": 66.7,
+    "mrr": 0.535,
+    "r5ci": [
+     46.7,
+     82
+    ],
+    "injected": 24,
+    "injectionRatePct": 100,
+    "effectiveR5": 16
+   },
+   "all": {
+    "n": 72,
+    "r1": 31,
+    "r3": 40,
+    "r5": 44,
+    "r1pct": 43.1,
+    "r3pct": 55.6,
+    "r5pct": 61.1,
+    "mrr": 0.509,
+    "r5ci": [
+     49.6,
+     71.5
+    ],
+    "injected": 72,
+    "injectionRatePct": 100,
+    "effectiveR5": 44
+   }
+  },
   "B0-haiku": {
    "tr": {
     "n": 23,
     "r1": 10,
     "r3": 12,
     "r5": 12,
+    "r1pct": 43.5,
+    "r3pct": 52.2,
+    "r5pct": 52.2,
     "mrr": 0.478,
     "r5ci": [
      33,
@@ -88,6 +174,9 @@
     "r1": 14,
     "r3": 16,
     "r5": 16,
+    "r1pct": 56,
+    "r3pct": 64,
+    "r5pct": 64,
     "mrr": 0.6,
     "r5ci": [
      44.5,
@@ -102,6 +191,9 @@
     "r1": 12,
     "r3": 15,
     "r5": 15,
+    "r1pct": 50,
+    "r3pct": 62.5,
+    "r5pct": 62.5,
     "mrr": 0.563,
     "r5ci": [
      42.7,
@@ -116,6 +208,9 @@
     "r1": 36,
     "r3": 43,
     "r5": 43,
+    "r1pct": 50,
+    "r3pct": 59.7,
+    "r5pct": 59.7,
     "mrr": 0.549,
     "r5ci": [
      48.2,
@@ -126,12 +221,85 @@
     "effectiveR5": 43
    }
   },
+  "local": {
+   "tr": {
+    "n": 23,
+    "r1": 2,
+    "r3": 5,
+    "r5": 6,
+    "r1pct": 8.7,
+    "r3pct": 21.7,
+    "r5pct": 26.1,
+    "mrr": 0.189,
+    "r5ci": [
+     12.5,
+     46.5
+    ],
+    "injected": 23,
+    "injectionRatePct": 100,
+    "effectiveR5": 6
+   },
+   "en": {
+    "n": 25,
+    "r1": 18,
+    "r3": 22,
+    "r5": 22,
+    "r1pct": 72,
+    "r3pct": 88,
+    "r5pct": 88,
+    "mrr": 0.793,
+    "r5ci": [
+     70,
+     95.8
+    ],
+    "injected": 25,
+    "injectionRatePct": 100,
+    "effectiveR5": 22
+   },
+   "mixed": {
+    "n": 24,
+    "r1": 11,
+    "r3": 15,
+    "r5": 16,
+    "r1pct": 45.8,
+    "r3pct": 62.5,
+    "r5pct": 66.7,
+    "mrr": 0.542,
+    "r5ci": [
+     46.7,
+     82
+    ],
+    "injected": 24,
+    "injectionRatePct": 100,
+    "effectiveR5": 16
+   },
+   "all": {
+    "n": 72,
+    "r1": 31,
+    "r3": 42,
+    "r5": 44,
+    "r1pct": 43.1,
+    "r3pct": 58.3,
+    "r5pct": 61.1,
+    "mrr": 0.517,
+    "r5ci": [
+     49.6,
+     71.5
+    ],
+    "injected": 72,
+    "injectionRatePct": 100,
+    "effectiveR5": 44
+   }
+  },
   "cloud-index": {
    "tr": {
     "n": 23,
     "r1": 9,
     "r3": 21,
     "r5": 23,
+    "r1pct": 39.1,
+    "r3pct": 91.3,
+    "r5pct": 100,
     "mrr": 0.643,
     "r5ci": [
      85.7,
@@ -146,6 +314,9 @@
     "r1": 17,
     "r3": 22,
     "r5": 25,
+    "r1pct": 68,
+    "r3pct": 88,
+    "r5pct": 100,
     "mrr": 0.795,
     "r5ci": [
      86.7,
@@ -160,6 +331,9 @@
     "r1": 14,
     "r3": 19,
     "r5": 20,
+    "r1pct": 58.3,
+    "r3pct": 79.2,
+    "r5pct": 83.3,
     "mrr": 0.702,
     "r5ci": [
      64.1,
@@ -174,6 +348,9 @@
     "r1": 40,
     "r3": 62,
     "r5": 68,
+    "r1pct": 55.6,
+    "r3pct": 86.1,
+    "r5pct": 94.4,
     "mrr": 0.715,
     "r5ci": [
      86.6,
@@ -190,6 +367,9 @@
     "r1": 15,
     "r3": 20,
     "r5": 22,
+    "r1pct": 65.2,
+    "r3pct": 87,
+    "r5pct": 95.7,
     "mrr": 0.79,
     "r5ci": [
      79,
@@ -204,6 +384,9 @@
     "r1": 20,
     "r3": 25,
     "r5": 25,
+    "r1pct": 80,
+    "r3pct": 100,
+    "r5pct": 100,
     "mrr": 0.893,
     "r5ci": [
      86.7,
@@ -218,6 +401,9 @@
     "r1": 18,
     "r3": 23,
     "r5": 23,
+    "r1pct": 75,
+    "r3pct": 95.8,
+    "r5pct": 95.8,
     "mrr": 0.858,
     "r5ci": [
      79.8,
@@ -232,6 +418,9 @@
     "r1": 53,
     "r3": 68,
     "r5": 70,
+    "r1pct": 73.6,
+    "r3pct": 94.4,
+    "r5pct": 97.2,
     "mrr": 0.849,
     "r5ci": [
      90.4,
@@ -244,25 +433,25 @@
   }
  },
  "signTest": {
-  "cloud vs haiku [tr]": {
-   "wins": 11,
+  "local vs raw [tr]": {
+   "wins": 0,
    "losses": 1,
-   "p": 0.006348
+   "p": 1
   },
-  "cloud vs raw [en]": {
-   "wins": 3,
+  "local vs raw [en]": {
+   "wins": 0,
    "losses": 0,
+   "p": 1
+  },
+  "local vs raw [mixed]": {
+   "wins": 0,
+   "losses": 2,
+   "p": 0.5
+  },
+  "local vs raw [pooled]": {
+   "wins": 0,
+   "losses": 3,
    "p": 0.25
-  },
-  "cloud vs raw [mixed]": {
-   "wins": 5,
-   "losses": 0,
-   "p": 0.0625
-  },
-  "cloud vs raw [pooled]": {
-   "wins": 24,
-   "losses": 1,
-   "p": 0.00000155
   },
   "cloud-index vs haiku [tr]": {
    "wins": 11,
@@ -283,6 +472,26 @@
    "wins": 23,
    "losses": 2,
    "p": 0.00001943
+  },
+  "cloud vs haiku [tr]": {
+   "wins": 11,
+   "losses": 1,
+   "p": 0.006348
+  },
+  "cloud vs raw [en]": {
+   "wins": 3,
+   "losses": 0,
+   "p": 0.25
+  },
+  "cloud vs raw [mixed]": {
+   "wins": 5,
+   "losses": 0,
+   "p": 0.0625
+  },
+  "cloud vs raw [pooled]": {
+   "wins": 24,
+   "losses": 1,
+   "p": 0.00000155
   }
  },
  "evalLedgerUsd": 0.3054,
@@ -291,14 +500,24 @@
   "files3": "3 files, 49 tests passed",
   "skillMdBytes": 45991
  },
- "previousStatus": "PARTIAL: cloud held-out NOT completed (load-induced); local, hybrid-e5 B0, haiku B0 held-out not available",
- "floorSet": [
-  "raw",
-  "haiku"
- ],
- "missingBaselines": [
-  "hybrid-e5"
- ],
+ "previousStatus": "HELDOUT COMPLETE for cloud, cloud-index, B0 raw, B0 haiku (T10b, 2026-10-11). Local tier and B0 hybrid-e5 NOT measured (hybrid-e5 e5 snapshot index incomplete).",
+ "floorSet": {
+  "local": [
+   "raw",
+   "hybrid-e5"
+  ],
+  "cloud-index": [
+   "raw",
+   "hybrid-e5",
+   "haiku"
+  ],
+  "cloud": [
+   "raw",
+   "hybrid-e5",
+   "haiku"
+  ]
+ },
+ "missingBaselines": [],
  "verdicts": {
   "AC-Q1 (cloud)": {
    "tr": {
@@ -321,118 +540,136 @@
    }
   },
   "AC-Q2": {
-   "cloud": {
+   "local": {
     "tr": {
      "n": 23,
-     "tier": 22,
-     "B_L": 12,
+     "tier": 6,
+     "B_L": 7,
      "B_by_mode": {
       "raw": 7,
-      "haiku": 12
+      "hybrid-e5": 6
      },
-     "argmax": "haiku",
+     "argmax": [
+      "raw"
+     ],
      "strictThreshold": "B_L<22/23",
      "strictRequired": true,
-     "verdict": "PASS",
+     "verdict": "FAIL",
      "directional": true,
      "paired": {
-      "wins": 11,
+      "wins": 0,
       "losses": 1,
-      "p": 0.006348
+      "p": 1
      },
-     "vsRaw": {
-      "wins": 16,
-      "losses": 1,
-      "p": 0.0002747
-     },
-     "vsHaiku": {
-      "wins": 11,
-      "losses": 1,
-      "p": 0.006348
+     "pairedVsEach": {
+      "raw": {
+       "wins": 0,
+       "losses": 1,
+       "p": 1
+      },
+      "hybrid-e5": {
+       "wins": 0,
+       "losses": 0,
+       "p": 1
+      }
      }
     },
     "en": {
      "n": 25,
-     "tier": 25,
+     "tier": 22,
      "B_L": 22,
      "B_by_mode": {
       "raw": 22,
-      "haiku": 16
+      "hybrid-e5": 22
      },
-     "argmax": "raw",
+     "argmax": [
+      "raw",
+      "hybrid-e5"
+     ],
      "strictThreshold": "B_L<23/25",
      "strictRequired": true,
-     "verdict": "PASS",
+     "verdict": "FAIL",
      "directional": true,
      "paired": {
-      "wins": 3,
+      "wins": 0,
       "losses": 0,
-      "p": 0.25
+      "p": 1
      },
-     "vsRaw": {
-      "wins": 3,
-      "losses": 0,
-      "p": 0.25
-     },
-     "vsHaiku": {
-      "wins": 9,
-      "losses": 0,
-      "p": 0.003906
+     "pairedVsEach": {
+      "raw": {
+       "wins": 0,
+       "losses": 0,
+       "p": 1
+      },
+      "hybrid-e5": {
+       "wins": 0,
+       "losses": 0,
+       "p": 1
+      }
      }
     },
     "mixed": {
      "n": 24,
-     "tier": 23,
+     "tier": 16,
      "B_L": 18,
      "B_by_mode": {
       "raw": 18,
-      "haiku": 15
+      "hybrid-e5": 16
      },
-     "argmax": "raw",
+     "argmax": [
+      "raw"
+     ],
      "strictThreshold": "B_L<23/24",
      "strictRequired": true,
-     "verdict": "PASS",
+     "verdict": "FAIL",
      "directional": true,
      "paired": {
-      "wins": 5,
-      "losses": 0,
-      "p": 0.0625
+      "wins": 0,
+      "losses": 2,
+      "p": 0.5
      },
-     "vsRaw": {
-      "wins": 5,
-      "losses": 0,
-      "p": 0.0625
-     },
-     "vsHaiku": {
-      "wins": 8,
-      "losses": 0,
-      "p": 0.007813
+     "pairedVsEach": {
+      "raw": {
+       "wins": 0,
+       "losses": 2,
+       "p": 0.5
+      },
+      "hybrid-e5": {
+       "wins": 0,
+       "losses": 0,
+       "p": 1
+      }
      }
     },
     "pooled": {
      "n": 72,
-     "tier": 70,
+     "tier": 44,
      "bestB0": 47,
      "B_by_mode": {
       "raw": 47,
-      "haiku": 43
+      "hybrid-e5": 44
      },
-     "argmax": "raw",
-     "verdict": "PASS",
+     "argmax": [
+      "raw"
+     ],
+     "rule": "strictly greater",
+     "verdict": "FAIL",
      "paired": {
-      "wins": 24,
-      "losses": 1,
-      "p": 0.00000155
+      "wins": 0,
+      "losses": 3,
+      "p": 0.25
      },
-     "vsRaw": {
-      "wins": 24,
-      "losses": 1,
-      "p": 0.00000155
-     },
-     "vsHaiku": {
-      "wins": 28,
-      "losses": 1,
-      "p": 1.118e-7
+     "pairedVsEach": {
+      "raw": {
+       "wins": 0,
+       "losses": 3,
+       "p": 0.25
+      },
+      "hybrid-e5": {
+       "wins": 0,
+       "losses": 0,
+       "p": 1
+      }
      }
     }
    },
@@ -443,9 +680,12 @@
      "B_L": 12,
      "B_by_mode": {
       "raw": 7,
+      "hybrid-e5": 6,
       "haiku": 12
      },
-     "argmax": "haiku",
+     "argmax": [
+      "haiku"
+     ],
      "strictThreshold": "B_L<22/23",
      "strictRequired": true,
      "verdict": "PASS",
@@ -455,15 +695,22 @@
       "losses": 0,
       "p": 0.0009766
      },
-     "vsRaw": {
-      "wins": 16,
-      "losses": 0,
-      "p": 0.00003052
-     },
-     "vsHaiku": {
-      "wins": 11,
-      "losses": 0,
-      "p": 0.0009766
+     "pairedVsEach": {
+      "raw": {
+       "wins": 16,
+       "losses": 0,
+       "p": 0.00003052
+      },
+      "hybrid-e5": {
+       "wins": 17,
+       "losses": 0,
+       "p": 0.00001526
+      },
+      "haiku": {
+       "wins": 11,
+       "losses": 0,
+       "p": 0.0009766
+      }
      }
     },
     "en": {
@@ -472,9 +719,13 @@
      "B_L": 22,
      "B_by_mode": {
       "raw": 22,
+      "hybrid-e5": 22,
       "haiku": 16
      },
-     "argmax": "raw",
+     "argmax": [
+      "raw",
+      "hybrid-e5"
+     ],
      "strictThreshold": "B_L<23/25",
      "strictRequired": true,
      "verdict": "PASS",
@@ -484,15 +735,22 @@
       "losses": 0,
       "p": 0.25
      },
-     "vsRaw": {
-      "wins": 3,
-      "losses": 0,
-      "p": 0.25
-     },
-     "vsHaiku": {
-      "wins": 9,
-      "losses": 0,
-      "p": 0.003906
+     "pairedVsEach": {
+      "raw": {
+       "wins": 3,
+       "losses": 0,
+       "p": 0.25
+      },
+      "hybrid-e5": {
+       "wins": 3,
+       "losses": 0,
+       "p": 0.25
+      },
+      "haiku": {
+       "wins": 9,
+       "losses": 0,
+       "p": 0.003906
+      }
      }
     },
     "mixed": {
@@ -501,9 +759,12 @@
      "B_L": 18,
      "B_by_mode": {
       "raw": 18,
+      "hybrid-e5": 16,
       "haiku": 15
      },
-     "argmax": "raw",
+     "argmax": [
+      "raw"
+     ],
      "strictThreshold": "B_L<23/24",
      "strictRequired": true,
      "verdict": "PASS",
@@ -513,15 +774,22 @@
       "losses": 2,
       "p": 0.6875
      },
-     "vsRaw": {
-      "wins": 4,
-      "losses": 2,
-      "p": 0.6875
-     },
-     "vsHaiku": {
-      "wins": 7,
-      "losses": 2,
-      "p": 0.1797
+     "pairedVsEach": {
+      "raw": {
+       "wins": 4,
+       "losses": 2,
+       "p": 0.6875
+      },
+      "hybrid-e5": {
+       "wins": 6,
+       "losses": 2,
+       "p": 0.2891
+      },
+      "haiku": {
+       "wins": 7,
+       "losses": 2,
+       "p": 0.1797
+      }
      }
     },
     "pooled": {
@@ -530,29 +798,242 @@
      "bestB0": 47,
      "B_by_mode": {
       "raw": 47,
+      "hybrid-e5": 44,
       "haiku": 43
      },
-     "argmax": "raw",
+     "argmax": [
+      "raw"
+     ],
+     "rule": "strictly greater",
      "verdict": "PASS",
      "paired": {
       "wins": 23,
       "losses": 2,
       "p": 0.00001943
      },
-     "vsRaw": {
-      "wins": 23,
-      "losses": 2,
-      "p": 0.00001943
+     "pairedVsEach": {
+      "raw": {
+       "wins": 23,
+       "losses": 2,
+       "p": 0.00001943
+      },
+      "hybrid-e5": {
+       "wins": 26,
+       "losses": 2,
+       "p": 0.000003032
+      },
+      "haiku": {
+       "wins": 27,
+       "losses": 2,
+       "p": 0.000001624
+      }
+     }
+    }
+   },
+   "cloud": {
+    "tr": {
+     "n": 23,
+     "tier": 22,
+     "B_L": 12,
+     "B_by_mode": {
+      "raw": 7,
+      "hybrid-e5": 6,
+      "haiku": 12
      },
-     "vsHaiku": {
-      "wins": 27,
-      "losses": 2,
-      "p": 0.000001624
+     "argmax": [
+      "haiku"
+     ],
+     "strictThreshold": "B_L<22/23",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 11,
+      "losses": 1,
+      "p": 0.006348
+     },
+     "pairedVsEach": {
+      "raw": {
+       "wins": 16,
+       "losses": 1,
+       "p": 0.0002747
+      },
+      "hybrid-e5": {
+       "wins": 17,
+       "losses": 1,
+       "p": 0.000145
+      },
+      "haiku": {
+       "wins": 11,
+       "losses": 1,
+       "p": 0.006348
+      }
+     }
+    },
+    "en": {
+     "n": 25,
+     "tier": 25,
+     "B_L": 22,
+     "B_by_mode": {
+      "raw": 22,
+      "hybrid-e5": 22,
+      "haiku": 16
+     },
+     "argmax": [
+      "raw",
+      "hybrid-e5"
+     ],
+     "strictThreshold": "B_L<23/25",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 3,
+      "losses": 0,
+      "p": 0.25
+     },
+     "pairedVsEach": {
+      "raw": {
+       "wins": 3,
+       "losses": 0,
+       "p": 0.25
+      },
+      "hybrid-e5": {
+       "wins": 3,
+       "losses": 0,
+       "p": 0.25
+      },
+      "haiku": {
+       "wins": 9,
+       "losses": 0,
+       "p": 0.003906
+      }
+     }
+    },
+    "mixed": {
+     "n": 24,
+     "tier": 23,
+     "B_L": 18,
+     "B_by_mode": {
+      "raw": 18,
+      "hybrid-e5": 16,
+      "haiku": 15
+     },
+     "argmax": [
+      "raw"
+     ],
+     "strictThreshold": "B_L<23/24",
+     "strictRequired": true,
+     "verdict": "PASS",
+     "directional": true,
+     "paired": {
+      "wins": 5,
+      "losses": 0,
+      "p": 0.0625
+     },
+     "pairedVsEach": {
+      "raw": {
+       "wins": 5,
+       "losses": 0,
+       "p": 0.0625
+      },
+      "hybrid-e5": {
+       "wins": 7,
+       "losses": 0,
+       "p": 0.01563
+      },
+      "haiku": {
+       "wins": 8,
+       "losses": 0,
+       "p": 0.007813
+      }
+     }
+    },
+    "pooled": {
+     "n": 72,
+     "tier": 70,
+     "bestB0": 47,
+     "B_by_mode": {
+      "raw": 47,
+      "hybrid-e5": 44,
+      "haiku": 43
+     },
+     "argmax": [
+      "raw"
+     ],
+     "rule": "strictly greater",
+     "verdict": "PASS",
+     "paired": {
+      "wins": 24,
+      "losses": 1,
+      "p": 0.00000155
+     },
+     "pairedVsEach": {
+      "raw": {
+       "wins": 24,
+       "losses": 1,
+       "p": 0.00000155
+      },
+      "hybrid-e5": {
+       "wins": 27,
+       "losses": 1,
+       "p": 2.161e-7
+      },
+      "haiku": {
+       "wins": 28,
+       "losses": 1,
+       "p": 1.118e-7
+      }
      }
     }
    }
   },
   "AC-Q3": {
+   "local": {
+    "exactTermR1": {
+     "tier": {
+      "n": 12,
+      "r1": 9
+     },
+     "rawB0": {
+      "n": 12,
+      "r1": 8
+     },
+     "verdict": "PASS"
+    },
+    "enR5": {
+     "tier": 22,
+     "B_EN": 22,
+     "B_EN_by_mode": {
+      "raw": 22,
+      "hybrid-e5": 22
+     },
+     "verdict": "PASS"
+    }
+   },
+   "cloud-index": {
+    "exactTermR1": {
+     "tier": {
+      "n": 12,
+      "r1": 8
+     },
+     "rawB0": {
+      "n": 12,
+      "r1": 8
+     },
+     "verdict": "PASS"
+    },
+    "enR5": {
+     "tier": 25,
+     "B_EN": 22,
+     "B_EN_by_mode": {
+      "raw": 22,
+      "hybrid-e5": 22,
+      "haiku": 16
+     },
+     "verdict": "PASS"
+    }
+   },
    "cloud": {
     "exactTermR1": {
      "tier": {
@@ -563,37 +1044,16 @@
       "n": 12,
       "r1": 8
      },
-     "haikuB0": {
-      "n": 12,
-      "r1": 4
-     },
      "verdict": "PASS"
     },
     "enR5": {
      "tier": 25,
      "B_EN": 22,
-     "verdict": "PASS"
-    }
-   },
-   "cloud-index": {
-    "exactTermR1": {
-     "tier": {
-      "n": 12,
-      "r1": 8
+     "B_EN_by_mode": {
+      "raw": 22,
+      "hybrid-e5": 22,
+      "haiku": 16
      },
-     "rawB0": {
-      "n": 12,
-      "r1": 8
-     },
-     "haikuB0": {
-      "n": 12,
-      "r1": 4
-     },
-     "verdict": "PASS"
-    },
-    "enR5": {
-     "tier": 25,
-     "B_EN": 22,
      "verdict": "PASS"
     }
    }
@@ -623,6 +1083,28 @@
       "effectiveR5pct": 65.3
      }
     },
+    "hybrid-e5": {
+     "tr": {
+      "injectionRatePct": 100,
+      "effectiveR5": 6,
+      "effectiveR5pct": 26.1
+     },
+     "en": {
+      "injectionRatePct": 100,
+      "effectiveR5": 22,
+      "effectiveR5pct": 88
+     },
+     "mixed": {
+      "injectionRatePct": 100,
+      "effectiveR5": 16,
+      "effectiveR5pct": 66.7
+     },
+     "all": {
+      "injectionRatePct": 100,
+      "effectiveR5": 44,
+      "effectiveR5pct": 61.1
+     }
+    },
     "haiku": {
      "tr": {
       "injectionRatePct": 78.3,
@@ -643,6 +1125,28 @@
       "injectionRatePct": 79.2,
       "effectiveR5": 43,
       "effectiveR5pct": 59.7
+     }
+    },
+    "local": {
+     "tr": {
+      "injectionRatePct": 100,
+      "effectiveR5": 6,
+      "effectiveR5pct": 26.1
+     },
+     "en": {
+      "injectionRatePct": 100,
+      "effectiveR5": 22,
+      "effectiveR5pct": 88
+     },
+     "mixed": {
+      "injectionRatePct": 100,
+      "effectiveR5": 16,
+      "effectiveR5pct": 66.7
+     },
+     "all": {
+      "injectionRatePct": 100,
+      "effectiveR5": 44,
+      "effectiveR5pct": 61.1
      }
     },
     "cloud-index": {
@@ -693,10 +1197,94 @@
   }
  },
  "caveats": [
-  "hybrid-e5 B0 baseline missing; floor set is {raw, haiku}",
-  "cloud-index ran on engine ba736f4f before the fallback guard (no network at query time; per-query querySource/fallback fields are not recorded in the result file)",
-  "local tier unmeasured",
-  "n is 72 (23/25/24) not 75; per-language verdicts at n≈25 are directional, pooled is primary",
-  "B0 and cloud-index latencies were recorded under machine load and are not valid AC-L evidence"
- ]
+  "n is 72 (23/25/24) not 75; per-language verdicts at n~25 are directional, pooled is primary",
+  "cloud-index held-out ran on engine ba736f4f before the fallback guard (no per-query querySource/fallback field recorded); local on 8ed3a6d8; cloud on c274d18f; B0 on 0ba4c25a",
+  "held-out run latencies in the sealed files were recorded under machine load and are not AC-L evidence; AC-L comes from scripts/hook-latency.ts"
+ ],
+ "exactTermByLang": {
+  "raw": {
+   "tr": {
+    "n": 4,
+    "r1": 1
+   },
+   "en": {
+    "n": 4,
+    "r1": 4
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 3
+   }
+  },
+  "hybrid-e5": {
+   "tr": {
+    "n": 4,
+    "r1": 1
+   },
+   "en": {
+    "n": 4,
+    "r1": 4
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 4
+   }
+  },
+  "haiku": {
+   "tr": {
+    "n": 4,
+    "r1": 2
+   },
+   "en": {
+    "n": 4,
+    "r1": 2
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 0
+   }
+  },
+  "local": {
+   "tr": {
+    "n": 4,
+    "r1": 1
+   },
+   "en": {
+    "n": 4,
+    "r1": 4
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 4
+   }
+  },
+  "cloud-index": {
+   "tr": {
+    "n": 4,
+    "r1": 1
+   },
+   "en": {
+    "n": 4,
+    "r1": 4
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 3
+   }
+  },
+  "cloud": {
+   "tr": {
+    "n": 4,
+    "r1": 3
+   },
+   "en": {
+    "n": 4,
+    "r1": 3
+   },
+   "mixed": {
+    "n": 4,
+    "r1": 4
+   }
+  }
+ }
 }
