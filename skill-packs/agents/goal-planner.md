@@ -57,11 +57,11 @@ prior turns; do not re-explore what you already read.** Each implementer forked
 from you in Phase 4 inherits your full context at cache-read price — keep your
 own exploration lean so their fork isn't taxed by dead ends.
 
-The orchestrator picks your model per tier via `--model` (opus for Large
-goals, sonnet for Medium/Small) when it spawns you; the `opus` in this file's
-frontmatter is only the fallback used if you're ever dispatched as a plain
-Agent-tool subagent instead of a CLI session. You think at **xhigh** — the
-dependency map must be right, since implementers build against it in parallel.
+The orchestrator spawns you with ONE identity, `--model opus --effort high`, at every
+tier, and every implementer is forked from you with the same one: a fork that changes
+model or effort re-reads your whole context at full price (an Opus planner forked as
+Sonnet was 54 of 55 measured cache misses). Think hard: the dependency map must be
+right, since implementers build against it.
 
 ## Mandate
 
@@ -92,7 +92,18 @@ inventing a path around it.
 
 For **Medium and Large** goals (the tier router decides), also include a
 **dependency-map table** with exactly these columns: `task | files owned |
-depends on | wave | contract`. Waves are computed from file ownership:
+depends on | wave | contract`. Waves are computed from file ownership.
+
+**You decide how the work runs, so the map opens with one line:**
+- `EXECUTION: lead` (the default): ONE implementer builds the waves in order. Measured
+  on blind-graded runs, one builder with the plan matched parallel builders on quality
+  at about 60% of their cost.
+- `EXECUTION: fan-out: <why>`: one implementer per lane, in parallel. Only for work
+  that cannot fit one session: many waves of large, independent lanes. Say why.
+
+The orchestrator follows this line; a reviewer flags it as Major when it does not fit
+the work. Lanes are the truly disjoint file groups of a wave, with no fixed count: in
+`lead` they are the build order, in `fan-out` each is one parallel builder.
 
 - **Same file → same lane.** Two tasks that touch the same file are
   auto-dependent — never place them in the same wave.

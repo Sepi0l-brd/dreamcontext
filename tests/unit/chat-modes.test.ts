@@ -229,10 +229,13 @@ describe('modeBriefing', () => {
     const brief = modeBriefing('plan', { worktreeAllowed: false });
     expect(brief).toMatch(/SOLID/);
     expect(brief).toMatch(/re-review/i);
-    // Two rounds, a third only for a NEW real bug (2026-10-11: the Plan phase alone cost more
-    // than a whole solo build).
-    expect(brief).toMatch(/at most 2 rounds/);
-    expect(brief).toMatch(/a third round only for a NEW real bug found in round 2/);
+    // 2026-10-11 evening (owner): severity, not a counter, bounds the loop. Only a Critical or
+    // Major finding costs a round; a serious finding is never dropped because rounds ran out.
+    expect(brief).toMatch(/Iterate while a lens has a Critical or Major finding\*\*; both SOLID = done/);
+    expect(brief).toMatch(/a Minor never\s+costs a round/);
+    expect(brief).toMatch(/no round\s+cap/);
+    expect(brief).toMatch(/The SAME finding twice, or 8 rounds → STOP and put the open findings to the user/);
+    expect(brief).not.toMatch(/at most 2 rounds/);
     // Convergence by signal (goal-skill Phase 2): the same finding surviving a revision means
     // the loop is stuck, and a stuck loop goes to the user — it does not get waved through.
     expect(brief).toMatch(/SAME finding twice/i);
@@ -318,8 +321,11 @@ describe('modeBriefing', () => {
   it('develop: the lead builds every wave; builder fan-out is opt-in only', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).toMatch(/You LEAD the run, and you write the code/);
-    expect(brief).toMatch(/You build every wave yourself\*\*, its tests with it/);
-    expect(brief).toMatch(/Only work that cannot fit this session, or the owner\s+asking for builders, goes to `dreamcontext goal-live recipe fan-out`/);
+    // 2026-10-11 evening: the PLAN decides lead vs fan-out; Develop implements its line.
+    expect(brief).toMatch(/The plan decides how it runs; you implement it/);
+    expect(brief).toMatch(/`EXECUTION: lead` \(or no line\): you\s+build every wave yourself, its tests with it/);
+    expect(brief).toMatch(/`EXECUTION: fan-out`, or the owner asking for builders:\s+follow `dreamcontext goal-live recipe fan-out`/);
+    expect(brief).toMatch(/A line that does not fit the work is a\s+wrong plan: STOP and say so/);
     // The v2 "builders build, never you" contract must not creep back.
     expect(brief).not.toMatch(/You write no product code/);
     expect(brief).not.toMatch(/Builders build every wave/);
@@ -333,16 +339,21 @@ describe('modeBriefing', () => {
     expect(brief).toContain('dreamcontext goal-live start --goal <slug> --mode develop || true');
   });
 
-  it('develop writes the wave map before any code; Plan\'s map is used unchanged, its lanes built in turn', () => {
+  it('develop writes the wave map before any code; in a lead run a plan\'s lanes are built in turn', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).toMatch(/Write one\s+before any code/);
     expect(brief).toMatch(/one wave is fine/);
-    expect(brief).toMatch(/A map\s+from Plan mode is used unchanged: its lanes are groups of files you build in turn/);
+    expect(brief).toMatch(/its tests with it, lanes in turn/);
   });
 
   it('plan asks for the wave map in the file-by-file draft', () => {
     const brief = modeBriefing('plan', { worktreeAllowed: false });
-    expect(brief).toMatch(/Include the wave map: waves, lanes \(max 3\), files owned/);
+    // The plan decides how the work runs (2026-10-11 evening); lanes have no fixed count.
+    expect(brief).toMatch(/Include the wave map, opening with how it runs:/);
+    expect(brief).toMatch(/`EXECUTION: lead` \(one builder builds the waves in order: the default\)/);
+    expect(brief).toMatch(/`EXECUTION:\s+fan-out: <why>` \(parallel builders, only for work one session cannot hold\)/);
+    expect(brief).toMatch(/truly disjoint file groups of a wave, no fixed count/);
+    expect(brief).not.toMatch(/lanes \(max 3\)/);
     // In step 3, the draft — not bolted on after the review.
     expect(brief.indexOf('Include the wave map')).toBeLessThan(brief.indexOf('4. **Then have it attacked'));
   });
@@ -548,7 +559,8 @@ describe('modeBriefing', () => {
   //
   // `plan` went 2900 → 3100 (2026-10-11) for the REVIEWED-wave marks and the "also run" list
   // in step 3 (Develop's recipe reads both) and the two-round cap in step 5.
-  const BRIEFING_CEILING: Record<string, number> = { plan: 3100, develop: 3200, train: 2150, assistant: 5800 };  // assistant +500 (2026-09-27): the delegate-don't-do rule; +300 (2026-09-28): the latency rules; +100 (2026-09-28): look; +800 (2026-10-04): notch cues + live context; +150 (2026-10-04): close; +600 (2026-10-04): meetings via whichever notetaker MCP, or notes the owner hands over; +150 (2026-10-04): the `agent` tool line (a board's home agent or any agent by slug) and `agent` in the long-timeout list
+  // plan +300 (2026-10-11 evening): the EXECUTION line and the severity-bounded review loop.
+  const BRIEFING_CEILING: Record<string, number> = { plan: 3400, develop: 3200, train: 2150, assistant: 5800 };  // assistant +500 (2026-09-27): the delegate-don't-do rule; +300 (2026-09-28): the latency rules; +100 (2026-09-28): look; +800 (2026-10-04): notch cues + live context; +150 (2026-10-04): close; +600 (2026-10-04): meetings via whichever notetaker MCP, or notes the owner hands over; +150 (2026-10-04): the `agent` tool line (a board's home agent or any agent by slug) and `agent` in the long-timeout list
   const DEFAULT_CEILING = 1600;
 
   it('assistant: speaks before delegating, single-quotes --prompt, takes meeting notes through a tool, and stays 150 under its ceiling', () => {

@@ -1,9 +1,10 @@
 /**
  * The brief every headless goal-skill builder gets, printed by `dreamcontext goal-live recipe
- * builder-brief`. Develop's builders get {@link DEVELOP_BUILDER_RULES} instead (develop-recipe.ts).
+ * builder-brief`. Develop's fan-out builders get the same {@link NO_CHECK_BUILDER_RULES} inside
+ * their own brief (develop-recipe.ts).
  *
  * A `claude -p` builder forked by goal-skill never loads the goal-implementer agent file: the
- * prompt it is forked with is everything it sees. So the check rules live HERE, printed from
+ * prompt it is forked with is everything it sees. So the builder rules live HERE, printed from
  * the same install the orchestrator runs, and the orchestrator passes the filled-in text as a
  * file (`"$(cat …)"`) instead of retyping it. A retyped brief is how the 2026-10-04 builders
  * got a scoped-check rule and still ran the full suite.
@@ -11,39 +12,22 @@
  * tests/unit/goal-builder-discipline.test.ts pins the load-bearing lines.
  */
 
-/** How a builder runs its checks. Shared by goal-skill's brief and Develop's. */
-export const BUILDER_CHECK_RULES = `How you run checks. This session ends the moment your turn ends, so nothing you put in the
-background ever reports back:
-1. Foreground only. Every check runs in the foreground with an explicit timeout under
-   600000 ms. Never background one: no run_in_background, no &, no nohup, no Monitor wait.
-   One check per Bash call: never chain two type-checks, or a type-check and a test run.
-2. Never end your turn while a check is still running. A final message like "waiting for X"
-   is a failed run. If a tool result says a command "was moved to the background", poll its
-   output file with short foreground calls (sleep 30; tail -5 <file>) until it shows the
-   result. A check that times out gets a narrower scope, never the background.
-3. Only your lane's checks: the test files you wrote or changed, the existing tests of the
-   modules you touched, and the type-check of each package you touched. Never the full
-   suite, a build, integration tests that need compiled output, or a generator script: the
-   orchestrator runs those once, at the final gate.
-4. Run every type-check and test run through the repo's heavy lock, with at most 2 test
-   workers: \`dreamcontext builder heavy -- <command>\` (e.g. \`dreamcontext builder heavy --
-   npx vitest run --maxWorkers=2 <files>\`). It runs one heavy check at a time across every
-   builder of this repo. Exit 75 means the lock stayed busy and NOTHING ran: run it again.`;
-
 /**
- * How a Develop builder treats checks: it writes its lane's tests and runs none of them. The
- * lead runs one type-check + related-tests pass per wave (`dreamcontext builder test`) and
- * resumes the owning builder with exactly the failures. Measured 2026-10-11: checks were 40% of
- * a builder's active time (median 19 runs, p90 129, all through one repo-wide lock), and a
- * builder that never type-checks costs one resume at most. goal-skill keeps
- * {@link BUILDER_CHECK_RULES} until its own alignment run.
+ * How every builder treats checks, in Develop's fan-out and in goal-skill alike: it writes its
+ * tests and runs none of them. Whoever started it (the Develop lead or the goal-skill
+ * orchestrator) runs one type-check + related-tests pass per wave (`dreamcontext builder test`)
+ * and resumes the owning builder with exactly the failures. Measured 2026-10-11: checks were
+ * 40% of a builder's active time (median 19 runs, p90 129, all through one repo-wide lock), and
+ * a builder that never type-checks costs one resume at most. The hand-run, heavy-locked lane
+ * checks goal-skill used before (BUILDER_CHECK_RULES) are retired with that evening's alignment.
  */
-export const DEVELOP_BUILDER_RULES = `Checks are not yours. Write the tests for the code you write, in the files you own, and run
-none of them: no test runner, no type-check, no build, no dev server. The lead runs one
-type-check and test pass for the whole wave and resumes you with exactly what failed, if
-anything did. Never put anything in the background (no run_in_background, no &, no nohup) and
-never end your turn "waiting" for something: this session ends with your turn. Something
-broken or missing outside your files is reported, never fixed.`;
+export const NO_CHECK_BUILDER_RULES = `Checks are not yours. Write the tests for the code you write, in the files you own, and run
+none of them: no test runner, no type-check, no build, no dev server. The lead or orchestrator
+that started you runs one type-check and test pass for the whole wave and resumes you with
+exactly what failed, if anything did. Never put anything in the background (no
+run_in_background, no &, no nohup) and never end your turn "waiting" for something: this
+session ends with your turn. Something broken or missing outside your files is reported,
+never fixed.`;
 
 /** goal-skill's builder brief. The orchestrator fills the <placeholders> and writes it to a file. */
 export const BUILDER_BRIEF = `# Builder brief (goal-skill implementer)
@@ -54,17 +38,16 @@ with "$(cat "$RUN/brief-<TaskId>.md")" as its prompt. Never retype these rules.
 ---
 
 You are implementer <TaskId> for task <slug>. You are NO LONGER the planner. Read
-_dream_context/state/<slug>.md. Build only <files owned>, against the pinned contracts in its
-dependency map. Never touch another lane's file, never call dreamcontext goal-live, never edit
-the task's dependency map or session registry. If the plan is wrong or impossible, STOP and
-report instead of redesigning.
+_dream_context/state/<slug>.md. Build only <files owned: your lane's files, or in an EXECUTION:
+lead run the files of the wave you are given>, against the pinned contracts in its dependency
+map. Never touch another lane's file, never call dreamcontext goal-live, never edit the task's
+dependency map or session registry. If the plan is wrong or impossible, STOP and report
+instead of redesigning. In an EXECUTION: lead run you build every wave in turn: you are resumed
+with the next wave once this one's check is green.
 
-Your checks: <type-check command for each package you will touch>; <test command> on the test
-files you write or change and the existing tests of the modules you touch.
-
-${BUILDER_CHECK_RULES}
+${NO_CHECK_BUILDER_RULES}
 
 Your final message starts with the exact heading \`## <TaskId> report\`, then: files changed
-(one line each), each check you ran with its real result, the criteria met, anything not done
-and why. A final message without that heading is treated as unfinished and resumed.
+(one line each), the tests you wrote, the criteria met, anything not done and why. A final
+message without that heading is treated as unfinished and resumed.
 `;

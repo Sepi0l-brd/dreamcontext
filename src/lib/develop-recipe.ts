@@ -1,4 +1,4 @@
-import { BUILDER_BRIEF, DEVELOP_BUILDER_RULES } from './builder-brief.js';
+import { BUILDER_BRIEF, NO_CHECK_BUILDER_RULES } from './builder-brief.js';
 import { BUILDER_NO_BACKGROUND_ENV } from './builder-tools.js';
 
 /**
@@ -71,10 +71,12 @@ repo: tell the owner once that there is no net, and keep your own list of change
 
 ## 1. The wave map is your order of work
 
-A map from Plan mode is used unchanged: its lanes are groups of files to you, built one after
-another. No map in the task: write one before any code:
+The plan decides how the run goes, and a map from Plan mode is used unchanged. Its first line
+is \`EXECUTION: lead\` (or there is none): this recipe, its lanes built one after another.
+\`EXECUTION: fan-out\`: section 5. No map in the task: write one before any code, lead unless
+the work cannot fit one session:
 
-  dreamcontext tasks insert "$S" technical_details -- "WAVE MAP: W1 (a.ts, b.ts: AC1, AC2) | W2 ... | also run: <tests>"
+  dreamcontext tasks insert "$S" technical_details -- "WAVE MAP: EXECUTION: lead | W1 (a.ts, b.ts: AC1, AC2) | W2 ... | also run: <tests>"
 
 A wave ends where a check can prove something, so the map has as FEW waves as the
 dependencies allow, and one wave is fine. Tests are written with the code they test, never in
@@ -175,10 +177,12 @@ the exact commands and output. Flaky or skipped is FAIL."
 
 ## 5. When builders pay: the fan-out recipe
 
-Builders cost more than you building and wrote no better code when measured. Use them only
-when the work cannot fit this session (many waves of large, independent lanes), or when the
-owner asks for builders. Then tell the owner once why, run \`dreamcontext goal-live recipe
-fan-out\`, and follow it instead of sections 2 and 3.
+Builders cost more than you building and wrote no better code when measured. They run when
+the plan's map says \`EXECUTION: fan-out\` (work that cannot fit one session: many waves of
+large, independent lanes), or when the owner asks for builders. Then tell the owner once,
+run \`dreamcontext goal-live recipe fan-out\`, and follow it instead of sections 2 and 3. You
+do not switch on your own mid-run: a lead plan that turns out too big for this session is a
+wrong plan, so STOP and say so.
 
 ## 6. Reopen or handoff
 
@@ -196,12 +200,14 @@ re-validate an unreviewed fix.
 
 /**
  * The v2 builder fan-out (2026-10-11), opt-in since the same day: the default recipe sends the
- * lead here only for work that cannot fit one lead session, or when the owner asks for builders.
+ * lead here only when the plan's map says `EXECUTION: fan-out` (work that cannot fit one lead
+ * session), or when the owner asks for builders. Lanes have no fixed count since the same
+ * evening: the old cap of 3 protected a machine on which every builder ran its own tests.
  */
 export const FAN_OUT_RECIPE = `# Develop fan-out recipe (opt-in)
 
 Follow this only when the default recipe (\`dreamcontext goal-live recipe develop\`, section 5)
-sent you here: the work cannot fit one lead session, or the owner asked for builders.
+sent you here: the plan's map says \`EXECUTION: fan-out\`, or the owner asked for builders.
 
 You are the LEAD. Builders write the product code and its tests; you run the checks, route
 failures and dispatch the judges. In a fan-out run you write no product code: every file
@@ -245,9 +251,10 @@ Read the task. If it has no wave map, write one into it:
 
   dreamcontext tasks insert "$S" technical_details -- "WAVE MAP: W1 lanes A (owns a.ts, b.ts: AC1, AC2), B (owns c.ts: AC3) | W2 ... | also run: <tests>"
 
-Rules: criteria grouped per wave; at most 3 lanes a wave; every lane owns DISJOINT files; a
-later wave may depend on an earlier one, never on a sibling lane. A task that arrived from
-Plan mode with a wave map is used unchanged. On an adopted run whose impl.waves differs from
+Rules: criteria grouped per wave; a wave's lanes are its truly disjoint file groups, with no
+fixed count (each is one parallel builder); every lane owns DISJOINT files; a later wave may
+depend on an earlier one, never on a sibling lane. A task that arrived from Plan mode with a
+wave map is used unchanged. On an adopted run whose impl.waves differs from
 the task's wave map, start fresh: \`dreamcontext goal-live clear || true\` on one line, then
 \`start\` again on the next.
 
@@ -304,8 +311,9 @@ reading list and mint again with \`--remint\`.
   dreamcontext goal-live phase impl --wave N --waves M || true
   dreamcontext builder load --reap
 
-\`busy\` (1-min load above the core count) = at most 1-2 lanes at a time this wave; the rest
-start as those finish. Every builder shares one machine with whatever else is running.
+\`quiet\` = start every lane of the wave at once (builders run no checks, so a lane costs the
+machine little). \`busy\` (1-min load above the core count) = 2 lanes at a time this wave; the
+rest start as those finish. Every builder shares one machine with whatever else is running.
 
 Per lane L (ids are wave-qualified: \`wN-L\`, never a bare lane name), write its brief to
 $ROOT/tmp/develop/$S/wN-L.md (section 5, BUILDER), then:
@@ -483,7 +491,7 @@ BUILDER: "Your lane: <criteria>. You own ONLY: <files>. <What you consume from a
 wave or produce for a later one: exact names and shapes>. Build exactly that.
 <A spawned builder, not a fork, also gets: Read _dream_context/state/<slug>.md first.>
 Never call dreamcontext goal-live.
-${DEVELOP_BUILDER_RULES}
+${NO_CHECK_BUILDER_RULES}
 Your final message starts with the exact heading '## wN-L report', then a line 'files changed:'
 followed by every path you created, edited or deleted, then 'outside my files:' (what you
 found broken or missing elsewhere, or none), then your assumptions."

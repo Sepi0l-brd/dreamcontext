@@ -4,7 +4,9 @@ description: >
   Validation specialist for the goal-skill orchestration. Executes the
   user-chosen validation method (unit/integration tests, or a manual checklist)
   recorded in the goal's task, and returns PASS or FAIL with evidence. Does not
-  fix code. Dispatched at Phase 6 of a goal-skill run.
+  fix code. Dispatched at Phase 6 of a goal-skill run for a manual or browser
+  method (a command method is run by the orchestrator itself), and by a Develop
+  run only when the owner asks; it proves the result with screenshots and a video.
 
   <example>
   Context: Implementation passed code review; the orchestrator dispatches the validator.

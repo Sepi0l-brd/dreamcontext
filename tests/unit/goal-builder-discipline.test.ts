@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FAN_OUT_RECIPE, GOAL_LIVE_RECIPES } from '../../src/lib/develop-recipe.js';
-import { BUILDER_BRIEF, BUILDER_CHECK_RULES, DEVELOP_BUILDER_RULES } from '../../src/lib/builder-brief.js';
+import { BUILDER_BRIEF, NO_CHECK_BUILDER_RULES } from '../../src/lib/builder-brief.js';
 import { BUILDER_NO_BACKGROUND_ENV } from '../../src/lib/builder-tools.js';
 import { modeBriefing } from '../../src/server/chat-modes.js';
 
@@ -28,6 +28,8 @@ const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..');
 const read = (...p: string[]) => readFileSync(join(ROOT, ...p), 'utf-8');
 const SKILL = read('skill-packs', 'goal-skill', 'SKILL.md');
 const IMPL = read('skill-packs', 'agents', 'goal-implementer.md');
+const PLANNER = read('skill-packs', 'agents', 'goal-planner.md');
+const PLAN_REVIEWER = read('skill-packs', 'agents', 'goal-plan-reviewer.md');
 
 /**
  * A section of a markdown file, from its heading to the next heading of the same level. A
@@ -57,37 +59,26 @@ describe('the builder brief: printed from the CLI, the only thing a -p builder r
     expect(GOAL_LIVE_RECIPES['builder-brief']).toBe(BUILDER_BRIEF);
   });
 
-  it('rule 1: foreground with a timeout under the Bash cap, one check per call, nothing backgrounded', () => {
-    expect(BUILDER_CHECK_RULES).toMatch(/foreground with an explicit timeout under\s+600000 ms/);
-    for (const re of NO_BACKGROUND) expect(BUILDER_CHECK_RULES).toMatch(re);
-    expect(BUILDER_CHECK_RULES).toMatch(/One check per Bash call/);
+  // 2026-10-11 evening: every builder, goal-skill's too, writes its tests and runs none; the
+  // orchestrator runs one `builder test` per wave. The hand-run heavy-locked checks are retired.
+  it('the no-check rules: write the tests, run none of them, never background, report what is outside', () => {
+    expect(NO_CHECK_BUILDER_RULES).toMatch(/Write the tests for the code you write/);
+    expect(NO_CHECK_BUILDER_RULES).toMatch(/run\s+none of them: no test runner, no type-check, no build/);
+    expect(NO_CHECK_BUILDER_RULES).toMatch(/The lead or orchestrator\s+that started you runs one type-check and test pass for the whole wave/);
+    for (const re of NO_BACKGROUND.slice(0, 3)) expect(NO_CHECK_BUILDER_RULES).toMatch(re);
+    expect(NO_CHECK_BUILDER_RULES).toMatch(/never end your turn "waiting"/);
+    expect(NO_CHECK_BUILDER_RULES).toMatch(/outside your files is reported,\s+never fixed/);
   });
 
-  it('rule 2: never end with a check running; a moved-to-background check is polled, not abandoned', () => {
-    expect(BUILDER_CHECK_RULES).toMatch(/Never end your turn while a check is still running/);
-    expect(BUILDER_CHECK_RULES).toMatch(/"waiting for X"\s+is a failed run/);
-    expect(BUILDER_CHECK_RULES).toMatch(/"was moved to the background", poll its\s+output file/);
-    expect(BUILDER_CHECK_RULES).toMatch(/narrower scope, never the background/);
-  });
-
-  it('rule 3: the lane\'s checks only; the heavy steps are the orchestrator\'s', () => {
-    expect(BUILDER_CHECK_RULES).toMatch(/the test files you wrote or changed, the existing tests of the\s+modules you touched, and the type-check of each package you touched/);
-    const notYours = BUILDER_CHECK_RULES.slice(BUILDER_CHECK_RULES.indexOf('Never the full'));
-    for (const re of NOT_YOURS) expect(notYours).toMatch(re);
-    expect(notYours).toMatch(/once, at the final gate/);
-  });
-
-  it('rule 4: every type-check and test run through the heavy lock, 2 workers, exit 75 = run again', () => {
-    expect(BUILDER_CHECK_RULES).toMatch(/`dreamcontext builder heavy -- <command>`/);
-    expect(BUILDER_CHECK_RULES).toMatch(/--maxWorkers=2/);
-    expect(BUILDER_CHECK_RULES).toMatch(/Exit 75 means the lock stayed busy and NOTHING ran: run it again/);
-  });
-
-  it('the goal-skill brief carries the rules and ends on the sentinel', () => {
-    expect(BUILDER_BRIEF).toContain(BUILDER_CHECK_RULES);
+  it('the goal-skill brief carries the no-check rules and ends on the sentinel', () => {
+    expect(BUILDER_BRIEF).toContain(NO_CHECK_BUILDER_RULES);
     expect(BUILDER_BRIEF).toContain(`Your final message starts with the exact heading \`${SENTINEL}\``);
     expect(BUILDER_BRIEF).toMatch(/You are NO LONGER the planner/);
     expect(BUILDER_BRIEF).toMatch(/never call dreamcontext goal-live/);
+    expect(BUILDER_BRIEF).toMatch(/In an EXECUTION: lead run you build every wave in turn/);
+    // The retired hand-run checks do not creep back.
+    expect(BUILDER_BRIEF).not.toMatch(/builder heavy --/);
+    expect(BUILDER_BRIEF).not.toMatch(/Your checks:/);
   });
 
   it('it names no repo-specific command: a skill pack ships to every project', () => {
@@ -111,6 +102,35 @@ describe('goal-skill: every builder runs without background tasks, with its writ
         expect(r, r).toMatch(/> "\$RUN\/[^"]+\.json"/);
       }
     }
+  });
+
+  it('one identity for the whole lineage: planner, forks and resumes all run opus at effort high', () => {
+    expect(SKILL).not.toMatch(/--model sonnet/);
+    expect(SKILL).not.toMatch(/<tier-model>/);
+    for (const l of builderLines) for (const r of l.split(/ & (?=CLAUDE_CODE|claude)/)) expect(r, r).toContain('--model opus --effort high');
+    const plannerLines = claudeCommands(SKILL).filter((l) => /--session-id <plannerId>|--resume <plannerId> "/.test(l));
+    for (const l of plannerLines) {
+      expect(l, l).toContain('--model opus --effort high');
+      expect(l, l).toContain(BUILDER_NO_BACKGROUND_ENV);
+    }
+    expect(SKILL).toMatch(/\*\*One identity for the whole lineage, always\.\*\*/);
+    // A fork does not "keep the planner's settings" by itself: effort comes from the flag.
+    for (const doc of [SKILL, IMPL, PLANNER]) expect(doc).not.toMatch(/keeps? the planner's settings/);
+    expect(IMPL).toMatch(/`--model opus --effort high`, passed on every fork and resume/);
+    expect(PLANNER).toMatch(/ONE identity, `--model opus --effort high`/);
+  });
+
+  it('rule 3b: an implementer resume (next wave, every FAIL route) carries the write flags and a message file', () => {
+    const mechanics = section(SKILL, '### Builder session mechanics');
+    const r3b = mechanics.slice(mechanics.indexOf('3b. **Resume an implementer**'), mechanics.indexOf('4. **Re-fork'));
+    expect(r3b).toContain('claude -p --resume <implId> "$(cat "$RUN/<TaskId>-r<N>.md")"');
+    expect(r3b).toContain(WRITE_FLAGS);
+    expect(r3b).toMatch(/the next wave of an `EXECUTION: lead` run, and every FAIL\s+route/);
+    const phase4 = section(SKILL, '### Phase 4');
+    expect(phase4).toMatch(/next wave \("Build wave N: <criteria, files>", mechanics rule 3b\)/);
+    expect(phase4).toMatch(/`--resume` \(mechanics rule 3b\) on the \*\*specific owning implementer\*\*/);
+    expect(section(SKILL, '### Phase 5')).toMatch(/\(mechanics rule 3b\)/);
+    expect(section(SKILL, '### Phase 6')).toMatch(/\(mechanics\s+rule 3b\)/);
   });
 
   it('the planner never gets write flags', () => {
@@ -137,13 +157,16 @@ describe('goal-skill: the orchestrator asks every exiting builder whether it rep
 
   it('unfinished → ONE resume with the fork\'s flags; a usage limit is a pause', () => {
     expect(rule6).toMatch(/Resume it ONCE, with the same flags it was forked\s+with/);
-    expect(rule6).toContain('"Run your pending checks in the foreground and write your final report."');
+    expect(rule6).toContain('"Finish what you were building and write your final report now."');
     expect(rule6).toMatch(/usage limit is a pause/);
   });
 
-  it('a second miss is bounded: you run the lane\'s checks, re-fork once, then escalate', () => {
+  it('a second miss is bounded: one builder test on its files, re-fork once, then escalate', () => {
     expect(rule6).toMatch(/\*\*Second miss, then escalate\.\*\*/);
-    expect(rule6).toMatch(/re-fork the lane once/);
+    expect(rule6).toMatch(/ONE `dreamcontext builder test <slug> --wave N --related\s+<its owned files>`/);
+    expect(rule6).not.toMatch(/builder\s+heavy/);
+    expect(rule6).toMatch(/re-fork it once from the planner with the exact FAIL lines/);
+    expect(rule6).toMatch(/in a lead run\s+the re-fork's brief is the current wave, and it replaces `impl` in the registry/);
     expect(rule6).toMatch(/ESCALATE to the user/);
   });
 
@@ -162,7 +185,9 @@ describe('goal-skill: light wave gates, one heavy final gate, nothing run twice'
 
   it('the wave gate is type-checks + the wave\'s tests, run once by the orchestrator through the lock', () => {
     expect(phase4).toMatch(/\*\*Wave gate = the type-checks \+ this wave's tests, run once by you\.\*\*/);
-    expect(phase4).toMatch(/each through `dreamcontext builder heavy`/);
+    expect(phase4).toContain('dreamcontext builder test <slug> --wave N --related <every path the wave changed>');
+    expect(phase4).toMatch(/with exactly its FAIL lines/);
+    expect(phase4).toContain('builder test <slug> --wave N --failed --related <files the fix changed>');
   });
 
   it('the final gate lists every heavy step, after the last wave and before Phase 5', () => {
@@ -171,9 +196,13 @@ describe('goal-skill: light wave gates, one heavy final gate, nothing run twice'
     for (const re of FINAL_GATE) expect(heavy).toMatch(re);
   });
 
-  it('a step the validation method already runs is left to the validator', () => {
-    expect(phase4).toMatch(/\*\*Never twice\.\*\*/);
-    expect(phase4).toMatch(/left to the Phase 6\s+validator/);
+  it('never twice: the final gate builds before what needs the build, Phase 6 cites it instead of re-running', () => {
+    expect(phase4).toMatch(/\*\*Never twice\.\*\* The final gate runs every heavy step the change needs, in dependency\s+order/);
+    expect(phase4).toMatch(/the build first whenever integration tests or a browser check need compiled\s+output/);
+    expect(phase4).toMatch(/cited from the final gate's logged\s+command and output/);
+    expect(phase4).not.toMatch(/left to Phase 6/);
+    expect(section(SKILL, '## Hard rules')).toMatch(/the build before anything that needs compiled output/);
+    expect(section(SKILL, '### Phase 6')).toMatch(/cite that logged run instead of running it again/);
   });
 
   it('only a planner-marked compiled artifact pulls a build forward', () => {
@@ -207,8 +236,10 @@ describe('goal-skill: load-aware waves, orphans reaped, a bounded wait for quiet
     expect(SKILL).not.toMatch(/awk -F'load averages/);
   });
 
-  it('busy → 1-2 builders instead of 3', () => {
-    expect(phase4).toMatch(/`busy` = run the wave with \*\*1–2 builders instead of 3\*\*/);
+  it('quiet → every lane of a fan-out wave at once; busy → 2 builders at a time; no fixed cap of 3', () => {
+    expect(phase4).toMatch(/`quiet` = start every lane of a fan-out wave at once/);
+    expect(phase4).toMatch(/`busy` = \*\*2 builders at a time\*\*/);
+    expect(SKILL).not.toMatch(/Max ~?3 concurrent implementers/);
   });
 
   it('waits for quiet at most 15 minutes, then runs throttled and records the load', () => {
@@ -221,29 +252,42 @@ describe('goal-skill: load-aware waves, orphans reaped, a bounded wait for quiet
   it('the validator is dispatched after the same load check', () => {
     expect(phase6).toMatch(/Run `dreamcontext builder load --reap` first and dispatch on `quiet`/);
   });
+
+  it('a command method is run once by the orchestrator; the validator drives manual and browser checks', () => {
+    expect(phase6).toMatch(/\*\*A command\*\* \(a test suite, a build, a script\): run it yourself, ONCE/);
+    expect(phase6).toMatch(/The command's\s+real output IS the evidence/);
+    expect(phase6).toMatch(/\*\*Manual, or Browser \(jev-verify\)\*\*: dispatch \*\*one\*\* `goal-validator` \(opus, clean\s+context\)/);
+    expect(phase6).toMatch(/screenshots and a video of the\s+flow/);
+  });
 });
 
 describe('goal-implementer: the agent file says what the brief says', () => {
   const cli = section(IMPL, '## Running as a CLI builder session');
   const output = section(IMPL, '## Output');
 
-  it('forbids every way of backgrounding a check, one check per call', () => {
+  it('forbids every way of backgrounding anything', () => {
     for (const re of NO_BACKGROUND) expect(cli).toMatch(re);
-    expect(cli).toMatch(/one check per Bash call/);
     expect(cli).toContain(BUILDER_NO_BACKGROUND_ENV);
   });
 
-  it('never ends with a check running', () => {
-    expect(cli).toMatch(/Your turn never ends before every check you started has finished/);
+  it('never ends its turn "waiting"', () => {
+    expect(cli).toMatch(/Your turn never ends "waiting"/);
     expect(cli).toMatch(/FAILED run/);
   });
 
-  it('scopes its checks to its lane and runs them through the heavy lock', () => {
-    expect(cli).toMatch(/test files you wrote or changed/);
-    expect(cli).toMatch(/existing tests of the modules you touched/);
-    expect(cli).toMatch(/`dreamcontext builder heavy -- <command>`/);
+  it('runs no checks: it writes its tests, the orchestrator\'s builder test runs them', () => {
+    expect(cli).toMatch(/\*\*Checks are not yours\.\*\*/);
+    expect(cli).toMatch(/run none of them: no test runner, no type-check, no build/);
+    expect(cli).toContain('`dreamcontext builder test`');
+    expect(cli).not.toMatch(/builder heavy --/);
     const notYours = cli.slice(cli.indexOf('**Not yours'));
     for (const re of NOT_YOURS) expect(notYours).toMatch(re);
+  });
+
+  it('in a lead run it is the one implementer, resumed wave by wave, on opus', () => {
+    expect(cli).toMatch(/In an `EXECUTION: lead` run you are the only implementer/);
+    expect(cli).toMatch(/each later wave arrives as a resume/);
+    expect(IMPL).toMatch(/^model: opus$/m);
   });
 
   it('starts its final message with the sentinel heading', () => {
@@ -265,19 +309,11 @@ describe('Develop fan-out (opt-in since 2026-10-11): builders run no checks, the
 
   it('its builder brief carries the no-check rules verbatim and the sentinel', () => {
     const builder = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('BUILDER: "'), FAN_OUT_RECIPE.indexOf('REVIEWER: "'));
-    expect(builder).toContain(DEVELOP_BUILDER_RULES);
-    expect(builder).not.toContain(BUILDER_CHECK_RULES);
+    expect(builder).toContain(NO_CHECK_BUILDER_RULES);
+    expect(builder).not.toMatch(/builder heavy -- <command>/);
     expect(builder).toMatch(/starts with the exact heading '## wN-L report'/);
     expect(builder).toMatch(/files changed:/);
     expect(builder).toMatch(/outside my files:/);
-  });
-
-  it('the no-check rules: write the tests, run none of them, never background, report what is outside', () => {
-    expect(DEVELOP_BUILDER_RULES).toMatch(/Write the tests for the code you write/);
-    expect(DEVELOP_BUILDER_RULES).toMatch(/run\s+none of them: no test runner, no type-check, no build/);
-    for (const re of NO_BACKGROUND.slice(0, 3)) expect(DEVELOP_BUILDER_RULES).toMatch(re);
-    expect(DEVELOP_BUILDER_RULES).toMatch(/never end your turn "waiting"/);
-    expect(DEVELOP_BUILDER_RULES).toMatch(/outside your files is reported, never fixed/);
   });
 
   it('an exited builder that did not report is resumed once; wait says so', () => {
@@ -289,12 +325,69 @@ describe('Develop fan-out (opt-in since 2026-10-11): builders run no checks, the
     expect(FAN_OUT_RECIPE).not.toMatch(/Build \+ test/);
     const wave = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('### 2c.'), FAN_OUT_RECIPE.indexOf('Per lane L'));
     expect(wave).toContain('dreamcontext builder load --reap');
-    expect(wave).toMatch(/at most 1-2 lanes at a time/);
+    expect(wave).toMatch(/`busy` \(1-min load above the core count\) = 2 lanes at a time this wave/);
     expect(FAN_OUT_RECIPE).toMatch(/through\s+the heavy lock/);
     const final = FAN_OUT_RECIPE.slice(FAN_OUT_RECIPE.indexOf('## 3.'), FAN_OUT_RECIPE.indexOf('## 4.'));
     expect(final.indexOf('dreamcontext builder load --reap')).toBeGreaterThan(-1);
     expect(final.indexOf('dreamcontext builder load --reap')).toBeLessThan(final.indexOf('goal-live phase done'));
     expect(final).toMatch(/for at most 15 min/);
     expect(final).toMatch(/The\s+full suite runs only when the Validation method names it/);
+  });
+});
+
+// ── One doctrine (owner, 2026-10-11 evening) ────────────────────────────────────────────────
+// The plan decides how the work runs; only serious findings cost a review round; every
+// builder is an Opus fork of the planner; Develop's description in this pack is current.
+describe('goal-skill and its agents: the plan decides, severity bounds the review', () => {
+  const phase1 = section(SKILL, '### Phase 1');
+  const phase2 = section(SKILL, '### Phase 2');
+  const phase4 = section(SKILL, '### Phase 4');
+
+  it('the map opens with the EXECUTION line; lanes are disjoint file groups, no fixed count', () => {
+    expect(phase1).toMatch(/The map opens with `EXECUTION: lead` \(the default: ONE\s+implementer builds the waves in order\)/);
+    expect(phase1).toMatch(/`EXECUTION: fan-out: <why>`/);
+    expect(phase1).toMatch(/\*\*Lanes are the truly disjoint file groups\*\* of a wave, with no fixed count/);
+    expect(PLANNER).toMatch(/\*\*You decide how the work runs, so the map opens with one line:\*\*/);
+    expect(PLANNER).toMatch(/`EXECUTION: lead` \(the default\)/);
+    expect(PLANNER).not.toMatch(/sonnet for Medium/);
+  });
+
+  it('Phase 4 follows the line: ONE implementer resumed wave by wave, or one fork per lane', () => {
+    expect(phase4).toMatch(/The map's `EXECUTION:` line decides how the waves are built; you never re-decide it/);
+    expect(phase4).toMatch(/\*\*`EXECUTION: lead`\*\* \(and every S tier\): fork ONE implementer from the \*\*planner\*\*/);
+    expect(phase4).toMatch(/`--resume` the same session with the\s+next wave/);
+    expect(phase4).toMatch(/\*\*`EXECUTION: fan-out`\*\*: fork one implementer per lane of the wave from the planner, every\s+lane at once/);
+    expect(phase4).toMatch(/\*\*Write the tests, run none of them\*\*/);
+  });
+
+  it('only Critical or Major findings block, with no fixed round cap; lenses are critic + security or edge-cases', () => {
+    expect(phase2).toMatch(/\*\*Only a Critical or Major\s+finding blocks\*\*/);
+    expect(phase2).toMatch(/a Minor never costs a round/);
+    expect(phase2).toMatch(/No fixed round cap: a serious finding is never left open because rounds ran out/);
+    expect(phase2).toMatch(/- \*\*critic\*\*/);
+    expect(phase2).toMatch(/- \*\*edge-cases\*\* — L tier otherwise/);
+    expect(phase2).not.toMatch(/\*\*pragmatist\*\*/);
+    expect(section(SKILL, '## Convergence rules')).toMatch(/Only a Critical or Major finding is blocking; a Minor never costs a round/);
+  });
+
+  it('the plan reviewer carries the severity ladder and passes a plan whose open issues are small', () => {
+    expect(PLAN_REVIEWER).toMatch(/## Severity: only Critical and Major block/);
+    for (const level of ['**Critical**', '**Major**', '**Minor**', '**Nit**']) expect(PLAN_REVIEWER).toContain(level);
+    expect(PLAN_REVIEWER).toMatch(/`NEEDS_WORK` needs at least one Critical or Major\. With none, the verdict is `SOLID`/);
+    expect(PLAN_REVIEWER).toMatch(/an\s+`EXECUTION:` line that does not fit the work/);
+    expect(PLAN_REVIEWER).toMatch(/repeat a finding that is still open in the same words/);
+    expect(PLAN_REVIEWER).toMatch(/Never upgrade an old Minor to keep the loop going/);
+    // A clean reviewer can only repeat a finding it is shown: from round 2 it gets its own.
+    expect(PLAN_REVIEWER).toMatch(/from round 2, your own previous findings word for word/);
+    expect(section(SKILL, '### Phase 2')).toMatch(/from round 2 its own\s+previous findings word for word/);
+    expect(modeBriefing('plan', { worktreeAllowed: false })).toMatch(/from round 2, plus its own previous findings verbatim/);
+    expect(PLAN_REVIEWER).toMatch(/\*\*edge-cases\*\* — Empty\/null inputs/);
+  });
+
+  it('describes Develop as it runs now: the lead builds, one end review, validator on request', () => {
+    expect(SKILL).not.toMatch(/a clean reviewer after EVERY wave/);
+    expect(SKILL).toMatch(/chat's lead builds each wave itself/);
+    expect(SKILL).toMatch(/ONE\s+clean reviewer judges the whole change at the end/);
+    expect(SKILL).toContain('dreamcontext goal-live recipe develop|fan-out|builder-brief');
   });
 });

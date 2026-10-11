@@ -71,15 +71,16 @@ Builders are spawned and driven via the `claude` CLI, not the Agent tool:
 
 1. **Spawn the planner** (once, at Phase 1):
    ```
-   claude -p "<goal + context>" --session-id <plannerId> --output-format json --model <tier-model> < /dev/null
+   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p "<goal + context>" --session-id <plannerId> --output-format json --model opus --effort high < /dev/null
    ```
    `< /dev/null` matters: a headless `-p` invocation with no stdin redirect can hang
    waiting for input. Always redirect stdin explicitly. The id you minted IS the
    planner's `session_id`; record it in the **Session registry** (below).
 
-2. **Resume the same builder** for a revision round (only the delta is new tokens):
+2. **Resume the planner** for a revision round (only the delta is new tokens; read-only,
+   the same identity it was spawned with):
    ```
-   claude -p --resume <session_id> "<the delta — new findings only>" --output-format json < /dev/null
+   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> "<the delta — new findings only>" --output-format json --model opus --effort high < /dev/null
    ```
 
 3. **Fork an implementer from the planner session** (Phase 4, once per task in a wave).
@@ -88,8 +89,15 @@ Builders are spawned and driven via the `claude` CLI, not the Agent tool:
    CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> --fork-session --session-id <implId> \
      "$(cat "$RUN/brief-<TaskId>.md")" \
      --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" \
-     --output-format json --model sonnet < /dev/null > "$RUN/<TaskId>-r1.json"
+     --output-format json --model opus --effort high < /dev/null > "$RUN/<TaskId>-r1.json"
    ```
+   **One identity for the whole lineage, always.** The planner, its resumes, every fork and
+   every implementer resume run `--model opus --effort high` with
+   `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`. A fork reads the planner's context from the
+   cache only when model, effort, system prompt and tool list match: an Opus planner forked
+   as Sonnet was 54 of 55 measured cache misses, each re-reading the whole planner context
+   at full price. Never change either on a fork or a resume.
+
    The prompt is the builder brief (Phase 4) read from a file, never retyped: a `-p` fork
    never loads the `goal-implementer` agent file, so the brief is ALL it sees, and a brief
    pasted into a double-quoted argument loses its backticks and quotes.
@@ -112,6 +120,18 @@ Builders are spawned and driven via the `claude` CLI, not the Agent tool:
    run — cost a wasted spawn + an extra resume round). Builders that must write always
    get `--permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash"` at fork time.
    The planner and its revision resumes stay read-only — never give them write flags.
+
+3b. **Resume an implementer**: the next wave of an `EXECUTION: lead` run, and every FAIL
+   route (wave gate, review, validation). Always with the identity and the write flags it
+   was forked with; the message is a file holding exactly the next wave ("Build wave N:
+   <criteria, files>") or exactly the FAIL lines / findings:
+   ```
+   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <implId> "$(cat "$RUN/<TaskId>-r<N>.md")" \
+     --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" \
+     --output-format json --model opus --effort high < /dev/null > "$RUN/<TaskId>-r<N>.json"
+   ```
+   A resume without the write flags stalls at its first Write or Bash (rule 3). Then rule 6
+   on its output.
 
 4. **Re-fork on repeated failure** (same finding twice): fork fresh from the planner
    again rather than continuing to resume a session that is arguing with itself.
@@ -136,9 +156,9 @@ Builders are spawned and driven via the `claude` CLI, not the Agent tool:
      ("waiting for…", "still running"). Resume it ONCE, with the same flags it was forked
      with:
      ```
-     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <implId> "Run your pending checks in the foreground and write your final report." \
+     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <implId> "Finish what you were building and write your final report now." \
        --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" \
-       --output-format json --model sonnet < /dev/null > "$RUN/<TaskId>-r<N+1>.json"
+       --output-format json --model opus --effort high < /dev/null > "$RUN/<TaskId>-r<N+1>.json"
      ```
      A resume without the permission flags stalls at its first Bash call, exactly like
      the fork described in rule 3.
@@ -149,10 +169,11 @@ Builders are spawned and driven via the `claude` CLI, not the Agent tool:
      crashed: re-fork it (rule 4).
 
    **Second miss, then escalate.** If the resumed run is `unfinished` again, stop resuming:
-   run that lane's checks yourself (one per Bash call, through `dreamcontext builder
-   heavy`). Green: accept the on-disk work and write its report into the task log
-   yourself. Red: re-fork the lane once from the planner with the exact failures. A re-fork
-   that misses too → ESCALATE to the user with both outputs.
+   check its work yourself with ONE `dreamcontext builder test <slug> --wave N --related
+   <its owned files>`. Green: accept the on-disk work and write its report into the task log
+   yourself. Red: re-fork it once from the planner with the exact FAIL lines (in a lead run
+   the re-fork's brief is the current wave, and it replaces `impl` in the registry). A
+   re-fork that misses too → ESCALATE to the user with both outputs.
 
 **Fork base = the PLANNER session, never the orchestrator's own chat.** The
 orchestrator's Claude Code conversation is not CLI-resumable — builders always branch
@@ -204,25 +225,25 @@ of the goal rather than an existing diff:
 | Tier | Ceremony |
 |---|---|
 | **S** — trivial/small, single file or two | Skip plan review entirely. No dependency map. One serial implementer. |
-| **M** — moderate, several files, one clear owner per file | 1 plan-review lens. Dependency map only if more than one file-owning task exists. |
-| **L** — large, cross-cutting, or many files | 2–3 plan-review lenses in parallel. Full dependency map required. |
+| **M** — moderate, several files, one clear owner per file | 1 plan-review lens (critic). Dependency map only if more than one file-owning task exists. |
+| **L** — large, cross-cutting, or many files | 2 plan-review lenses in parallel: critic, plus security on a hot path or edge-cases otherwise. Full dependency map required. |
 
 **Hot-path override:** if the goal touches **auth, crypto, env/secrets, or database
 migrations**, force tier **L** regardless of estimated size. These surfaces don't get
 to skip rigor because the diff looked small.
 
-**Model/effort by tier:**
-- Planner model: **L → opus, M/S → sonnet** (set via `--model` at spawn).
-- Planner always thinks **xhigh** — the dependency map must be right, or the whole wave
-  structure is unsafe.
-- Implementers always think **high**.
+**Model and effort, every tier:** one identity for the whole builder lineage (mechanics
+rule 3): `--model opus --effort high`, passed explicitly on the planner's spawn and every
+resume and fork, so every fork reads the planner from the cache. High, not xhigh: measured
+on a builder lane, xhigh took 2.4x the wall time of medium for no better code, and high
+keeps the planner thinking hard enough for a safe dependency map.
 
 ## Orchestration flow
 
 ```mermaid
 flowchart TD
     P0[Phase 0 — one batched ask to the user] --> PT[Tier router: S / M / L, hot-path override]
-    PT --> P1[Phase 1 — goal-planner: FORK once, plan + dep map, xhigh]
+    PT --> P1[Phase 1 — goal-planner: spawn once, plan + dep map, opus at effort high]
     P1 --> P2{Phase 2 — plan-reviewers, clean, parallel: all SOLID?}
     P2 -->|new blocking findings| R1[RESUME planner with the delta]
     R1 --> P1
@@ -230,7 +251,7 @@ flowchart TD
     RF1 --> P1
     P2 -->|still stuck after re-fork, or valve at 8 rounds| ESC1[ESCALATE to user — do NOT proceed]
     P2 -->|all SOLID| P3[Phase 3 — persist plan + dep map + session registry as a dreamcontext task]
-    P3 --> P4[Phase 4 — implementers FORK per task, parallel waves, high, load-aware]
+    P3 --> P4[Phase 4 — implementers FORK from the planner: ONE for EXECUTION lead, one per lane for fan-out]
     P4 --> GATE{wave gate, orchestrator once: type-checks + the wave's tests}
     GATE -->|FAIL| R2[RESUME the owning implementer]
     R2 --> P4
@@ -243,7 +264,7 @@ flowchart TD
     P5 -->|FAIL, same findings repeat| RF2[re-fork the implementer fresh]
     RF2 --> P4
     P5 -->|still stuck, or valve at 8 rounds| ESC2[ESCALATE to user — do NOT proceed]
-    P5 -->|PASS| P6{Phase 6 — goal-validator, clean, evidence: PASS?}
+    P5 -->|PASS| P6{Phase 6 — validation by the agreed method: a command run once by you, or goal-validator for manual/browser: PASS?}
     P6 -->|FAIL| R4[RESUME the owning implementer]
     R4 --> P4
     P6 -->|PASS| DONE[Goal reached — validation passed, mark task completed + tell the user]
@@ -279,7 +300,7 @@ record that you chose it, and surface it for confirmation.
 
 Do any messy pre-fork exploration in throwaway `Explore` agents first — keep the
 planner's base lean. Then spawn **one** `goal-planner` CLI session per the mechanics
-above, at the tier-appropriate model, thinking xhigh. Give it the confirmed goal + the
+above, with the lineage's one identity (opus, effort high). Give it the confirmed goal + the
 relevant skills to load. Record its `session_id` in the Session registry.
 
 It returns a **file-by-file plan**; it does NOT write code or the task doc. A plan that
@@ -295,8 +316,13 @@ Safety rules the planner must apply when building the map:
   scheduled in the same wave.
 - **Contracts pinned.** Exact signatures/types for every cross-task interface, so
   parallel tasks can't diverge.
-- **Bounded.** Max ~3 concurrent implementers per wave. The map exists only for M/L
-  tiers — S is one serial implement, no map.
+- **The plan decides how it runs.** The map opens with `EXECUTION: lead` (the default: ONE
+  implementer builds the waves in order) or `EXECUTION: fan-out: <why>` (one implementer per
+  lane, in parallel), only for work one session cannot hold. Measured on blind-graded runs,
+  one builder with the plan matched parallel builders on quality at about 60% of their
+  cost. A reviewer flags a line that does not fit the work as Major.
+- **Lanes are the truly disjoint file groups** of a wave, with no fixed count. The map
+  exists only for M/L tiers — S is one serial implement, no map.
 - **Compiled artifacts marked.** A wave consumes the source of earlier waves, not their
   build output. When a task genuinely consumes a compiled artifact (it runs `dist/`, reads
   a generated manifest), its `depends on` cell says so explicitly, e.g.
@@ -306,18 +332,25 @@ Safety rules the planner must apply when building the map:
 ### Phase 2 — PLAN REVIEW (judges, clean, parallel)
 
 Dispatch `goal-plan-reviewer` Agent-tool subagents in parallel, in a single message,
-lens count per tier (S: skip this phase entirely; M: 1 lens; L: 2–3 lenses):
-- **pragmatist** — scope/YAGNI.
-- **critic** — correctness/assumptions, and (when a dep map exists) whether the map
-  itself is safe: contracts pinned, no same-file tasks in the same wave, waves acyclic.
-- **security** — only when the goal is hot-path (auth/crypto/env/migrations).
+lens count per tier (S: skip this phase entirely; M: 1 lens; L: 2 lenses):
+- **critic** — correctness/assumptions and scope, and (when a dep map exists) whether the
+  map itself is safe: contracts pinned, no same-file tasks in the same wave, waves acyclic,
+  a wave that could merge, an `EXECUTION:` line that fits the work. Every reviewed tier.
+- **security** — L tier on a hot path (auth, crypto, secrets, money, migrations, outbound
+  messages).
+- **edge-cases** — L tier otherwise: empty/null, concurrency, partial failure, retries,
+  rollback.
 
-Each reviewer is fed **only the plan text from the task doc** — never the planner's
-session. Each returns `SOLID | NEEDS_WORK` + blocking findings.
+Each reviewer is fed **only the plan text from the task doc**, and from round 2 its own
+previous findings word for word, so it can drop what the revision answers and repeat what
+is still open — never the planner's session. Each returns `SOLID | NEEDS_WORK` + blocking findings. **Only a Critical or Major
+finding blocks** (the reviewer's severity ladder): a Minor never costs a round, the planner
+folds it in on the next real revision if it is cheap.
 
 **Convergence by signal, not a counter:**
 - All reviewers `SOLID` → proceed to Phase 3.
-- **New** blocking findings → `--resume` the same planner session with the delta.
+- **New** blocking (Critical/Major) findings → `--resume` the same planner session with
+  the delta. No fixed round cap: a serious finding is never left open because rounds ran out.
 - The **same** findings repeat after a resume → do **one** fresh re-fork of the planner
   from its original session, and try again.
 - Still stuck after the re-fork → **ESCALATE to the user** with the unresolved
@@ -358,31 +391,37 @@ key=value` on create — `tasks create` hard-fails otherwise.
 doc <time>"`) — do this at every phase transition from here on, so the final report
 gets a timing breakdown for free.
 
-### Phase 4 — IMPLEMENT (builders, parallel waves, fork + resume)
+### Phase 4 — IMPLEMENT (builders, fork + resume, as the plan's EXECUTION line says)
 
-For each task in the current wave, fork an implementer from the **planner** session per
-the mechanics above (`--resume <plannerId> --fork-session`), at sonnet, thinking high.
-Capture each fork's `session_id` into the registry under `impl-<taskId>`. **Every
-implementer must load the engineering skill** — non-negotiable.
+The map's `EXECUTION:` line decides how the waves are built; you never re-decide it. A line
+that turns out not to fit the work is a broken plan: back to Phase 1/2, or escalate.
+
+- **`EXECUTION: lead`** (and every S tier): fork ONE implementer from the **planner** session
+  per the mechanics above (`--resume <plannerId> --fork-session`), registry key `impl`, with
+  wave 1 in its brief. After its wave gate is green, `--resume` the same session with the
+  next wave ("Build wave N: <criteria, files>", mechanics rule 3b). One builder carries the whole plan from wave
+  to wave: no handoff, no lane coordination.
+- **`EXECUTION: fan-out`**: fork one implementer per lane of the wave from the planner, every
+  lane at once on a quiet machine (load check below). Capture each fork's `session_id` into
+  the registry under `impl-<taskId>`.
+
+**Every implementer must load the engineering skill** — non-negotiable.
 
 **Builder brief — printed, filled, passed as a file.** Print the template with
 `dreamcontext goal-live recipe builder-brief`, fill its `<placeholders>` (the task id, the
-slug, the lane's owned files, its type-check and test commands), write it to
+slug, the files it owns: a lane's files, or in a lead run wave 1's files), write it to
 `$RUN/brief-<TaskId>.md` and fork with `"$(cat "$RUN/brief-<TaskId>.md")"` (mechanics rule
 3). Never retype it: it ships with the CLI, so it matches this install, and a retyped brief
 is how the 2026-10-04 builders were told to scope their checks and still ran the full
 suite. Its rules, in short:
 
-- **Foreground only, never end early.** Every check in the foreground with a timeout under
-  600000 ms, one check per Bash call; no `run_in_background`, `&`, `nohup` or Monitor wait;
-  the turn never ends while a check runs. A timed-out check gets a narrower scope.
-- **The lane's checks only**: the tests it wrote or changed, the existing tests of the
-  modules it touched, and the type-check of each package it touched. Never the full suite,
-  a build, integration tests that need compiled output, or a generator script.
-- **Through the heavy lock**: every type-check and test run goes through
-  `dreamcontext builder heavy -- <command>`, test runners with at most 2 workers. Builders
-  of one repo take turns on the type-checker instead of running three at once; exit 75 =
-  the lock stayed busy, nothing ran, run it again.
+- **Write the tests, run none of them**: no test runner, no type-check, no build. You run
+  ONE check for the whole wave (the wave gate) and resume the owner with exactly what
+  failed. Measured 2026-10-11: checks were 40% of a builder's active time (median 19 runs
+  each, all through one repo-wide lock).
+- **Nothing in the background, never end the turn "waiting"**: no `run_in_background`, `&`,
+  `nohup` or Monitor wait. A `-p` session ends with its turn; nothing it backgrounds reports.
+- **Outside its files = reported, never fixed.**
 - **The sentinel**: the final message opens with `## <TaskId> report`.
 
 **Load check before every wave**, and before the final gate:
@@ -396,11 +435,11 @@ surprises) and kills, listing each, the type-checkers and test runners of this r
 parent is gone: what a builder's backgrounded check leaves behind when its session exits.
 On 2026-10-04 three builders plus other sessions pushed the load to 50–107 on 8 cores: one
 CLI call went from 0.3 s to 20 s and an integration suite that is 42/42 on a quiet machine
-went red on 29 timeouts. `busy` = run the wave with **1–2 builders instead of 3**; the rest
-of the wave starts as those finish.
+went red on 29 timeouts. `quiet` = start every lane of a fan-out wave at once (a builder that
+runs no checks costs the machine little). `busy` = **2 builders at a time**; the rest of the
+wave starts as those finish.
 
 Wave execution rules (mirrors the dependency map exactly):
-- **Max 3 concurrent implementers**, 1–2 when the load check says the machine is busy.
 - Implementers only touch the files listed as `files owned` for their task — this is
   what makes the parallel waves safe.
 - **Report ≠ work.** When a builder exits, first the sentinel (mechanics rule 6), then
@@ -408,20 +447,30 @@ Wave execution rules (mirrors the dependency map exactly):
   rule 5). Empty diff + confident report = the fork stalled or drifted; resume/re-fork
   before anything else.
 - **Wave gate = the type-checks + this wave's tests, run once by you.** After every
-  builder of the wave has reported, run the type-checks (root, plus every other package
-  the wave touched) and the test files the wave's lanes own or affect, one per Bash call,
-  each through `dreamcontext builder heavy`. You run it once, not each builder. A gate
-  FAIL routes back to `--resume` on the **specific owning implementer** for that file —
-  not a broader re-implement.
+  builder of the wave has reported, ONE call:
+  ```bash
+  dreamcontext builder test <slug> --wave N --related <every path the wave changed> --also <tests that read a changed file by path>
+  ```
+  It type-checks each package the wave touched and runs the tests that import the changes,
+  through the heavy lock, and prints `FAIL: <key>` per failure (exit 0 green, 1 failures,
+  75 = nothing ran, run it again). You run it once, never each builder. A FAIL routes back
+  to `--resume` (mechanics rule 3b) on the **specific owning implementer** (in a lead run,
+  the one implementer) with exactly its FAIL lines — not a broader re-implement — then
+  `builder test <slug> --wave N --failed --related <files the fix changed>`. A key marked
+  `FAILED 2x` after a second fix → escalate.
 - **Heavy steps run once, at the final gate**, after the last wave and before Phase 5:
   the full unit suite, `build` / `build:cli`, the integration suite, `gen:*` scripts
   (e.g. `gen:cli-manifest`) and browser verification. A later wave works from source, so
   a wave gate does not need them. The one exception: a task whose `depends on` cell the
   planner marked with a compiled artifact (`+ build:cli`) gets that build pulled forward
   into the gate of the wave before it.
-- **Never twice.** A heavy step the task's `Validation method:` already runs (an
-  autonomous run's default is the test suite plus a build) is left to the Phase 6
-  validator; the final gate runs only the rest.
+- **Never twice.** The final gate runs every heavy step the change needs, in dependency
+  order: the build first whenever integration tests or a browser check need compiled
+  output. Phase 6 then never re-runs a step the final gate already ran on the same tree: a
+  command validation method the final gate covered is cited from the final gate's logged
+  command and output (the tree has not changed since). Only a step the final gate did not
+  run is run at Phase 6. A manual or browser validation method is not a final-gate step:
+  the validator owns it, so the final gate skips it.
 - **Run the final gate on a quiet machine, but not forever.** `dreamcontext builder load
   --reap` until it says `quiet`, checking every ~60 s for at most 15 minutes. Still
   `busy` after that: run it anyway, through the heavy lock with at most 2 test workers,
@@ -432,10 +481,10 @@ Wave execution rules (mirrors the dependency map exactly):
   progress and status back to you; they never edit the map or registry directly, and
   never write to the task doc concurrently with each other.
 - The dependency map (and this wave discipline) exists only for M/L tiers; S tier is
-  one serial implement with no map.
+  one implementer with no map, gated once like a single wave.
 
-On a re-implement after a FAIL, `--resume` the owning implementer's session with the
-**specific** failure — don't churn unrelated code, and don't re-explain what it already
+On a re-implement after a FAIL, `--resume` the owning implementer's session (mechanics rule
+3b) with the **specific** failure — don't churn unrelated code, and don't re-explain what it already
 knows from its own context.
 
 Log a phase timestamp at the start and end of each wave.
@@ -449,24 +498,34 @@ not paste a raw diff into its prompt.
 
 **Convergence by signal:**
 - `PASS` → proceed to Phase 6.
-- **New** findings → `--resume` the specific owning implementer with the failure.
+- **New** findings → `--resume` the specific owning implementer with the failure
+  (mechanics rule 3b).
 - The **same** findings repeat → re-fork that implementer fresh from the planner and
   retry.
 - Still stuck → **ESCALATE to the user** with the unresolved findings.
 - **Safety valve: 8 rounds.** Spend protection only, same as Phase 2 — never a
   "proceed anyway" signal.
 
-### Phase 6 — VALIDATE (judge, clean, evidence — the real gate)
+### Phase 6 — VALIDATE (evidence by the agreed method — the real gate)
 
 Run `dreamcontext builder load --reap` first and dispatch on `quiet` (the same bounded
-wait as the final gate): the validator runs the heavy steps the final gate left to it.
-Dispatch **one** `goal-validator` (opus, clean context). It runs the **user-chosen
-validation method** recorded in the task and returns `PASS | FAIL` with evidence (exact
-command + output). A FAIL that is a timeout under a `busy` load line is re-run on a quiet
-machine before it is routed to anyone.
+wait as the final gate): validation runs the heavy steps the final gate left to it. Then
+the **user-chosen validation method** recorded in the task decides who validates:
+- **A command** (a test suite, a build, a script): run it yourself, ONCE, through
+  `dreamcontext builder heavy --`, and log the exact command and its output; when the final
+  gate already ran it on this same tree, cite that logged run instead of running it again. The command's
+  real output IS the evidence; a judge re-running it adds nothing (measured: the validator
+  agent found 0 product bugs in 35 runs).
+- **Manual, or Browser (jev-verify)**: dispatch **one** `goal-validator` (opus, clean
+  context). It drives the real app, proves the result with screenshots and a video of the
+  flow, and returns `PASS | FAIL` with evidence.
+
+A FAIL that is a timeout under a `busy` load line is re-run on a quiet machine before it is
+routed to anyone.
 
 - **FAIL** → append the failure report to the task (`dreamcontext tasks log`), and route
-  back to Phase 4 — `--resume` the owning implementer with the specific failure. Loop
+  back to Phase 4 — `--resume` the owning implementer with the specific failure (mechanics
+  rule 3b). Loop
   IMPLEMENT → REVIEW → VALIDATE until validation PASSES.
 - **PASS** → the goal is reached. Close it:
   `dreamcontext tasks status <slug> completed "all criteria met; validation passed via
@@ -501,27 +560,27 @@ standalone goal-live step is bookkeeping the user has to read past in the team l
 
 ```bash
 # Run start (right after the goal is confirmed): the file, the plan phase, the planner, in one step
-dreamcontext goal-live start --goal <slug> && dreamcontext goal-live phase plan && dreamcontext goal-live actor planner --kind spawn --session <plannerId> && claude -p "<goal + context>" --session-id <plannerId> --output-format json --model <tier-model> < /dev/null
+dreamcontext goal-live start --goal <slug> && dreamcontext goal-live phase plan && dreamcontext goal-live actor planner --kind spawn --session <plannerId> && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p "<goal + context>" --session-id <plannerId> --output-format json --model opus --effort high < /dev/null
 ```
 
 ```bash
 # Planner revision round N: the planner picks up where it left off
-dreamcontext goal-live phase plan && dreamcontext goal-live actor planner --kind resume --round N --session <plannerId> && claude -p --resume <plannerId> "<the delta>" --output-format json < /dev/null
+dreamcontext goal-live phase plan && dreamcontext goal-live actor planner --kind resume --round N --session <plannerId> && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> "<the delta>" --output-format json --model opus --effort high < /dev/null
 ```
 
 ```bash
 # first call of the dispatch message: plan review round N, then the goal-plan-reviewer Agent calls
-dreamcontext goal-live phase review && dreamcontext goal-live actor critic,pragmatist,edge-cases --kind fresh --round N
+dreamcontext goal-live phase review && dreamcontext goal-live actor critic,edge-cases --kind fresh --round N
 ```
 
 ```bash
 # Verdicts ride on the next real step (here: the planner revision it triggers)
-dreamcontext goal-live state critic=NEEDS_WORK pragmatist=SOLID edge-cases=SOLID && claude -p --resume <plannerId> "<the delta>" --output-format json < /dev/null
+dreamcontext goal-live state critic=NEEDS_WORK edge-cases=SOLID && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> "<the delta>" --output-format json --model opus --effort high < /dev/null
 ```
 
 ```bash
 # Implementer forks: one actor call per lane (a --session names ONE run), each lane its own minted id
-dreamcontext goal-live phase impl --wave 1 --waves 3 && dreamcontext goal-live actor "T1=Role registry" --role implementer --kind fork --from planner --context-of <plannerId> --session <T1Id> && dreamcontext goal-live actor "T2=Tokens" --role implementer --kind fork --from planner --context-of <plannerId> --session <T2Id> && (CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> --fork-session --session-id <T1Id> "$(cat "$RUN/brief-T1.md")" --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" --output-format json --model sonnet < /dev/null > "$RUN/T1-r1.json" & CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> --fork-session --session-id <T2Id> "$(cat "$RUN/brief-T2.md")" --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" --output-format json --model sonnet < /dev/null > "$RUN/T2-r1.json" & wait)
+dreamcontext goal-live phase impl --wave 1 --waves 3 && dreamcontext goal-live actor "T1=Role registry" --role implementer --kind fork --from planner --context-of <plannerId> --session <T1Id> && dreamcontext goal-live actor "T2=Tokens" --role implementer --kind fork --from planner --context-of <plannerId> --session <T2Id> && (CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> --fork-session --session-id <T1Id> "$(cat "$RUN/brief-T1.md")" --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" --output-format json --model opus --effort high < /dev/null > "$RUN/T1-r1.json" & CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude -p --resume <plannerId> --fork-session --session-id <T2Id> "$(cat "$RUN/brief-T2.md")" --permission-mode acceptEdits --allowedTools "Write" "Edit" "Bash" --output-format json --model opus --effort high < /dev/null > "$RUN/T2-r1.json" & wait)
 ```
 
 ```bash
@@ -571,8 +630,9 @@ dreamcontext goal-live start --goal <slug> [--mode goal|develop]
 dreamcontext goal-live phase <plan|review|task|impl|codereview|validate|done> [--wave N] [--waves N]
 dreamcontext goal-live actor <id[=name],…> --kind <spawn|fork|resume|fresh> [--role <role>] [--from <id>] [--round N] [--context-of <sessionId>] [--session <uuid>] [--wave N]
 dreamcontext goal-live state <id=word> [<id=word> …] [--wave N]
-dreamcontext goal-live recipe develop|builder-brief
+dreamcontext goal-live recipe develop|fan-out|builder-brief
 dreamcontext builder load [--reap] | heavy [--max-wait <s>] -- <cmd> | report <file> <TaskId>
+dreamcontext builder test <slug> --wave N|final [--related <paths>] [--also <tests>] [--failed]
 dreamcontext goal-live clear
 ```
 
@@ -589,12 +649,14 @@ dreamcontext goal-live clear
 - `clear` is for escalation and abort only, never for the success path.
 - `recipe builder-brief` prints the brief every implementer is forked with (Phase 4). `builder`
   is not telemetry: `heavy` and `report` exit non-zero on purpose (see Phase 4 and mechanics rule 6).
-- `--mode develop`, `--wave` and `recipe develop` belong to **Develop mode chats**, not to
-  this orchestrator. A Develop run writes the same file with `mode: develop`: builders per
-  wave (`w<N>-<lane>`, `--wave N`), a clean reviewer after EVERY wave (`w<N>-reviewer`,
-  its verdict credited to that wave), a validator at the end, and `start` adopts the run on a
-  reopen or handoff instead of wiping it. `recipe develop` prints that procedure. This pack's
-  own flow is unchanged: its Phase 5 still reviews once, after the last wave.
+- `--mode develop`, `--wave` and `recipe develop|fan-out` belong to **Develop mode chats**,
+  not to this orchestrator. A Develop run writes the same file with `mode: develop`: the
+  chat's lead builds each wave itself (`--wave N`) and checks it with `builder test`, ONE
+  clean reviewer judges the whole change at the end, and a validator runs only on the
+  owner's request; a plan marked `EXECUTION: fan-out` runs builders per lane
+  (`w<N>-<lane>`) by `recipe fan-out`. `start` adopts the run on a reopen or handoff instead
+  of wiping it. This pack follows the same evidence: the plan's `EXECUTION:` line, builders
+  that run no checks, one review at Phase 5.
 
 ### What the file holds (schema reference)
 
@@ -642,7 +704,8 @@ Standalone viewer and demo:
 ## Convergence rules (how the loops end)
 
 - **Loops converge on a signal, never a fixed round count.** All judges SOLID/PASS →
-  proceed. New blocking findings → resume the builder with the delta. The same findings
+  proceed. Only a Critical or Major finding is blocking; a Minor never costs a round. New
+  blocking findings → resume the builder with the delta. The same findings
   repeating after a resume → one fresh re-fork, then retry. Still stuck after the
   re-fork → escalate.
 - The **safety valve is 8 rounds**, and it exists purely to protect spend — hitting it
@@ -657,7 +720,8 @@ Standalone viewer and demo:
 | Thought | Reality |
 |---|---|
 | "The plan looks fine, I'll skip plan review." | Plan review is mandatory for M/L tiers. You are not the reviewer. Dispatch them. |
-| "One reviewer flagged a minor thing — close enough, proceed." | Not all-SOLID = NEEDS_WORK. Resume, re-fork, or escalate — never skip. |
+| "The reviewer said NEEDS_WORK, but its finding looks minor to me — proceed." | NEEDS_WORK carries a Critical or Major by the reviewer's ladder, and the verdict is the reviewer's. Resume, re-fork, or escalate — never skip. (Minors alone come back SOLID: that is when you proceed.) |
+| "The plan says lead, but parallel lanes would be faster." | The plan's `EXECUTION:` line decides. Measured on 2-3-lane work, parallel builders were slower and dearer for the same quality. A line that does not fit is a plan fix, not your call. |
 | "I'll just implement it myself, dispatching is overhead." | The orchestrator never writes production code. Fork an implementer. |
 | "Validation is flaky, I'll mark it passed." | A flaky or skipped validation is a FAIL. No PASS without evidence. |
 | "I'll let the implementer review its own work." | Self-review is not review. Use the clean-context `reviewer`. |
@@ -669,7 +733,7 @@ Standalone viewer and demo:
 | "I'll mark it complete because I *think* it's done." | Done is defined by Phase 6 validation passing with evidence — not by your hunch. |
 | "The implementer's report says it built everything — on to review." | Reports lie when forks stall (permission gate) or drift (role-binding). `git status` its owned files first; empty diff = nothing happened. |
 | "The builder exited with `success`, so it's done." / "It's been 30 minutes, it must be hung." | `success` only means the turn ended. Ask `dreamcontext builder report`: `unfinished` = it ended with a check in flight or without its report. Resume it once, with the fork's permission flags. |
-| "Let every builder run the full suite, more coverage is safer." | Three full suites at once choke the machine and turn green tests red on timeouts. Builders run their lane's checks through `dreamcontext builder heavy`, one at a time; you run the heavy steps once, at the final gate. |
+| "Let each builder run its own tests, more coverage is safer." | Builder check loops were 40% of builder time, and three suites at once turned green tests red on timeouts. Builders write tests and run none; you run ONE `builder test` per wave and the heavy steps once, at the final gate. |
 | "The integration suite is red, route it to the implementer." | Check the load first (`dreamcontext builder load`). A timeout red under load is the machine, not the code: record the load line, wait for `quiet` (at most 15 min), re-run. |
 
 ## Rationalization table
@@ -696,7 +760,8 @@ Standalone viewer and demo:
 - **`complete` only after Phase 6 PASS** — validation passing with evidence is the
   definition of done; never complete on a hunch, and never before validation.
 - **Tell `reviewer` to run `git diff` itself**; don't paste diffs into prompts.
-- **Convergence is by signal, not a fixed round count.** New findings → resume;
+- **Convergence is by signal, not a fixed round count**, and only Critical/Major findings
+  block. New findings → resume;
   repeated → one re-fork → escalate. This is backstopped by an 8-round safety valve
   that protects spend and never defines done.
 - **Same file → same lane.** Wave-parallel implementers never share a file.
@@ -704,13 +769,16 @@ Standalone viewer and demo:
   type-checks + the wave's tests, run once by the orchestrator, never by each builder.
 - **Heavy steps run once, at the final gate** (full suite, `build` / `build:cli`,
   integration, `gen:*`, browser), on a quiet machine (`dreamcontext builder load`, bounded
-  wait), and never a second time when the validation method already runs them. Only a
+  wait), the build before anything that needs compiled output, and never a second time:
+  Phase 6 cites the final gate's run of a step the validation method names. Only a
   `depends on` cell marked with a compiled artifact pulls a build forward.
 - **Builders run with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, from a printed brief
-  (`goal-live recipe builder-brief`), their checks through `dreamcontext builder heavy`,
-  and end on `## <TaskId> report`.** `dreamcontext builder report` not `reported` = one
-  resume with the fork's flags; a second miss = you run the lane's checks, then re-fork
-  once, then escalate.
+  (`goal-live recipe builder-brief`), on the lineage's one identity (`--model opus --effort
+  high`, mechanics rule 3), write their tests and run no checks, and end on `## <TaskId> report`.** `dreamcontext builder report` not
+  `reported` = one resume with the fork's flags; a second miss = one `builder test` on its
+  files, then re-fork once, then escalate.
+- **The plan's `EXECUTION:` line decides**: `lead` = ONE implementer builds the waves in
+  order, `fan-out` = one per lane. Lanes are disjoint file groups, no fixed count.
 - **Every implementer loads the engineering skill.** Non-negotiable.
 - **Feature goals end with integration wiring.** When the goal ships a new feature/subsystem, the plan and the final wave MUST apply the project's `knowledge/patterns/feature-integration-pattern.md` checklist (skill docs, Entity Router, reference section, sleep docs, sub-agent contracts, skill-pack scan) — a feature the skill doesn't describe is invisible to future sessions.
 - **Use the `dreamcontext` skill** throughout — the task doc is the source of truth.

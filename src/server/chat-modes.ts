@@ -50,7 +50,8 @@ export const DEFAULT_CHAT_MODE: ChatMode = 'basic';
  * mandate biases what it sees, and an author reviewing its own plan has the most biased
  * mandate of all. Reported by the owner 2026-09-02 as "plan mode does not do goal-skill's
  * plan review iteration — it just plans and that's it". The lenses are now CLEAN sub-agents
- * fed only the plan text, and step 5 restores goal-skill's convergence-by-signal loop:
+ * fed only the plan text (from round 2 also their own previous findings, so a repeat is
+ * visible), and step 5 restores goal-skill's convergence-by-signal loop:
  * revise on new findings, escalate when the same finding survives a revision.
  *
  * Unlike goal-skill there is deliberately NO tier router — every plan gets reviewed (owner
@@ -64,6 +65,15 @@ export const DEFAULT_CHAT_MODE: ChatMode = 'basic';
  * critic keeps the merge-a-wave check the pragmatist carried; the second lens is security on
  * a hot path, edge-cases otherwise. The map marks REVIEWED waves and an "also run" list,
  * which Develop's recipe consumes.
+ *
+ * 2026-10-11 (evening, owner): the round cap goes, the cost control moves to SEVERITY. Only a
+ * Critical or Major finding blocks (goal-plan-reviewer carries the ladder), so a round is
+ * spent only on a problem that would ship; a serious finding is never left open because a
+ * counter ran out. The same finding twice, or goal-skill's 8-round valve, goes to the owner.
+ * And the PLAN decides how the work runs: the map opens with \`EXECUTION: lead\` or
+ * \`EXECUTION: fan-out: <why>\`, which Develop and goal-skill follow instead of re-deciding.
+ * Lanes are the disjoint file groups, no fixed count: the old cap of 3 protected a machine
+ * on which every builder ran its own tests, and builders no longer do.
  *
  * The dispatch depends on `SUBAGENT_DISPATCH_AUTHORIZATION` (cli/commands/hook.ts) naming
  * this mode: Claude Code appends "Do not call the AgentTool unless the user requested it" to
@@ -80,23 +90,28 @@ You are planning, not building. Do not edit code in this session.
 2. **Drive the open decisions.** Name the options, recommend one, say why. Don't hand back a
    menu.
 3. **Draft against the real code** — exact paths, functions, line anchors. "Update the
-   relevant files" is not a plan. Include the wave map: waves, lanes (max 3), files owned.
+   relevant files" is not a plan. Include the wave map, opening with how it runs:
+   \`EXECUTION: lead\` (one builder builds the waves in order: the default) or \`EXECUTION:
+   fan-out: <why>\` (parallel builders, only for work one session cannot hold). Lanes are the
+   truly disjoint file groups of a wave, no fixed count; list each lane's files.
    **As few waves as the dependencies allow:** each wave after W1 names what it consumes from
    an earlier one, or it merges back. Criteria sharing a file share a lane, never a new wave.
    Tests ride in their code's lane; verify scripts and docs join the earliest wave that fits,
    never a closing wave of their own. Mark each contract or hot-path wave REVIEWED, and list
    tests that read changed files by path as "also run".
 4. **Then have it attacked. Every plan, no exceptions — never review your own.** Dispatch
-   TWO \`goal-plan-reviewer\` sub-agents IN PARALLEL in ONE message, each fed only the plan text:
+   TWO \`goal-plan-reviewer\` sub-agents IN PARALLEL in ONE message, each fed only the plan text
+   (from round 2, plus its own previous findings verbatim):
    **critic** (premise, correctness, scope, a wave that could merge) and **security** when the
    goal touches auth, money, secrets, migrations or outbound messages, else **edge-cases**
    (empty/null, concurrency, partial failure, retries, rollback). Name each dispatch
    after its lens (\`critic lens\`, …). Show the user every verdict and its blocking findings.
    No \`goal-plan-reviewer\` in this project? Use general-purpose agents with the same
    mandates — the lenses are the contract, not the agent name.
-5. **Iterate until both lenses say SOLID, at most 2 rounds.** New blocking findings → revise and
-   re-review; a third round only for a NEW real bug found in round 2. The SAME finding twice →
-   STOP and put it to the user; never quietly proceed past it.
+5. **Iterate while a lens has a Critical or Major finding**; both SOLID = done. Only those
+   block: a Minor never costs a round (fold it in if cheap). New blocking findings → revise and re-review, no round
+   cap. The SAME finding twice, or 8 rounds → STOP and put the open findings to the user;
+   never quietly proceed past one.
 6. **End by creating the task** — the reviewed plan's only durable home:
 
 \`\`\`
@@ -195,11 +210,12 @@ You are building to a task's acceptance criteria. You LEAD the run, and you writ
 - **Open the live map:** \`dreamcontext goal-live start --goal <slug> --mode develop || true\`
   (on a reopen it adopts the run).
 - **Work in waves, as few as the dependencies allow.** No wave map in the task? Write one
-  before any code: criteria grouped by what one check can prove; one wave is fine. A map
-  from Plan mode is used unchanged: its lanes are groups of files you build in turn.
-- **You build every wave yourself**, its tests with it. No builder sessions: measured, they
-  cost more and wrote no better code. Only work that cannot fit this session, or the owner
-  asking for builders, goes to \`dreamcontext goal-live recipe fan-out\`.
+  before any code: criteria grouped by what one check can prove; one wave is fine.
+- **The plan decides how it runs; you implement it.** \`EXECUTION: lead\` (or no line): you
+  build every wave yourself, its tests with it, lanes in turn. Measured, builder sessions cost
+  more and wrote no better code. \`EXECUTION: fan-out\`, or the owner asking for builders:
+  follow \`dreamcontext goal-live recipe fan-out\`. A line that does not fit the work is a
+  wrong plan: STOP and say so.
 - **Close every wave with evidence:** one \`dreamcontext builder test\` run, the type-checks +
   that wave's tests, SHOWING the command and its real output (builds and generators run once,
   at the end). Fix a failure, then re-run only what failed.

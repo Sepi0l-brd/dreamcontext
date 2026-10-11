@@ -35,9 +35,13 @@ describe('develop: the lead builds, checks each wave, and ONE clean reviewer jud
     expect(D).not.toMatch(/dreamcontext builder (?:base|fork|spawn|resume|wait)\b/);
     expect(D).not.toMatch(/claude -p/);
     const optIn = dSection('## 5.', '## 6.');
-    expect(optIn).toMatch(/only\s+when the work cannot fit this session/);
-    expect(optIn).toMatch(/`dreamcontext goal-live recipe\s+fan-out`/);
-    expect(optIn).toMatch(/tell the owner once why/);
+    // 2026-10-11 evening: the PLAN's EXECUTION line (or the owner) sends a run to fan-out,
+    // never the lead's own judgment mid-run.
+    expect(optIn).toMatch(/the plan's map says `EXECUTION: fan-out`/);
+    expect(optIn).toMatch(/or when the owner asks for builders/);
+    expect(optIn).toMatch(/`dreamcontext goal-live recipe fan-out`/);
+    expect(optIn).toMatch(/You\s+do not switch on your own mid-run/);
+    expect(optIn).toMatch(/wrong plan, so STOP and say so/);
   });
 
   it('never ends its turn on a running judge, and never stops between waves to ask', () => {
@@ -55,9 +59,12 @@ describe('develop: the lead builds, checks each wave, and ONE clean reviewer jud
     expect(D).toMatch(/A path you did not change is another session's work/);
   });
 
-  it('a Plan-mode map is used unchanged, its lanes built one after another', () => {
+  it('a Plan-mode map is used unchanged; its EXECUTION line picks this recipe or fan-out', () => {
     const map = dSection('## 1.', '## 2.');
-    expect(map).toMatch(/A map from Plan mode is used unchanged: its lanes are groups of files to you/);
+    expect(map).toMatch(/The plan decides how the run goes, and a map from Plan mode is used unchanged/);
+    expect(map).toMatch(/`EXECUTION: lead` \(or there is none\): this recipe, its lanes built one after another/);
+    expect(map).toMatch(/`EXECUTION: fan-out`: section 5/);
+    expect(map).toContain('WAVE MAP: EXECUTION: lead | W1');
     expect(map).toMatch(/as FEW waves as the\s+dependencies allow, and one wave is fine/);
     expect(map).toMatch(/never in\s+a test wave/);
   });
@@ -381,10 +388,18 @@ describe('reopen and the wave map (R8, R10)', () => {
     expect(R).toMatch(/never re-validate an unreviewed fix/);
   });
 
-  it('the wave map: max 3 lanes, disjoint files, a Plan-mode map used unchanged', () => {
-    expect(R).toMatch(/at most 3 lanes a wave/);
+  it('the wave map: lanes are the disjoint file groups (no fixed count), a Plan-mode map used unchanged', () => {
+    expect(R).toMatch(/lanes are its truly disjoint file groups, with no\s+fixed count/);
+    expect(R).not.toMatch(/at most 3 lanes/);
     expect(R).toMatch(/DISJOINT files/);
     expect(R).toMatch(/used unchanged/);
+    expect(R).toMatch(/sent you here: the plan's map says `EXECUTION: fan-out`, or the owner asked for builders/);
+  });
+
+  it('a quiet machine starts every lane of a wave at once, a busy one 2 at a time', () => {
+    const start = section('### 2c.', '### 2d.');
+    expect(start).toMatch(/`quiet` = start every lane of the wave at once/);
+    expect(start).toMatch(/`busy` \(1-min load above the core count\) = 2 lanes at a time this wave/);
   });
 
   it('the wave map has as few waves as the dependencies allow', () => {

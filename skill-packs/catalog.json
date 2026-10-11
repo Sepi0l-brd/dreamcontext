@@ -224,7 +224,7 @@
     },
     {
       "name": "goal-skill",
-      "description": "Load when the user wants to drive a non-trivial goal to completion under sub-agent orchestration, or invokes /goal-skill. Triggers: 'drive this goal to completion', 'subagent-driven development', 'SDD', 'orchestrate this build', 'run this end-to-end with reviewers'. For multi-step features/fixes too large or risky for a single straight-line pass. v2: CLI builder sessions fork once and resume per round, clean fresh judges, a tier router (S/M/L) scales ceremony, and dependency-map waves parallelize implementation.",
+      "description": "Load when the user wants to drive a non-trivial goal to completion under sub-agent orchestration, or invokes /goal-skill. Triggers: 'drive this goal to completion', 'subagent-driven development', 'SDD', 'orchestrate this build', 'run this end-to-end with reviewers'. For multi-step features/fixes too large or risky for a single straight-line pass. v2: CLI builder sessions fork once and resume per round, clean fresh judges, a tier router (S/M/L) scales ceremony, and the plan's EXECUTION line picks one implementer building the waves in order (the default) or one per lane in parallel.",
       "tags": [
         "goal",
         "orchestration",
@@ -449,7 +449,7 @@
         "security",
         "quality"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "discover-brand",
@@ -557,7 +557,7 @@
         "secrets",
         "auth"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "review-cloud-functions",
@@ -571,7 +571,7 @@
         "serverless",
         "idempotency"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "review-frontend",
@@ -585,7 +585,7 @@
         "a11y",
         "design-tokens"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "review-edge-cases",
@@ -599,7 +599,7 @@
         "concurrency",
         "production-risk"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "biv-researcher",
@@ -689,7 +689,7 @@
       "name": "goal-planner",
       "file": "agents/goal-planner.md",
       "pack": "goal-skill",
-      "description": "Planning specialist for goal-skill. Runs as a CLI builder session (fork once, resume per revision round) and produces a rigorous file-by-file plan plus a dependency-map table (task/files owned/depends on/wave/contract) by reading the codebase + dreamcontext context, thinking xhigh. Does not write code or the task doc. Dispatched at Phase 1.",
+      "description": "Planning specialist for goal-skill. Runs as a CLI builder session (fork once, resume per revision round) and produces a rigorous file-by-file plan plus a dependency-map table (task/files owned/depends on/wave/contract) that opens with the EXECUTION line (lead or fan-out), by reading the codebase + dreamcontext context, on the lineage's one identity (opus, effort high). Does not write code or the task doc. Dispatched at Phase 1.",
       "tags": [
         "goal",
         "planning",
@@ -702,40 +702,40 @@
       "name": "goal-plan-reviewer",
       "file": "agents/goal-plan-reviewer.md",
       "pack": "goal-skill",
-      "description": "Plan reviewer for goal-skill. Dispatched clean and fresh every round, fed only the plan text from the task doc (never the planner's session), and critiques it from one lens (pragmatist/critic/security), returning SOLID or NEEDS_WORK with blocking findings. Distinct from the code reviewer. Dispatched in parallel at Phase 2.",
+      "description": "Plan reviewer for goal-skill. Dispatched clean and fresh every round, fed only the plan text from the task doc and, from round 2, its own previous findings (never the planner's session), and critiques it from one lens (critic/security/edge-cases), returning SOLID or NEEDS_WORK; only Critical or Major findings block. Distinct from the code reviewer. Dispatched in parallel at Phase 2.",
       "tags": [
         "goal",
         "plan-review",
         "sdd",
         "sub-agent"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "goal-implementer",
       "file": "agents/goal-implementer.md",
       "pack": "goal-skill",
-      "description": "Implementation specialist for goal-skill. Forked from the planner's CLI session for exactly one task/lane of the dependency map, thinking high; builds strictly to that lane's owned files and the validated task's acceptance criteria, logs progress, does not expand scope or edit the dependency map, and stops+reports if the plan is wrong. Dispatched per wave at Phase 4 (fork once, resume per fix).",
+      "description": "Implementation specialist for goal-skill. Forked from the planner's CLI session on the planner's model for one lane of the dependency map, or for every wave in turn when the plan says EXECUTION: lead; writes its tests and runs no checks; builds strictly to its owned files and the validated task's acceptance criteria, logs progress, does not expand scope or edit the dependency map, and stops+reports if the plan is wrong. Dispatched per wave at Phase 4 (fork once, resume per fix).",
       "tags": [
         "goal",
         "implementation",
         "sdd",
         "sub-agent"
       ],
-      "model": "sonnet"
+      "model": "opus"
     },
     {
       "name": "goal-validator",
       "file": "agents/goal-validator.md",
       "pack": "goal-skill",
-      "description": "Validation specialist for goal-skill. Runs the user-chosen validation method (unit/integration tests or manual checklist) and returns PASS or FAIL with evidence. Does not fix code. Dispatched at Phase 6.",
+      "description": "Validation specialist for goal-skill. Proves a manual or browser validation method in the real app with screenshots and a video and returns PASS or FAIL with evidence (a command method is run by the orchestrator itself). Does not fix code. Dispatched at Phase 6.",
       "tags": [
         "goal",
         "validation",
         "testing",
         "sub-agent"
       ],
-      "model": "sonnet"
+      "model": "opus"
     }
   ]
 }
