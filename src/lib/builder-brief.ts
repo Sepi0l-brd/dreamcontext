@@ -1,6 +1,6 @@
 /**
- * The brief every headless builder gets, printed by `dreamcontext goal-live recipe
- * builder-brief` and shared with Develop's own builder brief (develop-recipe.ts).
+ * The brief every headless goal-skill builder gets, printed by `dreamcontext goal-live recipe
+ * builder-brief`. Develop's builders get {@link DEVELOP_BUILDER_RULES} instead (develop-recipe.ts).
  *
  * A `claude -p` builder forked by goal-skill never loads the goal-implementer agent file: the
  * prompt it is forked with is everything it sees. So the check rules live HERE, printed from
@@ -29,6 +29,21 @@ background ever reports back:
    workers: \`dreamcontext builder heavy -- <command>\` (e.g. \`dreamcontext builder heavy --
    npx vitest run --maxWorkers=2 <files>\`). It runs one heavy check at a time across every
    builder of this repo. Exit 75 means the lock stayed busy and NOTHING ran: run it again.`;
+
+/**
+ * How a Develop builder treats checks: it writes its lane's tests and runs none of them. The
+ * lead runs one type-check + related-tests pass per wave (`dreamcontext builder test`) and
+ * resumes the owning builder with exactly the failures. Measured 2026-10-11: checks were 40% of
+ * a builder's active time (median 19 runs, p90 129, all through one repo-wide lock), and a
+ * builder that never type-checks costs one resume at most. goal-skill keeps
+ * {@link BUILDER_CHECK_RULES} until its own alignment run.
+ */
+export const DEVELOP_BUILDER_RULES = `Checks are not yours. Write the tests for the code you write, in the files you own, and run
+none of them: no test runner, no type-check, no build, no dev server. The lead runs one
+type-check and test pass for the whole wave and resumes you with exactly what failed, if
+anything did. Never put anything in the background (no run_in_background, no &, no nohup) and
+never end your turn "waiting" for something: this session ends with your turn. Something
+broken or missing outside your files is reported, never fixed.`;
 
 /** goal-skill's builder brief. The orchestrator fills the <placeholders> and writes it to a file. */
 export const BUILDER_BRIEF = `# Builder brief (goal-skill implementer)

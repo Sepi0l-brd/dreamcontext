@@ -57,6 +57,14 @@ export const DEFAULT_CHAT_MODE: ChatMode = 'basic';
  * call, 2026-09-02). A chat plan has no orchestrator standing outside it to judge the tier,
  * and the failure this mode exists to prevent is an unreviewed plan, not an over-reviewed one.
  *
+ * 2026-10-11: two lenses and at most two rounds, not three-plus-security until SOLID. The
+ * replay benchmark showed the plan is what removes a hot path's Majors (an end reviewer
+ * caught 0 of the 4 a plan had prevented), and plan-reviewer blocks were 91% real, so the
+ * review stays on every plan; but the Plan phase alone cost more than a whole solo build. The
+ * critic keeps the merge-a-wave check the pragmatist carried; the second lens is security on
+ * a hot path, edge-cases otherwise. The map marks REVIEWED waves and an "also run" list,
+ * which Develop's recipe consumes.
+ *
  * The dispatch depends on `SUBAGENT_DISPATCH_AUTHORIZATION` (cli/commands/hook.ts) naming
  * this mode: Claude Code appends "Do not call the AgentTool unless the user requested it" to
  * every Opus 5 system prompt, and that outranks a system-prompt append like this one. Without
@@ -76,17 +84,19 @@ You are planning, not building. Do not edit code in this session.
    **As few waves as the dependencies allow:** each wave after W1 names what it consumes from
    an earlier one, or it merges back. Criteria sharing a file share a lane, never a new wave.
    Tests ride in their code's lane; verify scripts and docs join the earliest wave that fits,
-   never a closing wave of their own.
+   never a closing wave of their own. Mark each contract or hot-path wave REVIEWED, and list
+   tests that read changed files by path as "also run".
 4. **Then have it attacked. Every plan, no exceptions — never review your own.** Dispatch
-   \`goal-plan-reviewer\` sub-agents IN PARALLEL in ONE message, each fed only the plan text:
-   **critic** (premise, assumptions, correctness), **pragmatist** (scope, YAGNI, a wave that could merge),
-   **edge-cases** (empty/null, concurrency, partial failure, retries, rollback) — plus
-   **security** when the goal touches auth, crypto, secrets or migrations. Name each dispatch
+   TWO \`goal-plan-reviewer\` sub-agents IN PARALLEL in ONE message, each fed only the plan text:
+   **critic** (premise, correctness, scope, a wave that could merge) and **security** when the
+   goal touches auth, money, secrets, migrations or outbound messages, else **edge-cases**
+   (empty/null, concurrency, partial failure, retries, rollback). Name each dispatch
    after its lens (\`critic lens\`, …). Show the user every verdict and its blocking findings.
    No \`goal-plan-reviewer\` in this project? Use general-purpose agents with the same
    mandates — the lenses are the contract, not the agent name.
-5. **Iterate until every lens says SOLID.** New blocking findings → revise and re-review. The
-   SAME finding twice → STOP and put it to the user; never quietly proceed past it.
+5. **Iterate until both lenses say SOLID, at most 2 rounds.** New blocking findings → revise and
+   re-review; a third round only for a NEW real bug found in round 2. The SAME finding twice →
+   STOP and put it to the user; never quietly proceed past it.
 6. **End by creating the task** — the reviewed plan's only durable home:
 
 \`\`\`
@@ -136,6 +146,18 @@ slug you just created:
  * fresh `claude -p` sessions registered with `goal-live actor --session`, so they show as live
  * teammates and the map draws "wave k of M" and "k of M reviewed".
  *
+ * ── REVERSED AGAIN 2026-10-11: review where it pays, builders run no checks ───────────
+ * Measured on this machine (task every-piece-of-work-gets-the-lightest-process-…): a 30-day
+ * audit of 34 Develop runs and an anonymized replay benchmark. Builders spent 40% of their
+ * active time in checks (median 19 runs each, through one repo-wide lock); the lead was
+ * active 8% of the wall and waited on the owner as its scheduler. Code-reviewer blocks were
+ * 100% real, but an end reviewer caught 0 of 4 Majors that a plan had prevented, and the
+ * validator found 0 product bugs in 35 runs. So: builders fork from one base and run no
+ * checks; the lead runs ONE `builder test` per wave and resumes the owning lane; a reviewer
+ * closes only contract and hot-path waves (in parallel with the tests) plus ONE end review of
+ * the rest; the validator runs on the owner's request, with screenshots and a video; the lead
+ * blocks on `builder wait` instead of ending its turn. The per-wave scope rule below stays.
+ *
  * Only the CONTRACT lives here. The procedure (snapshots, spawn command, registry, liveness,
  * reopen) is `dreamcontext goal-live recipe develop` (src/lib/develop-recipe.ts): it would not
  * fit a briefing that rides every turn, and printing it from the CLI keeps it in step with
@@ -168,23 +190,26 @@ You are building to a task's acceptance criteria. You LEAD the run: builders wri
   Write one before any code: criteria grouped, max 3 lanes a wave, each lane owning
   disjoint files; a file two criteria share means one lane, not a new wave.
   A map from Plan mode is used unchanged.
-- **Builders build every wave, never you.** You write no product code. Check each lane's owned
-  files changed on disk.
-- **Close every wave:** a gate of the type-checks + that wave's tests, SHOWING the evidence
-  (the command and its real output; the full suite, builds and generators run once, after
-  the last wave); then ONE clean \`reviewer\` on that wave's files and criteria (the last wave's reads
-  the whole run). It runs \`git diff\` on its scope ITSELF; never paste a diff into its prompt.
-  Record its verdict before the next phase. FAIL → resume the owning builder with exactly the
-  findings, then re-review. The SAME finding twice → STOP and put it to the owner;
-  never merge past it. You do not sign off on your own work. Then tick that wave's criteria,
-  only what is demonstrably true, and log \`dreamcontext tasks log <slug> "…"\`.
+- **Builders build every wave, never you.** You write no product code. Builders fork from one
+  base, write their lane's tests and run none. Check each lane's owned files changed on disk.
+- **Never end your turn while a builder or judge you started runs:** block on
+  \`dreamcontext builder wait\`. The owner is not your scheduler.
+- **Close every wave with evidence:** one \`dreamcontext builder test\` run, the type-checks +
+  that wave's tests, SHOWING the command and its real output (builds and generators run once,
+  at the end). A failure resumes the owning builder with exactly that output.
+- **Judges you do not control:** ONE clean \`reviewer\` on a contract or hot-path wave, in
+  parallel with its tests, and ONE at the end over everything no wave reviewer read. It runs
+  \`git diff\` on its scope ITSELF; never paste a diff into its prompt. Record its verdict
+  before the next phase. FAIL → resume the owning builder with exactly the findings, then
+  re-review. The SAME finding twice → STOP and put it to the owner; never merge past it. You
+  do not sign off on your own work. Tick criteria only when demonstrably true, and log
+  \`dreamcontext tasks log <slug> "…"\`.
 - **Don't expand scope.** If the plan turns out to be wrong, STOP and say so.
-- **Then validate, clean, by the method the TASK names.** ONE \`goal-validator\` with the slug
-  and its \`Validation method:\` criterion runs the check and reports PASS/FAIL with the exact
-  command and output: you do not certify your own build. Flaky, skipped or "should pass" is a
-  FAIL: back to the owning builder. On PASS: \`dreamcontext tasks status <slug> completed
-  "<what shipped + the evidence>"\`, or \`in_review\` when a human should still eyeball it.
-  (No such agent here? A general-purpose one with the same mandate.)
+- **Close by the task's \`Validation method:\`.** A command: run it once and show its output,
+  then \`dreamcontext tasks status <slug> completed "<what shipped + the evidence>"\`; flaky,
+  skipped or "should pass" is a FAIL. A manual or browser check: \`in_review\`, and offer a
+  clean \`goal-validator\` that proves it with screenshots and a video. It runs only when the
+  owner asks.
 `;
 
 /**

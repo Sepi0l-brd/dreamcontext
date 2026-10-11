@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEVELOP_RECIPE, GOAL_LIVE_RECIPES } from '../../src/lib/develop-recipe.js';
-import { BUILDER_BRIEF, BUILDER_CHECK_RULES } from '../../src/lib/builder-brief.js';
+import { BUILDER_BRIEF, BUILDER_CHECK_RULES, DEVELOP_BUILDER_RULES } from '../../src/lib/builder-brief.js';
 import { BUILDER_NO_BACKGROUND_ENV } from '../../src/lib/builder-tools.js';
 import { modeBriefing } from '../../src/server/chat-modes.js';
 
@@ -255,37 +255,46 @@ describe('goal-implementer: the agent file says what the brief says', () => {
   });
 });
 
-describe('Develop mode follows the same discipline', () => {
-  it('the briefing\'s wave gate is type-checks + the wave\'s tests, heavy steps once at the end', () => {
+describe('Develop mode: builders run no checks, the lead checks once per wave', () => {
+  it('the briefing\'s wave check is type-checks + the wave\'s tests, heavy steps once at the end', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).not.toMatch(/build\s*\+\s*test/i);
-    expect(brief).toMatch(/type-checks \+ that wave's tests/);
-    expect(brief).toMatch(/full suite, builds and generators run once, after\s+the last wave/);
+    expect(brief).toMatch(/the type-checks \+\s+that wave's tests/);
+    expect(brief).toMatch(/builds and generators run once,\s+at the end/);
   });
 
-  it('its builder brief carries the shared check rules verbatim and the sentinel', () => {
+  it('its builder brief carries the no-check rules verbatim and the sentinel', () => {
     const builder = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('BUILDER: "'), DEVELOP_RECIPE.indexOf('REVIEWER: "'));
-    expect(builder).toContain(BUILDER_CHECK_RULES);
+    expect(builder).toContain(DEVELOP_BUILDER_RULES);
+    expect(builder).not.toContain(BUILDER_CHECK_RULES);
     expect(builder).toMatch(/starts with the exact heading '## wN-L report'/);
     expect(builder).toMatch(/files changed:/);
+    expect(builder).toMatch(/outside my files:/);
   });
 
-  it('the lead asks each exited builder whether it reported, and bounds the resume', () => {
-    expect(DEVELOP_RECIPE).toContain('dreamcontext builder report "$ROOT/tmp/develop/$S/wN-L.log" wN-L');
-    expect(DEVELOP_RECIPE).toMatch(/resume\s+it ONCE/);
-    expect(DEVELOP_RECIPE).toMatch(/a second `unfinished` = run that lane's checks yourself/);
+  it('the no-check rules: write the tests, run none of them, never background, report what is outside', () => {
+    expect(DEVELOP_BUILDER_RULES).toMatch(/Write the tests for the code you write/);
+    expect(DEVELOP_BUILDER_RULES).toMatch(/run\s+none of them: no test runner, no type-check, no build/);
+    for (const re of NO_BACKGROUND.slice(0, 3)) expect(DEVELOP_BUILDER_RULES).toMatch(re);
+    expect(DEVELOP_BUILDER_RULES).toMatch(/never end your turn "waiting"/);
+    expect(DEVELOP_BUILDER_RULES).toMatch(/outside your files is reported, never fixed/);
   });
 
-  it('load-aware waves, a light gate through the lock, the final gate before the validator', () => {
+  it('an exited builder that did not report is resumed once; wait says so', () => {
+    expect(DEVELOP_RECIPE).toContain('dreamcontext builder wait "$S"');
+    expect(DEVELOP_RECIPE).toMatch(/`unfinished` \(no report\) = resume it ONCE/);
+  });
+
+  it('load-aware waves, one check through the lock, the final check before closing', () => {
     expect(DEVELOP_RECIPE).not.toMatch(/Build \+ test/);
-    const wave = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('### 2b.'), DEVELOP_RECIPE.indexOf('Per lane L'));
+    const wave = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('### 2c.'), DEVELOP_RECIPE.indexOf('Per lane L'));
     expect(wave).toContain('dreamcontext builder load --reap');
     expect(wave).toMatch(/at most 1-2 lanes at a time/);
-    expect(DEVELOP_RECIPE).toMatch(/each through the heavy lock/);
+    expect(DEVELOP_RECIPE).toMatch(/through\s+the heavy lock/);
     const final = DEVELOP_RECIPE.slice(DEVELOP_RECIPE.indexOf('## 3.'), DEVELOP_RECIPE.indexOf('## 4.'));
     expect(final.indexOf('dreamcontext builder load --reap')).toBeGreaterThan(-1);
-    expect(final.indexOf('dreamcontext builder load --reap')).toBeLessThan(final.indexOf('goal-live phase validate'));
+    expect(final.indexOf('dreamcontext builder load --reap')).toBeLessThan(final.indexOf('goal-live phase done'));
     expect(final).toMatch(/for at most 15 min/);
-    expect(final).toMatch(/does NOT already run/);
+    expect(final).toMatch(/The\s+full suite runs only when the Validation method names it/);
   });
 });

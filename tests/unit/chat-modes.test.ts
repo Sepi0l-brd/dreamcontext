@@ -205,14 +205,16 @@ describe('modeBriefing', () => {
     expect(brief).toMatch(/never review your own/i);
   });
 
-  it('plan names the mandate-diverse lenses, including edge cases', () => {
+  // 2026-10-11: TWO lenses, not three plus security. The critic keeps the pragmatist's
+  // merge-a-wave check; the second lens is security on a hot path, edge-cases otherwise.
+  it('plan names two mandate-diverse lenses: the critic, then security on a hot path or edge cases', () => {
     const brief = modeBriefing('plan', { worktreeAllowed: false });
-    // Different mandates surface different categories; none is a substitute for another.
-    for (const lens of ['critic', 'pragmatist', 'edge-cases', 'security']) {
-      expect(brief, `missing lens: ${lens}`).toContain(lens);
+    expect(brief).toMatch(/TWO `goal-plan-reviewer` sub-agents/);
+    for (const lens of ['critic', 'edge-cases', 'security']) {
+      expect(brief, `missing lens: ${lens}`).toContain(`**${lens}**`);
     }
-    // Security is conditional on the hot-path surfaces, not a fourth lens on every plan.
-    expect(brief).toMatch(/auth, crypto, secrets or migrations/);
+    expect(brief).not.toContain('**pragmatist**');
+    expect(brief).toMatch(/\*\*security\*\* when the\s+goal touches auth, money, secrets, migrations or outbound messages, else \*\*edge-cases\*\*/);
   });
 
   // The chat reads a lens off the dispatch's NAME (agentRoles.ts `resolveAgentIdentity`), so
@@ -227,6 +229,10 @@ describe('modeBriefing', () => {
     const brief = modeBriefing('plan', { worktreeAllowed: false });
     expect(brief).toMatch(/SOLID/);
     expect(brief).toMatch(/re-review/i);
+    // Two rounds, a third only for a NEW real bug (2026-10-11: the Plan phase alone cost more
+    // than a whole solo build).
+    expect(brief).toMatch(/at most 2 rounds/);
+    expect(brief).toMatch(/a third round only for a NEW real bug found in round 2/);
     // Convergence by signal (goal-skill Phase 2): the same finding surviving a revision means
     // the loop is stuck, and a stuck loop goes to the user — it does not get waved through.
     expect(brief).toMatch(/SAME finding twice/i);
@@ -275,32 +281,46 @@ describe('modeBriefing', () => {
     expect(brief).toContain('dreamcontext tasks log');
   });
 
-  // ── The review + validate contract (2026-09-02, per-wave since 2026-09-26) ──────────
-  // The mirror of the Plan briefing's step 4. This half used to end at "don't expand scope":
-  // the agent built, gated its own waves, ticked its own criteria and declared itself done —
-  // every judgement in the loop belonging to the author. 2026-09-02 added ONE clean review
-  // after the last wave; the owner reversed the timing on 2026-09-26: a review closes EVERY
-  // wave, scoped to that wave's files, and the last one reads the whole run.
-  it('develop closes EVERY wave with a CLEAN, scoped reviewer — it does not self-approve', () => {
+  // ── The review + validate contract (2026-09-02; per-wave 2026-09-26; v2 2026-10-11) ───
+  // The mirror of the Plan briefing's step 4. 2026-09-02 added ONE clean review after the
+  // last wave; 2026-09-26 put one after EVERY wave. 2026-10-11 (measured): a reviewer closes
+  // only contract and hot-path waves, in parallel with their tests, and ONE end review reads
+  // everything no wave reviewer read. The author still never judges its own work.
+  it('develop: a clean reviewer on contract/hot-path waves and one at the end — it does not self-approve', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
-    expect(brief).toMatch(/you do not sign off on your own work/i);
+    expect(brief).toMatch(/you\s+do not sign off on your own work/i);
     expect(brief).toContain('`reviewer`');
-    expect(brief).toMatch(/Close every wave/);
-    expect(brief).toMatch(/on that wave's files and criteria/);
-    expect(brief).toMatch(/last wave's reads\s+the whole run/);
-    // The reversed rule must not creep back: no "after the LAST wave" review timing.
-    expect(brief).not.toMatch(/After the LAST wave/);
+    expect(brief).toMatch(/ONE clean `reviewer` on a contract or hot-path wave, in\s+parallel with its tests/);
+    expect(brief).toMatch(/ONE at the end over everything no wave reviewer read/);
+    // The 2026-09-26 "reviewer closes every wave" must not creep back.
+    expect(brief).not.toMatch(/reviewer\s+on that wave's files and criteria/);
     // The judge fetches its own changes — a pasted diff is the author choosing what gets read.
     expect(brief).toMatch(/git diff[^\n]*ITSELF/);
     expect(brief).toMatch(/never paste a diff/i);
     // The verdict lands before the run moves on, or the map loses it.
-    expect(brief).toMatch(/verdict before the next phase/);
+    expect(brief).toMatch(/verdict\s+before the next phase/);
+  });
+
+  it('develop closes every wave with ONE check run whose real output is shown', () => {
+    const brief = modeBriefing('develop', { worktreeAllowed: false });
+    expect(brief).toMatch(/Close every wave with evidence/);
+    expect(brief).toContain('`dreamcontext builder test`');
+    expect(brief).toMatch(/SHOWING the command and its real output/);
+    expect(brief).toMatch(/A failure resumes the owning builder with exactly that output/);
+  });
+
+  it('develop never ends its turn while a child it started runs', () => {
+    const brief = modeBriefing('develop', { worktreeAllowed: false });
+    expect(brief).toMatch(/Never end your turn while a builder or judge you started runs/);
+    expect(brief).toContain('`dreamcontext builder wait`');
+    expect(brief).toMatch(/The owner is not your scheduler/);
   });
 
   it('develop: builders build, the lead writes no product code', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
     expect(brief).toMatch(/Builders build every wave, never you/);
     expect(brief).toMatch(/You write no product code/);
+    expect(brief).toMatch(/Builders fork from one\s+base, write their lane's tests and run none/);
     expect(brief).toMatch(/owned\s+files changed on disk/);
   });
 
@@ -329,14 +349,21 @@ describe('modeBriefing', () => {
   // 2026-10-09 (owner: "plan mode splits into needless extra waves"): every wave is a serial
   // snapshot + slowest lane + gate + review, and nothing told the planner to minimise them, so
   // maps split by topic and bumped a shared file into a new wave instead of one lane.
-  it('plan keeps the wave count to the dependency chain, and the pragmatist checks it', () => {
+  it('plan keeps the wave count to the dependency chain, and the critic checks it', () => {
     const brief = modeBriefing('plan', { worktreeAllowed: false });
     expect(brief).toMatch(/As few waves as the dependencies allow/);
     expect(brief).toMatch(/names what it consumes from\s+an earlier one, or it merges back/);
     expect(brief).toMatch(/Criteria sharing a file share a lane, never a new wave/);
     expect(brief).toMatch(/never a closing wave of their own/);
-    expect(brief).toMatch(/\*\*pragmatist\*\* \(scope, YAGNI, a wave that could merge\)/);
+    expect(brief).toMatch(/\*\*critic\*\* \(premise, correctness, scope, a wave that could merge\)/);
     expect(brief.indexOf('As few waves')).toBeLessThan(brief.indexOf('4. **Then have it attacked'));
+  });
+
+  it('plan marks the waves Develop reviews, and the tests a related run cannot find', () => {
+    const brief = modeBriefing('plan', { worktreeAllowed: false });
+    expect(brief).toMatch(/Mark each contract or hot-path wave REVIEWED/);
+    expect(brief).toMatch(/tests that read changed files by path as "also run"/);
+    expect(brief.indexOf('REVIEWED')).toBeLessThan(brief.indexOf('4. **Then have it attacked'));
   });
 
   it('develop writes its own map with as few waves as the dependencies allow', () => {
@@ -352,18 +379,19 @@ describe('modeBriefing', () => {
     expect(brief).toMatch(/never merge past it/i);
   });
 
-  it('develop validates through a CLEAN judge — it does not certify its own build', () => {
-    // Plan mode writes "Validation method: …" into the task as a criterion; this is the half
-    // that spends it. goal-skill Phase 6 calls this "the real gate" and always dispatches a
-    // clean goal-validator — an earlier draft of this briefing had the BUILDER run the check
-    // and close the task itself, which is the self-approval this whole change exists to end.
+  // 2026-10-11 (owner decisions 8 and 13): the validator found 0 product bugs in 35 runs. A
+  // command Validation method runs once at the end with its output shown; a manual or browser
+  // method moves the task to in_review and OFFERS a clean validator that proves it with
+  // screenshots and a video, run only when the owner asks.
+  it('develop closes by the task\'s Validation method; the validator runs on the owner\'s request', () => {
     const brief = modeBriefing('develop', { worktreeAllowed: false });
-    expect(brief).toContain('goal-validator');
-    expect(brief).toMatch(/you do not certify your own build/i);
     expect(brief).toContain('Validation method:');
-    expect(brief).toMatch(/Flaky, skipped or "should pass" is a\s+FAIL/);
+    expect(brief).toMatch(/A command: run it once and show its output/);
+    expect(brief).toMatch(/flaky,\s+skipped or "should pass" is a FAIL/);
     expect(brief).toContain('dreamcontext tasks status <slug> completed');
-    expect(brief).toContain('in_review');
+    expect(brief).toMatch(/A manual or browser check: `in_review`, and offer a\s+clean `goal-validator`/);
+    expect(brief).toMatch(/screenshots and a video/);
+    expect(brief).toMatch(/It runs only when the\s+owner asks/);
   });
 
   // ── Train Me (2026-09-27) ───────────────────────────────────────────────────────────
@@ -516,7 +544,10 @@ describe('modeBriefing', () => {
   // "the assistant always knows every session"): the three notch cues and the live-context rule.
   // Then 4900 → 5050 (2026-10-04, owner: close finished chats in other projects): the `close`
   // tool line, its idle-vs-busy rule line, and `close` in the long-timeout list.
-  const BRIEFING_CEILING: Record<string, number> = { plan: 2900, develop: 3200, train: 2150, assistant: 5800 };  // assistant +500 (2026-09-27): the delegate-don't-do rule; +300 (2026-09-28): the latency rules; +100 (2026-09-28): look; +800 (2026-10-04): notch cues + live context; +150 (2026-10-04): close; +600 (2026-10-04): meetings via whichever notetaker MCP, or notes the owner hands over; +150 (2026-10-04): the `agent` tool line (a board's home agent or any agent by slug) and `agent` in the long-timeout list
+  //
+  // `plan` went 2900 → 3100 (2026-10-11) for the REVIEWED-wave marks and the "also run" list
+  // in step 3 (Develop's recipe reads both) and the two-round cap in step 5.
+  const BRIEFING_CEILING: Record<string, number> = { plan: 3100, develop: 3200, train: 2150, assistant: 5800 };  // assistant +500 (2026-09-27): the delegate-don't-do rule; +300 (2026-09-28): the latency rules; +100 (2026-09-28): look; +800 (2026-10-04): notch cues + live context; +150 (2026-10-04): close; +600 (2026-10-04): meetings via whichever notetaker MCP, or notes the owner hands over; +150 (2026-10-04): the `agent` tool line (a board's home agent or any agent by slug) and `agent` in the long-timeout list
   const DEFAULT_CEILING = 1600;
 
   it('assistant: speaks before delegating, single-quotes --prompt, takes meeting notes through a tool, and stays 150 under its ceiling', () => {
