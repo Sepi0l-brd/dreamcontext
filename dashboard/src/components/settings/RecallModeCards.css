@@ -1,0 +1,116 @@
+/* Settings → Recall option cards. Rows and the radio list are SettingRow.css's own; only the
+   measured facts, the recommendation and the footnote live here. Tokens only. */
+
+.recall-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recall-rec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 32%, transparent);
+  border-radius: var(--radius-lg);
+}
+
+.recall-rec-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-ink);
+}
+
+.recall-rec-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.recall-badge {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-ink);
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-full);
+}
+
+.recall-metrics {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.recall-metrics dt {
+  color: var(--color-text-tertiary);
+}
+
+.recall-metrics dd {
+  margin: 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.recall-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.recall-bar-row {
+  display: grid;
+  grid-template-columns: var(--space-11) var(--space-20) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.recall-bar-label {
+  color: var(--color-text-secondary);
+}
+
+.recall-bar {
+  display: block;
+  height: var(--space-2);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.recall-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+}
+
+.recall-bar-pct {
+  color: var(--color-text);
+}
+
+.recall-advanced > summary {
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.recall-foot {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 720px) {
+  .recall-metrics {
+    grid-template-columns: 1fr;
+  }
+}

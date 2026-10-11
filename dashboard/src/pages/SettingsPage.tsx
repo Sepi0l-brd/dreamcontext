@@ -4,13 +4,12 @@ import { useVault } from '../context/VaultContext';
 import { useConfig, useUpdateConfig, type PlatformId } from '../hooks/useConfig';
 import { SleepSettings } from '../components/settings/SleepSettings';
 import { ConnectionsManager } from '../components/settings/ConnectionsManager';
-import { EmbeddingModelCard } from '../components/settings/EmbeddingModelCard';
-import { CloudRecallCard } from '../components/settings/CloudRecallCard';
+import { RecallModeCards } from '../components/settings/RecallModeCards';
 import { TaskOverrideEditor } from '../components/settings/TaskOverrideEditor';
 import { SETTINGS_ICONS } from '../components/settings/SettingsIcons';
 import { MaturityTag, type MaturityLevel } from '../components/common/MaturityTag';
 import { CloudTaskSync } from '../components/settings/CloudTaskSync';
-import { SettingGroup, SettingRow, SettingChoice, Toggle } from '../components/settings/SettingRow';
+import { SettingGroup, SettingRow, Toggle } from '../components/settings/SettingRow';
 import { VoiceSettings } from '../components/settings/VoiceSettings';
 import { useInstantSave, SaveMark } from '../components/settings/useInstantSave';
 import { useAgentCapabilities } from '../hooks/useAgentCapabilities';
@@ -47,22 +46,6 @@ interface PlatformOption {
 
 const PLATFORM_OPTIONS: PlatformOption[] = [
   { id: 'claude', labelKey: 'settings.platform.claude' },
-];
-
-// ─── Memory recall modes (mirror RECALL_MODES in src/cli/commands/sleep.ts) ───
-
-interface RecallModeOption {
-  mode: RecallMode;
-  labelKey: string;
-  hintKey: string;
-  experimental?: boolean;
-}
-
-const RECALL_MODE_OPTIONS: RecallModeOption[] = [
-  { mode: 'haiku', labelKey: 'settings.recall.haiku.label', hintKey: 'settings.recall.haiku.hint' },
-  { mode: 'raw', labelKey: 'settings.recall.raw.label', hintKey: 'settings.recall.raw.hint' },
-  { mode: 'hybrid', labelKey: 'settings.recall.hybrid.label', hintKey: 'settings.recall.hybrid.hint', experimental: true },
-  { mode: 'off', labelKey: 'settings.recall.off.label', hintKey: 'settings.recall.off.hint' },
 ];
 
 // ─── Section navigation (in-page menu) ────────────────────────────────────────
@@ -592,31 +575,11 @@ export function SettingsPage({ focus }: SettingsPageProps) {
       {activeSection === 'recall' && (
       <section className="settings-section">
         <SectionHead titleKey="settings.nav.recall" descKey="settings.desc.recall" />
-        <div className="setting-choices" role="radiogroup" aria-label={t('settings.nav.recall')}>
-          {RECALL_MODE_OPTIONS.map(({ mode, labelKey, hintKey, experimental }) => (
-            <SettingChoice
-              key={mode}
-              name="recall-mode"
-              value={mode}
-              checked={recallMode === mode}
-              disabled={updateSleep.isPending}
-              onSelect={() => updateSleep.mutate({ recall_mode: mode })}
-              title={t(labelKey)}
-              hint={t(hintKey)}
-              // `label`, not `level`: "Experimental" is literal copy about THIS choice, not
-              // a rung on the ladder — and a label is always muted, which is right for a
-              // mode you can pick but should think about first.
-              badge={experimental ? <MaturityTag label={t('settings.recall.experimental')} /> : undefined}
-            >
-              {mode === 'hybrid' && recallMode === 'hybrid' && (
-                <>
-                  <EmbeddingModelCard />
-                  <CloudRecallCard />
-                </>
-              )}
-            </SettingChoice>
-          ))}
-        </div>
+        <RecallModeCards
+          recallMode={recallMode}
+          saving={updateSleep.isPending}
+          onSelectMode={(mode) => updateSleep.mutate({ recall_mode: mode })}
+        />
         {updateSleep.isError && <p className="settings-test-err">✗ {t('common.error')}</p>}
       </section>
       )}

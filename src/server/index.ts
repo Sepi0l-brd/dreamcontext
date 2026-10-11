@@ -210,6 +210,7 @@ import { handleVersionCheckGet } from './routes/version-check.js';
 import { handleTaxonomyGet } from './routes/taxonomy.js';
 import { handleRecallGet, handleRecallHaikuGet } from './routes/recall.js';
 import { recallCloudRoutes } from './routes/recall-cloud.js';
+import { recallOptionsRoutes } from './routes/recall-options.js';
 import {
   handleBrainAuthDeviceStart,
   handleBrainAuthDevicePoll,
@@ -379,6 +380,7 @@ export function buildRouter(): Router {
   router.get('/api/recall', handleRecallGet);
   // Opt-in cloud recall tiers (Settings): status, key, consent, index. Every handler guards itself
   // (loopback Host, same-origin Origin, loopback socket, never in the hands-free cloud).
+  router.get('/api/recall/options', recallOptionsRoutes.options);
   router.get('/api/recall/cloud/status', recallCloudRoutes.status);
   router.post('/api/recall/cloud/key', recallCloudRoutes.setKey);
   router.post('/api/recall/cloud/key/copy-voice', recallCloudRoutes.copyVoiceKey);

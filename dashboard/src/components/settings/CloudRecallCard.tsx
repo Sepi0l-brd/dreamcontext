@@ -37,7 +37,19 @@ function ProgressBar({ pct, label }: { pct: number; label: string }) {
   );
 }
 
-export function CloudRecallCard() {
+export interface CloudRecallCardProps {
+  /**
+   * Show the card for ONE tier (the recall option card it sits under): only that tier's review
+   * button, and the enable flow whenever that tier is not the one currently on. Without it the card
+   * offers both tiers, as it did under Hybrid.
+   */
+  tier?: CloudTier;
+  /** Called after cloud recall was turned on (the server also set the recall mode) or off. */
+  onEnabled?: () => void;
+  onDisabled?: () => void;
+}
+
+export function CloudRecallCard({ tier: onlyTier, onEnabled, onDisabled }: CloudRecallCardProps = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: status, isLoading, isError } = useCloudRecallStatus();
@@ -51,7 +63,7 @@ export function CloudRecallCard() {
   const build = useBuildCloudIndex();
 
   const [keyDraft, setKeyDraft] = useState('');
-  const [reviewing, setReviewing] = useState<CloudTier | null>(null);
+  const [reviewing, setReviewing] = useState<CloudTier | null>(onlyTier ?? null);
   const [problem, setProblem] = useState<string | null>(null);
 
   // A finished build changes coverage and spend: refresh the status once, when the build stops.
@@ -121,6 +133,7 @@ export function CloudRecallCard() {
       {
         onSuccess: () => {
           setReviewing(null);
+          onEnabled?.();
           // The person agreed to the cloud index being built: start it, as the terminal does.
           build.mutate(undefined, { onError: fail });
         },
@@ -131,7 +144,7 @@ export function CloudRecallCard() {
 
   const onDisable = (): void => {
     setProblem(null);
-    disable.mutate(undefined, { onError: fail });
+    disable.mutate(undefined, { onSuccess: () => onDisabled?.(), onError: fail });
   };
 
   const tierLabel = t(`settings.recall.cloud.tier.${status.tier}`);
@@ -142,13 +155,21 @@ export function CloudRecallCard() {
     ? t('settings.recall.cloud.key.none')
     : `${t(status.keySource === 'env' ? 'settings.recall.cloud.key.present_env' : 'settings.recall.cloud.key.present_file')}${status.keyOrigin === 'voice-copy' ? ` ${t('settings.recall.cloud.key.from_voice')}` : ''}`;
 
+  const tiers = onlyTier ? [onlyTier] : TIERS;
+  // For a single tier "on" means THAT tier: another tier being on means this one still needs enabling.
+  const isOn = status.consent === 'valid' && status.tier !== 'local' && (!onlyTier || status.tier === onlyTier);
+
   return (
     <div className={`embed-model-card cloud-recall${status.tier !== 'local' ? ' embed-model-card--ready' : ''}`}>
-      <div className="embed-model-row">
-        <span className="embed-model-status">{t('settings.recall.cloud.title')}</span>
-        <span className={`embed-model-status ${status.tier === 'local' ? 'embed-model-status--muted' : 'embed-model-status--ready'}`}>{tierLabel}</span>
-      </div>
-      <p className="settings-field-hint">{t('settings.recall.cloud.intro')}</p>
+      {!onlyTier && (
+        <>
+          <div className="embed-model-row">
+            <span className="embed-model-status">{t('settings.recall.cloud.title')}</span>
+            <span className={`embed-model-status ${status.tier === 'local' ? 'embed-model-status--muted' : 'embed-model-status--ready'}`}>{tierLabel}</span>
+          </div>
+          <p className="settings-field-hint">{t('settings.recall.cloud.intro')}</p>
+        </>
+      )}
 
       <dl className="cloud-recall-facts">
         <dt>{t('settings.recall.cloud.consent')}</dt>
@@ -197,10 +218,10 @@ export function CloudRecallCard() {
         </div>
       </form>
 
-      {status.consent !== 'valid' || status.tier === 'local' ? (
+      {!isOn ? (
         <div className="cloud-recall-tiers">
           <div className="cloud-recall-tier-buttons">
-            {TIERS.map((tier) => (
+            {tiers.map((tier) => (
               <button
                 key={tier}
                 type="button"
