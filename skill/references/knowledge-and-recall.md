@@ -160,6 +160,8 @@ Writes a CHANGELOG entry (`type=note`, `scope=quick`); the sleep cycle reconcile
 
 Why Voyage-4 for both cloud tiers: the `voyage-4` family shares one embedding space, so the cloud index can be queried by the small local `voyage-4-nano` with no network at query time (cloud-index), or by `voyage-4` itself (cloud). The cloud tier's rerank pool is the union of the BM25 top candidates and the dense top candidates, so a Turkish doc the BM25-weighted fusion buries still reaches the reranker. Numbers per tier land in `eval/RESULTS.md`; this section states behaviour, not results.
 
+**Settings.** Settings → Recall → Hybrid shows the Cloud recall card: tier status, the key (copy the Voice key, with an in-app confirmation), enable or disable with the disclosure shown first, and the cloud index build.
+
 **Enabling is a human act.** `dreamcontext recall cloud enable <cloud-index|cloud>` prints the disclosure below, asks for confirmation at a terminal, records consent for this vault, sets `recall_mode=hybrid` (and says so) and builds the index. `disable` revokes consent and keeps `hybrid` on the local tier; `disable --purge` also deletes the cloud index files. Verbs and flags: [cli-reference.md](cli-reference.md) § Recall cloud.
 
 > **AGENTS NEVER ENABLE CLOUD RECALL.** Do not run `recall cloud enable`, `key copy-voice`, or write `~/.dreamcontext/recall-cloud.json` for the user, and do not suggest a workaround when the CLI refuses. If cloud recall would help, tell the user what it does and costs and let them run it. Reading `recall cloud status` is fine (it never prints the key).

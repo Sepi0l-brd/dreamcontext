@@ -248,3 +248,113 @@ Same-corpus A/B (with and without `core` evaluated on ONE `buildCorpus` in one p
 | held-out | 50.0 = | 63.3 = | 0.580 → 0.580 |
 
 Rank moves, all outside the top 3: q028 7→8 and q059 5→6 (`core/6.system_flow` above the gold doc), h012 8→9 (`core/0.soul` above). All three are on-topic answers, not noise.
+
+## 2026-10-11 — Recall tiers (local, cloud-index, cloud): held-out results
+
+Task "Recall dil fark etmeksizin isabetli olur". Source of every number: `eval/runs/2026-10-11-final.json` (held-out aggregates, verdicts, latency, cost), with the train-only tuning in `eval/runs/2026-10-11-tune-train.json` and `eval/runs/2026-10-11-tune-train-local.json`. Aggregates only; no query text.
+
+### Method
+
+- **Frozen snapshot** `dc-20261010` (1204 files, 1585 stable docs). Every tier and every baseline ran on it.
+- **Gold v2**, authored before any tuning. Train (30 per language) lives in the repo; the held-out and a reserve are sealed. **Held-out n = 72** (tr 23 / en 25 / mixed 24), not the planned 75, so per-language verdicts at n of about 25 are directional and the pooled figure is primary.
+- **B0** (the floor to beat) ran on the archived engine `0ba4c25a`: `raw` (BM25), `hybrid-e5` (the previous local hybrid) and `haiku` (BM25 behind a Haiku query translation). Injection is K=5.
+- **Tuning was train-only.** Fusion constants were chosen on train (and the legacy 90-query set as a no-regression check); the sealed held-out was never read while tuning.
+- **One look per tier**, each recorded in the eval ledger. Engines: local `8ed3a6d8`, cloud `c274d18f` (with the fallback guard), cloud-index `ba736f4f` (run before the fallback guard existed, so its per-query fallback state was not recorded).
+- **Pre-registered rules:** AC-Q1, AC-Q2 (a tier must strictly beat the best B0 mode per language and pooled; paired sign test reported), AC-Q3 (no loss on exact terms or English).
+
+### Held-out recall (n = 72)
+
+| Mode | Lang | n | r@1 | r@3 | r@5 | MRR |
+|---|---|---|---|---|---|---|
+| B0 raw | tr | 23 | 8.7 | 30.4 | 30.4 | 0.191 |
+| B0 raw | en | 25 | 76.0 | 88.0 | 88.0 | 0.813 |
+| B0 raw | mixed | 24 | 45.8 | 54.2 | 75.0 | 0.548 |
+| B0 raw | all | 72 | 44.4 | 58.3 | 65.3 | 0.526 |
+| B0 hybrid-e5 | tr | 23 | 8.7 | 21.7 | 26.1 | 0.171 |
+| B0 hybrid-e5 | en | 25 | 72.0 | 88.0 | 88.0 | 0.793 |
+| B0 hybrid-e5 | mixed | 24 | 45.8 | 54.2 | 66.7 | 0.535 |
+| B0 hybrid-e5 | all | 72 | 43.1 | 55.6 | 61.1 | 0.509 |
+| B0 haiku | tr | 23 | 43.5 | 52.2 | 52.2 | 0.478 |
+| B0 haiku | en | 25 | 56.0 | 64.0 | 64.0 | 0.600 |
+| B0 haiku | mixed | 24 | 50.0 | 62.5 | 62.5 | 0.563 |
+| B0 haiku | all | 72 | 50.0 | 59.7 | 59.7 | 0.549 |
+| **local** | tr | 23 | 8.7 | 21.7 | 26.1 | 0.189 |
+| **local** | en | 25 | 72.0 | 88.0 | 88.0 | 0.793 |
+| **local** | mixed | 24 | 45.8 | 62.5 | 66.7 | 0.542 |
+| **local** | all | 72 | 43.1 | 58.3 | 61.1 | 0.517 |
+| **cloud-index** | tr | 23 | 39.1 | 91.3 | 100 | 0.643 |
+| **cloud-index** | en | 25 | 68.0 | 88.0 | 100 | 0.795 |
+| **cloud-index** | mixed | 24 | 58.3 | 79.2 | 83.3 | 0.702 |
+| **cloud-index** | all | 72 | 55.6 | 86.1 | 94.4 | 0.715 |
+| **cloud** | tr | 23 | 65.2 | 87.0 | 95.7 | 0.790 |
+| **cloud** | en | 25 | 80.0 | 100 | 100 | 0.893 |
+| **cloud** | mixed | 24 | 75.0 | 95.8 | 95.8 | 0.858 |
+| **cloud** | all | 72 | 73.6 | 94.4 | 97.2 | 0.849 |
+
+Pooled r@5 95% intervals: raw 53.8-75.2, local 49.6-71.5, cloud-index 86.6-97.8, cloud 90.4-99.2. Turkish is where the gap lives: raw and local sit near 26-30% r@5, cloud-index reaches 100%, cloud 95.7%.
+
+### Verdicts
+
+**AC-Q1 (cloud r@5 >= 90% in each language): PASS.** tr 22/23 (need 21), en 25/25 (need 23), mixed 23/24 (need 22).
+
+**AC-Q2 (floor: strictly better than the best B0 mode, per language and pooled):**
+
+| Tier | tr | en | mixed | pooled | Pooled paired sign test vs best B0 (raw) |
+|---|---|---|---|---|---|
+| cloud | PASS (22 vs 12) | PASS (25 vs 22) | PASS (23 vs 18) | PASS (70 vs 47) | 24 wins, 1 loss, p = 1.6e-06 |
+| cloud-index | PASS (23 vs 12) | PASS (25 vs 22) | PASS (20 vs 18) | PASS (68 vs 47) | 23 wins, 2 losses, p = 1.9e-05 |
+| local | FAIL (6 vs 7) | FAIL (22 vs 22) | FAIL (16 vs 18) | FAIL (44 vs 47) | 0 wins, 3 losses, p = 0.25 |
+
+Per-language paired tests, cloud vs the strongest baseline for that language: tr vs haiku 11-1 (p = 0.0063); en vs raw 3-0 (p = 0.25); mixed vs raw 5-0 (p = 0.0625). Cloud-index: tr vs haiku 11-0 (p = 0.00098); en vs raw 3-0 (p = 0.25); mixed vs raw 4-2 (p = 0.69). At n of about 25 only the Turkish gap is individually significant; the pooled test is the primary evidence.
+
+**The local tier fails the floor.** It does not beat raw BM25 in any language, and it loses three paired queries to it (0-3, p = 0.25, not significant either way). Per plan §2.5 the local tier therefore keeps the pre-goal constants: nothing about it was changed for this goal, it is not claimed as an improvement, and its Turkish recall stays low. The cloud tiers are the answer to Turkish; local is the offline default, unchanged.
+
+**AC-Q3 (exact-term r@1 >= raw, English r@5 >= best B0 EN): PASS for all three tiers.** Exact-term r@1 (12 queries): local 9, cloud-index 8, cloud 10 vs raw 8. English r@5: local 22, cloud-index 25, cloud 25 vs best B0 22.
+
+**AC-Q5 (injection rate and effective r@5, reported not gating).** raw, hybrid-e5, local, cloud-index and cloud inject on 100% of queries, so effective r@5 equals r@5 (pooled 65.3, 61.1, 61.1, 94.4, 97.2). Haiku injects on 79.2% of queries, effective r@5 59.7% pooled. The call on which tier to recommend by default (Q4 gate) is the owner's, with these numbers.
+
+### Chosen constants (train-only)
+
+| Tier | Constants |
+|---|---|
+| **cloud** | `voyageai/rerank-2.5-lite`; pool `bm25-dense-union`; candidates N = 40; blend alpha = 0.7. Alpha 1.0 broke legacy exact-term r@1, so 0.7 won. Train r@5 100 / 93.3 / 100 (tr / en / mixed). |
+| **cloud-index** | relative lambda 0.7 plus the dense gate {rawSure 60, rawLead 14, leadRatio 2}; no rerank. Train r@5 86.7 / 90 / 90. |
+| **local** | unchanged: the e5 stage-1 tuning on train kept the production constants. |
+
+### Latency (hook, `scripts/hook-latency.ts`, 50 runs per tier, first run discarded)
+
+**Caveat: measured on a machine that was not quiet.** 8 cores, load averages 14-34 across the runs. Absolute numbers are inflated: the floor (bare node plus the hook with recall off) alone was 1184 ms p50 and 1988 ms p90. Overhead = tier wall minus floor wall (same statistic).
+
+| Tier | wall p50 (ms) | wall p90 (ms) | overhead p50 (ms) | overhead p90 (ms) |
+|---|---|---|---|---|
+| floor (recall off) | 1184 | 1988 | - | - |
+| raw | 1793 | 2787 | 609 | 799 |
+| local | 6072 | 10708 | 4888 | 8720 |
+| cloud-index | 5772 | 13070 | 4588 | 11082 |
+| cloud | 2434 | 3412 | 1250 | 1424 |
+
+- **AC-L1 (wall p90 <= 5000 ms):** raw PASS (2787), cloud PASS (3412); local (10708) and cloud-index (13070) FAIL as measured. Both failures are load-confounded (their local models compete with the busy machine for CPU) and **must be re-measured on a quiet machine** before they count either way.
+- **AC-L2 (overhead p90 <= 1.5 s preferred):** cloud meets it on overhead (1424 ms) but not on wall (3412 ms); raw meets it (799 ms); local (8720) and cloud-index (11082) miss as measured.
+- **AC-L3 (raw p50 <= 400 ms):** open. Raw overhead p50 was 609 ms and wall 1793 ms; the floor alone being 1184 ms says the machine, not recall, dominates. No profiling fix was attempted.
+- **AC-L4 (offline / circuit-breaker case): not measured**, counted as unmet.
+
+The held-out run latencies recorded in the sealed files were also taken under load and are not AC-L evidence.
+
+### Cost
+
+- **Full cloud index (AC-C1): PASS.** 1585 docs, 6597 chunks embedded, 0 reused, 241 s, **$0.159** (cap $0.50), unseeded.
+- **Cloud queries (AC-C2, informational): about $0.25 per 1,000 queries** (46 billed queries cost $0.0116, embed plus rerank). Under the $1.00 cap; a rough estimate from a small sample.
+- **Total goal spend (AC-C3): $0.549** (cap $5.00): legacy rerank check E0 $0.0114, spike TS $0.0422, eval ledger $0.4837 (includes the index build), real-consent latency run $0.0116.
+
+### Caveats
+
+- n = 72 (23 / 25 / 24); per-language verdicts are directional, pooled is primary.
+- cloud-index ran on engine `ba736f4f`, before the fallback guard existed, so no per-query record shows it did not silently fall back; local ran on `8ed3a6d8`, cloud on `c274d18f`, B0 on `0ba4c25a`.
+- Latency was load-confounded as described above.
+
+### Open items
+
+1. Re-measure latency on a quiet machine (AC-L1 for local and cloud-index, AC-L2, AC-L3).
+2. Run the AC-L4 offline-cloud / circuit-breaker test.
+3. Improve the local tier (parked task): it fails the floor, so a stronger local model is the route; the e5-small constants are exhausted.
+4. Q4 gate: the owner decides which tier to recommend by default, using AC-Q5 and the cost figures above.
