@@ -279,6 +279,10 @@ export interface AutomationManifestDetail {
    *  on top of the agent's own prompt. `''`, or absent on an older backend,
    *  means no job. */
   job?: string;
+  /** Hashed when non-empty, LAST: its agent's `## Soul`, how it works. A bound
+   *  automation's composed hash includes it, so an Approve here grants it too.
+   *  `''`, or absent on an older backend, means no soul. */
+  soul?: string;
   prompt: string;
   outputInstructions: string;
   pattern: AutomationPattern;

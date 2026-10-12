@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useAgents } from '../hooks/useAgents';
-import { AgentRosterCard } from '../components/agents/AgentRosterCard';
+import { AgentRosterCard, AgentTeamSeat } from '../components/agents/AgentRosterCard';
 import { AgentProfilePanel } from '../components/agents/AgentProfilePanel';
 import { AgentIdentityDialog } from '../components/agents/AgentIdentityDialog';
 import type { AgentsFocus } from '../lib/openAgents';
@@ -30,8 +30,9 @@ const TOAST_MS = 4200;
 type DialogState = { slug: string | null; whiteboard?: string } | null;
 
 /**
- * The Agents page: every agent in this project (the roster), one agent's profile docked beside it,
- * and the identity dialog for creating and editing. An agent is WHO does the work; automations,
+ * The Agents page: the team (every agent in this project as a portrait card, then an "Add to
+ * team" seat), one agent's profile docked beside it, and the identity dialog for creating and
+ * editing. An agent is WHO does the work; automations,
  * Chat, boards and tasks all pick from this one roster.
  *
  * `focus` is what a caller asked for (`requestOpenAgents`, the `page/agents/<slug>` link, the
@@ -74,20 +75,19 @@ export function AgentsPage({ focus, onFocusDone }: { focus: AgentsFocus | null; 
   return (
     <div className="arp">
       <section className="arp-roster" aria-label={t('agents.roster.aria')}>
-        <h2 className="arp-sr">{t('agents.page.title')}</h2>
         <div className="arp-head">
           <div className="arp-head-text">
-            {agents && count > 0 && (
-              <span className="arp-count">{t(rosterCountKey(count)).replace('{n}', String(count))}</span>
-            )}
-            <span className="arp-lead">{t('agents.page.lead')}</span>
+            <div className="arp-titleline">
+              <h1 className="page-title arp-title">{t('agents.team.title')}</h1>
+              {agents && count > 0 && (
+                <span className="arp-count">{t(rosterCountKey(count)).replace('{n}', String(count))}</span>
+              )}
+            </div>
+            <p className="arp-lead">{t('agents.page.lead')}</p>
           </div>
-          {/* One filled accent per screen: New agent, until a profile opens and Talk to it takes it. */}
-          <button
-            type="button"
-            className={`arp-new${selected ? '' : ' arp-new--primary'}`}
-            onClick={() => setDialog({ slug: null })}
-          >
+          {/* Neutral, never filled: the seat at the end of the team is the main way in, and the
+              one filled button belongs to the open profile (Talk to it). */}
+          <button type="button" className="arp-new" onClick={() => setDialog({ slug: null })}>
             {t('agents.page.new')}
           </button>
         </div>
@@ -96,13 +96,17 @@ export function AgentsPage({ focus, onFocusDone }: { focus: AgentsFocus | null; 
         {error && <p className="arp-note arp-note--error" role="alert">{t('agents.page.loadFailed')}</p>}
         {agents && count === 0 && <p className="arp-note">{t('agents.page.empty')}</p>}
 
-        {agents && count > 0 && (
+        {agents && (
           <ul className="arp-grid">
             {agents.map((a) => (
               <li key={a.slug}>
                 <AgentRosterCard agent={a} selected={selected === a.slug} onOpen={setSelected} />
               </li>
             ))}
+            {/* The empty seat, always LAST, also when the team is empty. */}
+            <li>
+              <AgentTeamSeat onAdd={() => setDialog({ slug: null })} />
+            </li>
           </ul>
         )}
       </section>

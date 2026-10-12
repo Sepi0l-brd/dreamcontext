@@ -1,8 +1,10 @@
 /*
  * One agent's profile, docked to the right of the roster.
  *
+ * Read like a teammate: header and state, then Soul, Job, Pattern, Where it works, Approval.
  * One filled accent at a time: Talk to it, or Approve while the review is open. Approval is two
- * rows with two chips (the chips are the roster's, from AgentsPage.css), never a single badge.
+ * rows with two chips (the chips are the roster's, from AgentsPage.css), never a single badge;
+ * the header's state line is one quiet word, with a dot only on the two attention states.
  */
 
 .agp-panel {
@@ -41,12 +43,83 @@
   margin: 0;
   font-family: var(--font-family-display);
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-semibold);
+  /* The 40px heading token (-1.6px) closes the word gap at this 20px size; the body
+     tracking keeps "Release writer" two words. */
+  letter-spacing: var(--letter-spacing-body);
   color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agp-role {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.agp-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* ─── State line ─── */
+
+.agp-stateline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.agp-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.agp-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  /* The ink tone, not --color-warning: that measures 2.61:1 on the light card, under the
+     3:1 a non-text mark needs; the ink is 5.39:1 there and the same colour in dark. */
+  background: var(--color-warning-ink);
+}
+
+/* A quiet text button: the header's Review, and Show all lessons. */
+.agp-textbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-hover);
+  text-underline-offset: var(--space-1);
+  cursor: pointer;
+  transition: text-decoration-color var(--transition-fast);
+}
+
+.agp-textbtn:hover {
+  text-decoration-color: currentColor;
+}
+
+.agp-textbtn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 
 .agp-muted {
@@ -80,6 +153,102 @@ p.agp-muted {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
+}
+
+.agp-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.agp-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+.agp-empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-tertiary);
+}
+
+/* The soul: the roster's quiet quote, at reading size. A rule, never a fill. */
+.agp-soul {
+  margin: 0;
+  align-self: stretch;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border-hover);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+/* Paragraphs and bullets inside the soul and the playbook. */
+.agp-para {
+  margin: 0;
+}
+
+.agp-bullets {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: disc;
+}
+
+.agp-bullets li::marker {
+  color: var(--color-text-tertiary);
+}
+
+/* ─── Pattern ─── */
+
+.agp-playbook {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.agp-lessons {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.agp-lesson {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.agp-lesson-date {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.agp-lesson-text {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
 }
 
 .agp-h4 {
@@ -121,6 +290,7 @@ p.agp-muted {
 .agp-approval-row {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-1);
 }
 
@@ -277,6 +447,7 @@ p.agp-muted {
 
 @media (prefers-reduced-motion: reduce) {
   .agp-panel { animation: none; }
-  .agp-btn { transition: none; }
+  .agp-btn,
+  .agp-textbtn { transition: none; }
   .agp-btn:active:not(:disabled) { transform: none; }
 }

@@ -40,8 +40,10 @@
   margin: 0;
   font-family: var(--font-family-display);
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-semibold);
+  /* The 40px heading token (-1.6px) closes the word gap at this 20px size; the body
+     tracking keeps "Release writer" two words. */
+  letter-spacing: var(--letter-spacing-body);
   color: var(--color-text);
 }
 
@@ -141,6 +143,79 @@
   color: var(--color-text-placeholder);
 }
 
+/* ─── Soul ─── */
+
+.aid-soul-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A template chip: neutral, and never keeps a selected state (a pick only fills the text). */
+.aid-chip {
+  height: calc(var(--space-6) + var(--space-1));
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.aid-chip:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-secondary);
+}
+
+.aid-chip:focus-visible,
+.aid-textbtn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.aid-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aid-soul-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.aid-soul-undo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.aid-textbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+  cursor: pointer;
+}
+
+.aid-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.aid-count--over {
+  color: var(--color-error-ink);
+}
+
 .aid-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -218,6 +293,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .aid-modal { animation: none; }
-  .aid-btn { transition: none; }
+  .aid-btn,
+  .aid-chip { transition: none; }
   .aid-btn:active:not(:disabled) { transform: none; }
 }

@@ -11,6 +11,7 @@ import {
   type AgentSummary,
 } from '../../hooks/useAgents';
 import { useWhiteboardList } from '../../hooks/useWhiteboards';
+import { SOUL_MAX_CHARS, SOUL_TEMPLATES, normalizeSoul, soulProblem, soulTemplate, type SoulTemplateId } from '../../generated/soul-templates';
 import { AgentAvatar } from './AgentAvatar';
 import { tx } from './AgentRosterCard';
 import './AgentIdentityDialog.css';
@@ -28,11 +29,13 @@ export interface IdentityForm {
   effort: '' | AgentEffort;
   whiteboard: string;
   learning: boolean;
+  /** How it works, free text. `''` is no soul (the default); a template only fills this. */
+  soul: string;
 }
 
 /** A new agent's form: blank, and learning on (the store's own default for a new agent). */
 export const EMPTY_IDENTITY_FORM: IdentityForm = {
-  title: '', prompt: '', model: '', effort: '', whiteboard: '', learning: true,
+  title: '', prompt: '', model: '', effort: '', whiteboard: '', learning: true, soul: '',
 };
 
 /** A new agent's form, with its home board preset when the create was asked for from a board. */
@@ -40,8 +43,10 @@ export function createForm(whiteboard?: string | null): IdentityForm {
   return whiteboard ? { ...EMPTY_IDENTITY_FORM, whiteboard } : EMPTY_IDENTITY_FORM;
 }
 
-/** The form an edit starts from: exactly what the agent is now. */
-export function formFromAgent(agent: AgentSummary, prompt: string, learning: boolean): IdentityForm {
+/** The form an edit starts from: exactly what the agent is now. `soul` is the FULL soul from the
+ *  detail read (`AgentDetail.soul`), never the roster's `soulExcerpt`: writing back a preview
+ *  would cut the soul short. */
+export function formFromAgent(agent: AgentSummary, prompt: string, learning: boolean, soul = ''): IdentityForm {
   return {
     title: agent.title,
     prompt,
@@ -49,6 +54,7 @@ export function formFromAgent(agent: AgentSummary, prompt: string, learning: boo
     effort: agent.effort ?? '',
     whiteboard: agent.whiteboard ?? '',
     learning,
+    soul,
   };
 }
 
@@ -56,7 +62,21 @@ export function formFromAgent(agent: AgentSummary, prompt: string, learning: boo
 export function identityFormError(form: IdentityForm): string | null {
   if (!form.title.trim()) return 'agents.identity.nameRequired';
   if (!form.prompt.trim()) return 'agents.identity.promptRequired';
+  // The one rule the CLI and the API apply too (the mirrored `soulProblem`).
+  const soul = soulProblem(form.soul);
+  if (soul === 'too-long') return 'agents.identity.soulTooLong';
+  if (soul === 'heading-line') return 'agents.identity.soulHeadingLine';
   return null;
+}
+
+/**
+ * Start the soul from a template: REPLACES the text with the template's, and hands back what was
+ * there so the dialog can offer Undo. Nothing records the pick; the template is only text.
+ */
+export function applySoulTemplate(form: IdentityForm, id: SoulTemplateId): { form: IdentityForm; previous: string } {
+  const template = soulTemplate(id);
+  if (!template) return { form, previous: form.soul };
+  return { form: { ...form, soul: template.text }, previous: form.soul };
 }
 
 /**
@@ -72,6 +92,7 @@ export function identityPatch(before: IdentityForm, after: IdentityForm): AgentI
   if (after.effort !== before.effort) patch.effort = after.effort || null;
   if (after.whiteboard !== before.whiteboard) patch.whiteboard = after.whiteboard || null;
   if (after.learning !== before.learning) patch.learning = after.learning;
+  if (after.soul.trim() !== before.soul.trim()) patch.soul = after.soul.trim();
   return patch;
 }
 
@@ -83,8 +104,8 @@ export function identityErrorKey(err: unknown): 'agents.identity.truncated' | 'a
 }
 
 /**
- * Create an agent, or edit one's identity: name, who it is (its prompt), photo, model, effort,
- * home board, learning. Call settings are never edited here (they are shown read-only on the
+ * Create an agent, or edit one's identity: name, photo, its job (the prompt), its soul (how it
+ * works), model, effort, home board, learning. Call settings are never edited here (they are shown read-only on the
  * profile). An edit reads the agent FRESH before it allows a save, so the prompt it writes back
  * is the whole prompt, never a preview.
  */
@@ -113,12 +134,14 @@ export function AgentIdentityDialog({
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  /** After a template replaced text the owner had: what to put back, and the template's name. */
+  const [soulUndo, setSoulUndo] = useState<{ previous: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // An edit starts from the agent as it is right now, once, when the fresh read lands.
   useEffect(() => {
     if (!editing || original || !detail.data) return;
-    const start = formFromAgent(detail.data.agent, detail.data.prompt, detail.data.learning);
+    const start = formFromAgent(detail.data.agent, detail.data.prompt, detail.data.learning, detail.data.soul ?? '');
     setOriginal(start);
     setForm(start);
   }, [editing, original, detail.data]);
@@ -141,6 +164,22 @@ export function AgentIdentityDialog({
   const set = <K extends keyof IdentityForm>(key: K, value: IdentityForm[K]) => {
     setForm((cur) => ({ ...cur, [key]: value }));
   };
+
+  const pickTemplate = (id: SoulTemplateId, name: string) => {
+    const { form: next, previous } = applySoulTemplate(form, id);
+    setForm(next);
+    setSoulUndo(previous.trim() && previous !== next.soul ? { previous, name } : null);
+  };
+
+  const undoTemplate = () => {
+    if (!soulUndo) return;
+    set('soul', soulUndo.previous);
+    setSoulUndo(null);
+  };
+
+  const soulLength = normalizeSoul(form.soul).length;
+  /** The soul's own refusal, shown at the field whatever else still blocks the save. */
+  const soulError = identityFormError({ ...form, title: 'x', prompt: 'x' });
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
@@ -197,6 +236,7 @@ export function AgentIdentityDialog({
       effort: form.effort || null,
       whiteboard: form.whiteboard || null,
       learning: form.learning,
+      ...(form.soul.trim() ? { soul: form.soul.trim() } : {}),
     }, { onSuccess: finish, onError: fail });
   };
 
@@ -260,6 +300,58 @@ export function AgentIdentityDialog({
           />
           <span className="aid-note">{t('agents.identity.promptHint')}</span>
         </label>
+
+        {/* The soul: how it works. A template only fills the text (with Undo); no chip stays
+            selected and nothing about the pick is sent or stored. Empty is the default. */}
+        <div className="aid-field" data-soul-field>
+          <label className="aid-label" htmlFor="aid-soul">{t('agents.identity.soul')}</label>
+          <div className="aid-soul-start" role="group" aria-label={t('agents.identity.soulStartFrom')}>
+            <span className="aid-note">{t('agents.identity.soulStartFrom')}</span>
+            {SOUL_TEMPLATES.map((tpl) => {
+              const label = tx(t, `agents.soul.template.${tpl.id}`, tpl.label);
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  className="aid-chip"
+                  onClick={() => pickTemplate(tpl.id, label)}
+                  disabled={!ready}
+                  data-soul-template={tpl.id}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <textarea
+            id="aid-soul"
+            className="aid-textarea"
+            value={form.soul}
+            onChange={(e) => { setSoulUndo(null); set('soul', e.target.value); }}
+            placeholder={ready ? t('agents.identity.soulPlaceholder') : t('agents.page.loading')}
+            readOnly={!ready}
+            data-soul-input
+          />
+          <div className="aid-soul-foot">
+            {soulUndo ? (
+              <span className="aid-note aid-soul-undo" role="status">
+                {t('agents.identity.soulReplaced').replace('{name}', soulUndo.name)}
+                <button type="button" className="aid-textbtn" onClick={undoTemplate} data-soul-undo>
+                  {t('agents.identity.soulUndo')}
+                </button>
+              </span>
+            ) : (
+              <span className="aid-note">{t('agents.identity.soulHint')}</span>
+            )}
+            <span
+              className={`aid-note aid-count${soulLength > SOUL_MAX_CHARS ? ' aid-count--over' : ''}`}
+              data-soul-count
+            >
+              {soulLength}/{SOUL_MAX_CHARS}
+            </span>
+          </div>
+          {soulError && <p className="aid-error" role="alert" data-soul-error>{t(soulError)}</p>}
+        </div>
 
         <div className="aid-row">
           <label className="aid-field">

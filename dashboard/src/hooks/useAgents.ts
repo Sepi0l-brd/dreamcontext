@@ -43,6 +43,11 @@ export interface AgentSummary {
   hasPhoto: boolean;
   /** Its prompt, capped server-side: who it is, in the owner's words. */
   description: string;
+  /** Its soul flattened to one line, at most 160 chars, `''` when it has none. A preview only:
+   *  an edit always loads the full soul from `AgentDetail.soul`. */
+  soulExcerpt: string;
+  /** The first line of its prompt, markdown markers stripped, at most 90 chars. */
+  roleLine: string;
   model: string | null;
   effort: AgentEffort | null;
   /** Its home board, or null. */
@@ -69,8 +74,18 @@ export interface AgentDetail {
   agent: AgentSummary;
   prompt: string;
   learning: boolean;
+  /** Its full soul (`## Soul`), `''` when it has none. Hashed: approved with its job. */
+  soul: string;
+  /** What it learned from its own runs, parsed. Read-only here; lessons newest first. */
+  pattern: AgentPattern;
   /** `field: value` lines, the same text the CLI's review prints. */
   review: string;
+}
+
+/** Mirrors `AutomationPattern`: the playbook and the dated lessons. */
+export interface AgentPattern {
+  playbook: string;
+  lessons: { date: string; text: string }[];
 }
 
 /** What creating an agent sends. Identity only: nothing here edits call settings. */
@@ -82,6 +97,8 @@ export interface AgentIdentityDraft {
   effort?: AgentEffort | null;
   whiteboard?: string | null;
   learning?: boolean;
+  /** How it works. `''` clears it on an edit. Nothing records a template it started from. */
+  soul?: string;
 }
 
 /** An identity edit: every field optional, so a dialog that omits one never blanks it. */
@@ -192,6 +209,16 @@ export function useApproveAgent() {
 /** The agents a picker may offer for conversation (Chat, sub-agents, the whiteboard). */
 export function chatReadyAgents(agents: readonly AgentSummary[] | undefined): AgentSummary[] {
   return (agents ?? []).filter((a) => a.approvedForChat);
+}
+
+/** The approval as ONE quiet word, from the two verdicts. Three states, never two: chat-approved
+ *  but not runnable is `cant-run`, never folded into `ready`; no chat means `needs-approval`
+ *  whatever the run verdict says. */
+export type AgentApprovalState = 'ready' | 'cant-run' | 'needs-approval';
+
+export function approvalState(a: Pick<AgentSummary, 'approvedForChat' | 'approvedToRun'>): AgentApprovalState {
+  if (!a.approvedForChat) return 'needs-approval';
+  return a.approvedToRun ? 'ready' : 'cant-run';
 }
 
 /** One agent by slug from the roster, or null. */
