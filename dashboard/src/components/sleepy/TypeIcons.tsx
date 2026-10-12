@@ -145,6 +145,17 @@ export function AutomationIcon(p: IconProps) {
   );
 }
 
+/** Agent — the Agents page's profile card: one figure in a card. */
+export function AgentIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="3" width="17" height="18" rx="2" />
+      <circle cx="12" cy="9" r="2.6" />
+      <path d="M7.4 16.2a4.8 4.8 0 0 1 9.2 0" />
+    </Svg>
+  );
+}
+
 /** Whiteboard — the Whiteboard page's easel. */
 export function WhiteboardIcon(p: IconProps) {
   return (
@@ -173,6 +184,7 @@ const BY_TYPE: Record<RecallHit['type'], (p: IconProps) => React.ReactElement> =
   insight: InsightIcon,
   thesis: ThesisIcon,
   automation: AutomationIcon,
+  agent: AgentIcon,
   whiteboard: WhiteboardIcon,
   core: CoreIcon,
 };

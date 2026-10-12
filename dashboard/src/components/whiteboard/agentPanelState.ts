@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AutomationSummary } from '../../hooks/useAutomations';
+import type { AgentSummary } from '../../hooks/useAgents';
 import { readPanelOpen, writePanelOpen } from './boardPlace';
 import { isValidRefFor, readWidgetPayload } from './widgetModel';
 
@@ -91,24 +91,31 @@ export function useBoardCards(vault: string | null, board: string | undefined): 
   return useSyncExternalStore(subscribe, () => boardCardsOf(vault, board));
 }
 
-/** A board's home agents: the ones whose manifest names it. */
-export function homeAgentsOf(automations: readonly AutomationSummary[] | undefined, board: string): AutomationSummary[] {
-  return (automations ?? []).filter((a) => a.whiteboard === board).sort((a, b) => a.title.localeCompare(b.title));
+/**
+ * What these helpers read of an agent. The board reads the AGENT roster (`/api/agents`, an
+ * `AgentSummary`), whose `whiteboard` is the agent's own home board; kept structural so a
+ * caller holding a narrower row still fits.
+ */
+export type BoardAgentLike = Pick<AgentSummary, 'slug' | 'title' | 'whiteboard'>;
+
+/** A board's home agents: the ones whose identity names it. */
+export function homeAgentsOf<A extends BoardAgentLike>(agents: readonly A[] | undefined, board: string): A[] {
+  return (agents ?? []).filter((a) => a.whiteboard === board).sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** Every agent on `board`, by title: its home agents and every agent with a card there. A card
  *  naming an agent this project does not have is left out (its card says so). */
-export function boardAgentsOf(
-  automations: readonly AutomationSummary[] | undefined,
+export function boardAgentsOf<A extends BoardAgentLike>(
+  agents: readonly A[] | undefined,
   board: string,
   cards: readonly BoardCard[],
-): AutomationSummary[] {
+): A[] {
   const carded = new Set(cards.map((c) => c.agent));
-  return (automations ?? []).filter((a) => a.whiteboard === board || carded.has(a.slug)).sort((a, b) => a.title.localeCompare(b.title));
+  return (agents ?? []).filter((a) => a.whiteboard === board || carded.has(a.slug)).sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** The agent the panel shows on `board`: the one picked there, else the first by title. */
-export function panelAgentOf(agents: readonly AutomationSummary[], pick: string | null): AutomationSummary | null {
+export function panelAgentOf<A extends BoardAgentLike>(agents: readonly A[], pick: string | null): A | null {
   return agents.find((a) => a.slug === pick) ?? agents[0] ?? null;
 }
 
@@ -124,9 +131,9 @@ export function usePanelPick(vault: string | null, board: string | undefined): s
 }
 
 /** The agent the panel shows on `board` while it is open, read outside React (the canvas's drop). */
-export function panelAgentSlug(vault: string | null, board: string, automations: readonly AutomationSummary[] | undefined): string | null {
+export function panelAgentSlug(vault: string | null, board: string, agents: readonly BoardAgentLike[] | undefined): string | null {
   if (!vault || !isOpen(vault)) return null;
-  return panelAgentOf(boardAgentsOf(automations, board, boardCardsOf(vault, board)), picked.get(key(vault, board)) ?? null)?.slug ?? null;
+  return panelAgentOf(boardAgentsOf(agents, board, boardCardsOf(vault, board)), picked.get(key(vault, board)) ?? null)?.slug ?? null;
 }
 
 /** Open the panel on `agent` (a click on its card, a drop on it). */

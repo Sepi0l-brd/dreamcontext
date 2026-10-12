@@ -8,6 +8,7 @@ import {
   type AgentActivity, type FeedMessage, type RunAnswer, type ThreadEntry,
 } from '../../hooks/useAutomations';
 import { AgentAvatar } from './AgentAvatar';
+import { agentFaceOf } from './AgentMemberCard';
 import { AgentFiles, AgentMessage, AgentProse, THREAD_REPLY_MAX_CHARS } from './AgentMessage';
 import { fitRunReport } from '../sleepy/chat/runReport';
 import { runDuration, trimFailureEcho, useNow } from './agentRunState';
@@ -74,11 +75,12 @@ function SystemRow({ entry, rootText }: { entry: ThreadEntry; rootText: string |
   );
 }
 
-/** Who wrote a thread row: your placeholder face, or the agent's photo. One size for both. */
+/** Who wrote a thread row: your placeholder face, or the photo of the agent the automation
+ *  runs as (`agentFaceOf`). One size for both. */
 function RowFace({ who, message }: { who: 'user' | 'agent'; message: FeedMessage }) {
-  return who === 'user'
-    ? <span className="agent-you-av" aria-hidden="true">You</span>
-    : <AgentAvatar slug={message.slug} title={message.title} hasPhoto={message.hasPhoto} size={32} version={message.runId} />;
+  if (who === 'user') return <span className="agent-you-av" aria-hidden="true">You</span>;
+  const face = agentFaceOf(message);
+  return <AgentAvatar slug={face.slug} title={face.title} hasPhoto={message.hasPhoto} of={face.of} size={32} version={message.runId} />;
 }
 
 function AuthoredRow({
@@ -103,7 +105,7 @@ function AuthoredRow({
       <RowFace who={entry.kind === 'user' ? 'user' : 'agent'} message={message} />
       <div className="agent-thread-post-main">
       <div className="agent-thread-post-head">
-        <span className="agent-thread-post-who">{entry.kind === 'user' ? 'You' : message.title}</span>
+        <span className="agent-thread-post-who">{entry.kind === 'user' ? 'You' : agentFaceOf(message).title}</span>
         <span className="agent-thread-post-time">{hhmm(entry.at)}</span>
         {queued && <span className="agent-thread-post-queued">{t('agents.thread.queued')}</span>}
       </div>
@@ -197,7 +199,7 @@ function AnswerRow({
       <RowFace who="agent" message={message} />
       <div className="agent-thread-post-main">
         <div className="agent-thread-post-head">
-          <span className="agent-thread-post-who">{message.title}</span>
+          <span className="agent-thread-post-who">{agentFaceOf(message).title}</span>
           <button
             type="button"
             className="agent-thread-answer-file"

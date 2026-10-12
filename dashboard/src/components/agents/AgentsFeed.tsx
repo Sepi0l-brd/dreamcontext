@@ -2,6 +2,7 @@ import {
   useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type AnimationEvent,
 } from 'react';
 import { AgentAvatar } from './AgentAvatar';
+import { agentFaceOf } from './AgentMemberCard';
 import { AgentMessage } from './AgentMessage';
 import { AgentThreadPanel } from './AgentThreadPanel';
 import { AgentsFeedFilters, type FeedChip, type FeedFilter } from './AgentsFeedFilters';
@@ -309,6 +310,10 @@ export function AgentsFeed({
       slug: a.slug,
       title: a.title,
       hasPhoto: a.hasPhoto,
+      // The server names the agent each automation runs as; the hook's row type does not carry
+      // it yet, so it is read through a cast and falls back to the automation's own face
+      // (an older backend sends none).
+      face: agentFaceOf(a),
     })),
   ];
 

@@ -9,7 +9,9 @@ import { CHAT_MODE_ROWS, type ChatMode } from '../../../lib/chatModes';
 import { MaturityTag } from '../../common/MaturityTag';
 import { SleepyMascot } from '../SleepyMascot';
 import { AgentAvatar } from '../../agents/AgentAvatar';
-import { useAutomations } from '../../../hooks/useAutomations';
+import { useAgents } from '../../../hooks/useAgents';
+import { requestOpenAgents } from '../../../lib/openAgents';
+import { useI18n } from '../../../context/I18nContext';
 
 /**
  * The three panels behind the redesigned composer toolbar: mode+permission (left trigger),
@@ -39,7 +41,7 @@ const PERMISSIONS: Array<{ id: PermissionMode; label: string; glyph: string; des
 
 // ── Agent (who this chat talks to) ───────────────────────────────────────────────────
 
-/** An automation agent picked in the composer: what the surface needs to open its chat. */
+/** An agent picked in the composer: what the surface needs to open its chat. */
 export interface ChatAgentPick {
   slug: string;
   title: string;
@@ -53,8 +55,13 @@ const Check = () => (
 
 /**
  * WHO this chat talks to, listed under the modes the way a model picker lists models (owner,
- * 2026-10-12). Every approved agent is one row; an unapproved one is listed but unpickable,
- * and its tooltip says where to fix it.
+ * 2026-10-12). The rows are the AGENT roster (`/api/agents`, the list the whiteboard reads), not
+ * the automations: an agent is who does the work, and one you only ever talk to has no
+ * automation at all.
+ *
+ * Conversation asks the CHAT verdict (`approvedForChat`), never the run one. An agent approved
+ * for chat is one row, picked as is. One that is not is still listed, with a note, and picking
+ * it opens it on the Agents page, where approval happens in place: the composer never approves.
  *
  * Picking an agent opens a NEW conversation with it (AgentSurface's `pickChatAgent`). "Claude"
  * is the way back, so it is only listed while an agent holds the chat: otherwise the modes
@@ -65,10 +72,13 @@ function AgentList({ agent, onPick, close }: {
   onPick: (agent: ChatAgentPick | null) => void;
   close: () => void;
 }) {
-  const { data: agents = [] } = useAutomations();
+  const { t } = useI18n();
+  const tx = (k: string, fallback: string) => { const v = t(k); return v === k ? fallback : v; };
+  const { data: agents = [] } = useAgents();
   if (agents.length === 0 && !agent) return null;
   const pick = (next: ChatAgentPick | null) => { onPick(next); close(); };
-  const row = (slug: string | null, title: string, hasPhoto: boolean, opts: { disabled?: boolean; tip?: string } = {}) => {
+  const openOnAgentsPage = (slug: string) => { requestOpenAgents({ slug }); close(); };
+  const row = (slug: string | null, title: string, hasPhoto: boolean, opts: { unapproved?: boolean; tip?: string } = {}) => {
     const selected = (slug ?? '') === agent;
     return (
       <button
@@ -76,43 +86,66 @@ function AgentList({ agent, onPick, close }: {
         type="button"
         role="menuitemradio"
         aria-checked={selected}
-        disabled={opts.disabled}
         title={opts.tip}
-        className={`chat-cmp-pickrow${selected ? ' is-active' : ''}`}
-        onClick={() => pick(slug ? { slug, title } : null)}
+        className={`chat-cmp-pickrow${selected ? ' is-active' : ''}${opts.unapproved ? ' is-unapproved' : ''}`}
+        data-agent={slug ?? ''}
+        onClick={() => {
+          if (slug && opts.unapproved) openOnAgentsPage(slug);
+          else pick(slug ? { slug, title } : null);
+        }}
       >
         <span className={`chat-cmp-agentface${slug ? '' : ' is-claude'}`} aria-hidden>
           {slug
-            ? <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={24} />
+            ? <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={24} of="agent" />
             : <SleepyMascot size={24} mood="idle" compact mode="basic" />}
         </span>
         <span className="chat-cmp-pickrow-body">
           <span className="chat-cmp-pickrow-name">{title}</span>
+          {opts.unapproved && (
+            <span className="chat-cmp-pickrow-insight">{tx('agents.picker.unapproved', 'Not approved for chat on this Mac')}</span>
+          )}
         </span>
         {selected && <Check />}
       </button>
     );
   };
+  const openHint = tx('agents.roster.open', 'Open {name}');
   return (
     <>
       <div className="chat-cmp-menu-divider" />
-      <span className="chat-cmp-grouplabel">Agents</span>
+      <span className="chat-cmp-grouplabel">{tx('agents.page.title', 'Agents')}</span>
       <div className="chat-cmp-picklist is-agents">
         {agent && row(null, 'Claude', false, { tip: 'Back to Claude, in a new chat' })}
-        {agents.map((a) => row(a.slug, a.title, a.hasPhoto, {
-          disabled: !a.approved,
-          tip: a.approved ? a.cadenceLabel : 'Approve it in Automations first',
-        }))}
+        {agents.map((a) => row(a.slug, a.title, a.hasPhoto, a.approvedForChat
+          ? { tip: oneLineAbout(a.description) }
+          : { unapproved: true, tip: openHint.replace('{name}', a.title) }))}
+        <button
+          type="button"
+          role="menuitem"
+          className="chat-cmp-pickrow"
+          onClick={() => { requestOpenAgents({}); close(); }}
+        >
+          <span className="chat-cmp-pickrow-body">
+            <span className="chat-cmp-pickrow-name">{tx('agents.picker.manage', 'Manage agents')}</span>
+          </span>
+        </button>
       </div>
     </>
   );
+}
+
+/** An agent's prompt as a one-line tooltip: who it is, in the owner's words, never a wall. */
+function oneLineAbout(description: string): string | undefined {
+  const line = description.replace(/\s+/g, ' ').trim();
+  if (!line) return undefined;
+  return line.length > 140 ? `${line.slice(0, 139)}…` : line;
 }
 
 /** The trigger's name for a chat bound to an agent: its face and title. */
 export function AgentTriggerName({ slug, title, hasPhoto }: { slug: string; title: string; hasPhoto: boolean }) {
   return (
     <>
-      <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={16} />
+      <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={16} of="agent" />
       <span className="chat-cmp-modeltrigger-model">{title}</span>
     </>
   );

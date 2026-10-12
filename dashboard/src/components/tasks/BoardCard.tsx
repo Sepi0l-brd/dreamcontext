@@ -4,8 +4,9 @@ import { useStatusModel } from '../../hooks/useTasks';
 import {
   type CardProps,
   assigneeHue, assigneeInitials, dueInfo, fmtUpdated, levelLabel, prioColor, tagHue, taskAssignees,
-  taskName, taskRice, taskVersion, urgColor,
+  taskAgent, taskName, taskRice, taskVersion, urgColor,
 } from './boardModel';
+import { TaskAgentFace } from './AssignToAgentComposer';
 
 interface BoardCardProps {
   task: Task;
@@ -79,6 +80,7 @@ export function BoardCard({ task, cardProps: cp, dragging, variant = 'board', as
   const ver = task.version;
   const assignees = taskAssignees(task);
   const name = taskName(task);
+  const agent = taskAgent(task);
   const nameOf = (slug: string) => (assigneeName ? assigneeName(slug) : slug);
 
   const showDue = cp.due && !!di;
@@ -110,6 +112,7 @@ export function BoardCard({ task, cardProps: cp, dragging, variant = 'board', as
         {showDue && di && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6, color: di.color, background: di.bg, whiteSpace: 'nowrap', flex: '0 0 auto' }}>{di.label}</span>
         )}
+        {agent && <TaskAgentFace slug={agent} />}
         {showAssignee && <AvatarStack slugs={assignees} ring="var(--color-bg-elevated)" nameOf={nameOf} />}
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', width: 74, textAlign: 'right' }}>{fmtUpdated(task.updated_at)}</span>
       </div>
@@ -163,6 +166,7 @@ export function BoardCard({ task, cardProps: cp, dragging, variant = 'board', as
           </div>
         )}
         <div style={{ flex: 1, minWidth: 4 }} />
+        {agent && <TaskAgentFace slug={agent} />}
         {showAssignee && <AvatarStack slugs={assignees} ring="var(--color-bg-elevated)" nameOf={nameOf} />}
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', flex: '0 0 auto' }}>{fmtUpdated(task.updated_at)}</span>
       </div>

@@ -21,6 +21,9 @@
  *   dreamcontext://project/<vault>/page/<page>[/<id>]
  *   dreamcontext://project/<vault>/view?path=<project-relative path>
  *
+ * `page/agents/<slug>` lands on the Agents page with that agent's profile open; its id must be
+ * an agent slug, stricter than the generic item id.
+ *
  * ROUTING NEVER DUPLICATES A WINDOW. A project link goes to the window that already holds that
  * project (live tab first, then a cold chip that can be woken), found the same way the
  * Assistant's relay finds it (`findOpenProject`). Only when no window holds it is one built, and
@@ -48,11 +51,16 @@ const PAGE_ID_RE = /^[A-Za-z0-9._-]{1,160}$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 export const APP_LINK_PAGES = [
-  'sleep', 'automations', 'tasks', 'knowledge', 'core', 'lab', 'roadmap', 'hypotheses', 'settings',
+  'sleep', 'automations', 'tasks', 'knowledge', 'core', 'lab', 'roadmap', 'hypotheses', 'settings', 'agents',
 ] as const;
 export type AppLinkPage = typeof APP_LINK_PAGES[number];
 /** The pages whose link may name one item. */
-const PAGES_WITH_ID: ReadonlySet<AppLinkPage> = new Set(['tasks', 'knowledge', 'core']);
+const PAGES_WITH_ID: ReadonlySet<AppLinkPage> = new Set(['tasks', 'knowledge', 'core', 'agents']);
+
+/** The item id a page link may carry: an agent's slug on `agents`, the generic id elsewhere. */
+function isValidPageId(page: AppLinkPage, id: string): boolean {
+  return page === 'agents' ? SLUG_RE.test(id) : PAGE_ID_RE.test(id);
+}
 
 export type AppLink =
   | { kind: 'inbox' }
@@ -152,7 +160,7 @@ export function parseAppLink(raw: unknown): AppLink | null {
     if (args.length === 1) return { kind: 'page', vault, page, id: null };
     if (!PAGES_WITH_ID.has(page)) return null;
     const id = decodeSegment(args[1]);
-    return id !== null && PAGE_ID_RE.test(id) ? { kind: 'page', vault, page, id } : null;
+    return id !== null && isValidPageId(page, id) ? { kind: 'page', vault, page, id } : null;
   }
   if (kind === 'view') {
     if (args.length !== 0) return null;

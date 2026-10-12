@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useAutomations, type AutomationSummary } from '../../../hooks/useAutomations';
+import { useAgents, findAgent, type AgentSummary } from '../../../hooks/useAgents';
 import { useAgentModelConfig } from '../../../hooks/useAgentCapabilities';
 import { FALLBACK_MODEL_CONFIG } from '../../../lib/agentComposer';
-import { buildAppLink, routeAppLink } from '../../../lib/appLink';
+import { requestOpenAgents } from '../../../lib/openAgents';
 import { useApi, useVault } from '../../../context/VaultContext';
 import { AgentAvatar } from '../../agents/AgentAvatar';
-import { AgentDialog } from '../../agents/AgentDialog';
 import { ChatPaneHost, type ChatSurfaceActions } from '../../sleepy/ChatPaneHost';
 import type { ChatSession } from '../../sleepy/chatSession';
 import { isValidRefFor } from '../widgetModel';
@@ -23,15 +22,19 @@ import './agentWidget.css';
 type Tx = (key: string, fallback: string) => string;
 
 /**
- * An agent on the board (`agent` widget, ref = the automation slug): the agent's face (owner,
+ * An agent on the board (`agent` widget, ref = the agent slug): the agent's face (owner,
  * 2026-10-06: "card = identity, the conversation always in the panel"). It shows who the agent
  * is, its live state and the last lines of its conversation on this board, read-only; a click
  * opens the board's agent panel on it, where the conversation is (BoardAgentPanel.tsx). The card
  * the panel shows is marked, and the panel's Find its card flashes it.
  *
  * The conversation is the agent's ONE on this board (boardAgentScratch `homeCardId`), a
- * Chat-bridge session the panel opens, never the automation's thread. The card never opens it:
+ * Chat-bridge session the panel opens, never an automation's thread. The card never opens it:
  * while none is live, its lines come from the remembered transcript on disk.
+ *
+ * WHO the card names is the agent roster's (`/api/agents`), the list Chat reads: an agent only
+ * talked to has no automation, and its card must still find it. Editing who it is happens on
+ * its own Agents page, so the card's menu opens that page rather than a dialog of its own.
  *
  * A board element dragged over the card says where it will go; dropped, it lands as a chip in
  * the panel's composer for this agent (canvasGestures `dropOnAgentCard`).
@@ -40,8 +43,8 @@ export function AgentWidget({ elementId, payload, active, size }: WidgetProps) {
   const tx = useWbText();
   const host = useWhiteboardHost();
   const slug = isValidRefFor('agent', payload.ref) ? payload.ref : null;
-  const { data: automations, isLoading } = useAutomations();
-  const agent = useMemo(() => (automations ?? []).find((a) => a.slug === slug) ?? null, [automations, slug]);
+  const { data: roster, isLoading } = useAgents();
+  const agent = useMemo(() => findAgent(roster, slug), [roster, slug]);
   const fallbackTitle = payload.title || slug || tx('whiteboard.kind.agent', 'Agent');
 
   if (!slug) {
@@ -69,7 +72,7 @@ export function AgentWidget({ elementId, payload, active, size }: WidgetProps) {
 
 function AgentCard({ elementId, agent, active, size, board, tx }: {
   elementId: string;
-  agent: AutomationSummary;
+  agent: AgentSummary;
   active: boolean;
   size: WidgetProps['size'];
   board: string | undefined;
@@ -81,7 +84,7 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
   // The agent's one conversation on this board, the panel's: the card only reads it.
   const { spec, session, open } = useAgentSession(vault, board, agent);
   const lines = useCardLines(spec, session);
-  const state = agentCardState({ approved: agent.approved, busy: !!session?.busy, asking: !!session?.asking });
+  const state = agentCardState({ approved: agent.approvedForChat, busy: !!session?.busy, asking: !!session?.asking });
   const panelOpen = useAgentPanelOpen(vault);
   const { agent: shown } = useBoardAgents(board);
   const inPanel = panelOpen && shown?.slug === slug;
@@ -90,13 +93,9 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
   const flashing = useCardFlash(vault, board, elementId);
   const talk = () => showAgentInPanel(vault, board, slug);
 
-  // ── menu and dialog ─────────────────────────────────────────────────────────────────────────
-  const [editing, setEditing] = useState(false);
-  const openInAgents = useCallback(() => {
-    const failed = () => host.toast(tx('whiteboard.agent.openFailed', 'Could not open the Agents page.'));
-    if (!vault) { failed(); return; }
-    void routeAppLink(buildAppLink({ kind: 'automation', vault, slug, file: null })).catch(failed);
-  }, [vault, slug, host, tx]);
+  // ── menu ────────────────────────────────────────────────────────────────────────────────────
+  // Edit, review and approve all live on the agent's own page: the card only sends you there.
+  const openInAgents = useCallback(() => requestOpenAgents({ slug }), [slug]);
   const newConversation = useCallback(() => {
     showAgentInPanel(vault, board, slug);
     if (open('new')) host.toast(tx('whiteboard.agent.newConversationStarted', 'New conversation started.'));
@@ -106,9 +105,8 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
     <AgentCardMenu
       tx={tx}
       items={[
-        { label: tx('whiteboard.agent.edit', 'Edit agent'), run: () => setEditing(true) },
         { label: tx('whiteboard.agent.openInAgents', 'Open in Agents'), run: openInAgents },
-        ...(agent.approved
+        ...(agent.approvedForChat
           ? [{ label: tx('whiteboard.agent.newConversation', 'New conversation'), run: newConversation }]
           : []),
       ]}
@@ -117,7 +115,7 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
 
   const small = size === 's';
   let body: ReactNode;
-  if (!agent.approved && !small) {
+  if (!agent.approvedForChat && !small) {
     body = <Blocked agent={agent} onReview={openInAgents} tx={tx} />;
   } else {
     body = (
@@ -130,11 +128,9 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); talk(); } }}
       >
         <div className="wb-agent-who">
-          <AgentAvatar slug={agent.slug} title={agent.title} hasPhoto={agent.hasPhoto} size={small ? 28 : 44} />
+          <AgentAvatar slug={agent.slug} title={agent.title} hasPhoto={agent.hasPhoto} size={small ? 28 : 44} of="agent" />
           <span className="wb-agent-who-text">
-            {inPanel
-              ? <span className="wb-agent-in-panel">{tx('whiteboard.agent.inPanelMark', 'Open in the panel')}</span>
-              : agent.cadenceLabel && <span className="wb-agent-cadence">{agent.cadenceLabel}</span>}
+            {inPanel && <span className="wb-agent-in-panel">{tx('whiteboard.agent.inPanelMark', 'Open in the panel')}</span>}
             {!small && agent.description && <span className="wb-agent-about">{oneLine(agent.description, 200)}</span>}
           </span>
         </div>
@@ -173,10 +169,6 @@ function AgentCard({ elementId, agent, active, size, board, tx }: {
           </div>
         )}
       </div>
-      {editing && createPortal(
-        <AgentDialog agent={agent} onClose={() => setEditing(false)} onToast={host.toast} />,
-        document.body,
-      )}
     </WidgetFrame>
   );
 }
@@ -303,7 +295,7 @@ export function StateWord({ state, tx }: { state: AgentCardState; tx: Tx }) {
 
 /** An unapproved agent: the server would refuse its card, so the reason and the one control
  *  that fixes it, in place of a chat. */
-export function Blocked({ agent, onReview, tx }: { agent: AutomationSummary; onReview: () => void; tx: Tx }) {
+export function Blocked({ agent, onReview, tx }: { agent: Pick<AgentSummary, 'title'>; onReview: () => void; tx: Tx }) {
   return (
     <p className="wb-agent-blocked">
       <span>

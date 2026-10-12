@@ -31,7 +31,7 @@ import { peerLogoUrl } from '../../../api/client';
 import { usePeerMentions } from '../../../hooks/usePeerMentions';
 import { chatModeRow, DEFAULT_CHAT_MODE, type ChatMode } from '../../../lib/chatModes';
 import { patchAgentSettings } from '../../../lib/agentSettings';
-import { useAutomations } from '../../../hooks/useAutomations';
+import { useAgents, findAgent } from '../../../hooks/useAgents';
 import {
   composerBodyHeight, composerHeightBounds, measureBodyChrome, measureFieldContent, readFieldMetrics,
 } from './composerHeight';
@@ -288,7 +288,7 @@ export function Composer({
   mode?: ChatMode;
   /** Inert by default for the same reason — see `mode`. */
   onModeChange?: (mode: ChatMode) => void;
-  /** The automation agent this chat speaks as (`''` = Claude), shown on the trigger. */
+  /** The agent this chat speaks as (`''` = Claude), shown on the trigger. */
   agent?: string;
   /** The mode menu's Agent section. Absent = no section (see ModeMenu). */
   onAgentPick?: (agent: ChatAgentPick | null) => void;
@@ -1233,10 +1233,11 @@ export function Composer({
   const modelLabel = modelLabelFor(modelConfig, model);
   const effortValue = effort || modelConfig.defaultEffort;
   const modeRow = chatModeRow(mode);
-  // The agent this chat speaks as, read live so a rename in Automations shows here. Only a
-  // bound chat asks for the list; while it loads (or if the agent is gone) the slug stands in.
-  const { data: agentList } = useAutomations({ enabled: !!agent });
-  const agentSummary = agent ? agentList?.find((a) => a.slug === agent) : undefined;
+  // The agent this chat speaks as, read live from the agent roster so a rename on the Agents
+  // page shows here. Only a bound chat asks for the list; while it loads (or if the agent is
+  // gone) the slug stands in.
+  const { data: agentList } = useAgents({ enabled: !!agent });
+  const agentSummary = agent ? findAgent(agentList, agent) ?? undefined : undefined;
   const agentName = agentSummary?.title ?? agent;
 
   // ── Toolbar menus (mode / model+effort / usage) ──────────────────────────────────

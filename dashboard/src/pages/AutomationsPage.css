@@ -193,14 +193,9 @@
   box-shadow: var(--shadow-lg);
 }
 
-/* The header row gives way in steps, least useful first, so nothing is ever cut mid-word
-   or pushed past the edge: the "· N on a schedule" half, then the row wraps onto a second
-   line. The scheduler keeps its WORD at every width (C1): with no title on the row there is
-   room for it, and a bare dot said nothing. */
-@container agents-head (max-width: 760px) {
-  .agents-channel-sub-sched { display: none; }
-}
-
+/* The header row gives way rather than cut anything mid-word or push it past the edge: it
+   wraps onto a second line. The scheduler keeps its WORD at every width (C1): with no title
+   on the row there is room for it, and a bare dot said nothing. */
 @container agents-head (max-width: 620px) {
   .agents-head-row {
     flex-wrap: wrap;

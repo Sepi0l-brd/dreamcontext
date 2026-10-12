@@ -4,7 +4,10 @@ import DOMPurify from 'dompurify';
 import type { AutomationSummary } from '../../hooks/useAutomations';
 import { useSetAutomationEnabled } from '../../hooks/useAutomations';
 import { AgentAvatar } from './AgentAvatar';
+import { agentFaceOf, runsAsTitle } from './AgentMemberCard';
 import { nextFireWords } from '../../lib/agentDraft';
+import { requestOpenAgents } from '../../lib/openAgents';
+import { useI18n } from '../../context/I18nContext';
 import './AgentProfilePopover.css';
 
 /**
@@ -61,7 +64,10 @@ export function AgentProfilePopover({
   onEdit: (slug: string) => void;
   onToast: (msg: string) => void;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const face = agentFaceOf(summary);
+  const runsAs = runsAsTitle(summary);
   const descriptionHtml = useDescriptionHtml(summary.description);
   const setEnabled = useSetAutomationEnabled();
   const scheduled = summary.mode === 'sched';
@@ -89,7 +95,7 @@ export function AgentProfilePopover({
     const next = !summary.enabled;
     setEnabled.mutate({ slug: summary.slug, enabled: next }, {
       onSuccess: () => { onToast(`${summary.title}: ${next ? 'resumed' : 'paused'}.`); onClose(); },
-      onError: (err) => onToast(`${summary.title}: could not ${next ? 'resume' : 'pause'} — ${(err as Error).message}`),
+      onError: (err) => onToast(`${summary.title}: could not ${next ? 'resume' : 'pause'}. ${(err as Error).message}`),
     });
   };
 
@@ -104,15 +110,17 @@ export function AgentProfilePopover({
     <div className="agent-pop" ref={ref} style={{ left, top, width: POPOVER_WIDTH }} role="dialog" aria-label={`${summary.title} profile`}>
       <div className="agent-pop-head">
         <AgentAvatar
-          slug={summary.slug}
-          title={summary.title}
+          slug={face.slug}
+          title={face.title}
           hasPhoto={summary.hasPhoto}
+          of={face.of}
           size={44}
           version={summary.cache?.lastRunAt ?? undefined}
         />
         <div className="agent-pop-id">
           <b>{summary.title}</b>
           <small>{cadence} · {summary.model ?? 'default model'}, {summary.effort ?? 'default'} effort</small>
+          {runsAs && <small>{t('automations.runsAs').replace('{name}', runsAs)}</small>}
         </div>
       </div>
 
@@ -126,6 +134,12 @@ export function AgentProfilePopover({
             button that starts the same run from a profile card is a second,
             differently-worded way to say the same thing. */}
         <button type="button" className="agent-btn" onClick={() => { onEdit(summary.slug); onClose(); }}>Edit</button>
+        {/* Who it runs as is edited where that agent lives: its own profile on the Agents page. */}
+        {face.of === 'agent' && (
+          <button type="button" className="agent-btn" onClick={() => { requestOpenAgents({ slug: face.slug }); onClose(); }}>
+            {t('automations.openAgent').replace('{name}', face.title)}
+          </button>
+        )}
         {scheduled && (
           <button type="button" className="agent-btn" onClick={togglePause} disabled={setEnabled.isPending}>
             {summary.enabled ? 'Pause' : 'Resume'}

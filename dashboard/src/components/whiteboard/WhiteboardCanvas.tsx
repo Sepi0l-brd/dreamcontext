@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   CaptureUpdateAction, Excalidraw, getCommonBounds, getSceneVersion, newElementWith,
   reconcileElements, restoreElements,
@@ -11,8 +10,8 @@ import type {
   ExcalidrawElement, ExcalidrawEmbeddableElement, FileId, NonDeleted, OrderedExcalidrawElement,
 } from '@excalidraw/excalidraw/element/types';
 import { emitInstance, useVault } from '../../context/VaultContext';
-import { useAutomations } from '../../hooks/useAutomations';
-import { AgentDialog } from '../agents/AgentDialog';
+import { useAgents } from '../../hooks/useAgents';
+import { requestOpenAgents } from '../../lib/openAgents';
 import { openExternalUrl } from '../../lib/desktop';
 import { DEFAULT_WIDGET_BOXES, DEFAULT_WIDGET_SIZES, isCardColor, nearestWidgetSize, type CardColor, type WidgetPayload, type WidgetSize } from '../../lib/whiteboardWidgets';
 import { handleLinkOpen, installHyperlinkGuard } from './linkRouting';
@@ -21,7 +20,7 @@ import { reconcileRemoteScene } from './sceneSync';
 import { isPictureOf, type BoardPictures } from './boardPictures';
 import { WidgetPalette } from './WidgetPalette';
 import {
-  WIDGET_STROKE, hasWidgetStroke, humaniseSlug, isWidgetLink, newElementId, readWidgetPayload, selectionIsOnlyWidgets,
+  WIDGET_STROKE, hasWidgetStroke, isWidgetLink, newElementId, readWidgetPayload, selectionIsOnlyWidgets,
   widgetLink,
 } from './widgetModel';
 import { placeNewWidget, widgetSizeOf } from './widgetSize';
@@ -112,8 +111,6 @@ export default function WhiteboardCanvas({ boardSlug, initialScene, onApi, pictu
   /** The selection is only widgets: Excalidraw's properties panel and link popup are hidden. */
   const [widgetsOnly, setWidgetsOnly] = useState(false);
   const strokeFixPending = useRef(false);
-  /** "New agent" from the palette: where its card goes once the create lands. */
-  const [newAgentAt, setNewAgentAt] = useState<{ x: number; y: number } | null>(null);
 
   const onSceneChangeRef = useRef(onSceneChange);
   onSceneChangeRef.current = onSceneChange;
@@ -228,9 +225,11 @@ export default function WhiteboardCanvas({ boardSlug, initialScene, onApi, pictu
   const vaultRef = useRef(vault);
   vaultRef.current = vault;
   boardSlugRef.current = boardSlug;
-  const { data: automations } = useAutomations();
-  const automationsRef = useRef(automations);
-  automationsRef.current = automations;
+  // The agent roster (`/api/agents`), the list Chat reads: a drop asks the CHAT verdict, because
+  // what lands in the panel's composer is conversation, never a run.
+  const { data: roster } = useAgents();
+  const rosterRef = useRef(roster);
+  rosterRef.current = roster;
   const dropContext = useCallback((): DropContext | null => {
     const vaultNow = vaultRef.current;
     const board = boardSlugRef.current;
@@ -240,10 +239,10 @@ export default function WhiteboardCanvas({ boardSlug, initialScene, onApi, pictu
       board,
       tx: txRef.current,
       agentOf: (slug) => {
-        const a = automationsRef.current?.find((x) => x.slug === slug);
-        return a ? { title: a.title, approved: a.approved } : null;
+        const a = rosterRef.current?.find((x) => x.slug === slug);
+        return a ? { title: a.title, approved: a.approvedForChat } : null;
       },
-      panelAgent: () => panelAgentSlug(vaultNow, board, automationsRef.current),
+      panelAgent: () => panelAgentSlug(vaultNow, board, rosterRef.current),
       toast,
     };
   }, [toast]);
@@ -499,18 +498,10 @@ export default function WhiteboardCanvas({ boardSlug, initialScene, onApi, pictu
             onClose={() => setPalette(null)}
             onPick={(payload) => addWidget(payload, palette.scene)}
             onCanvasMenu={palette.origin ? openCanvasMenu : undefined}
-            onNewAgent={() => { setNewAgentAt(palette.scene); setPalette(null); }}
+            // A new agent is an identity, made on its own page (the Agents page's create flow),
+            // with this board preset as its home, so it lands as this board's agent in one step.
+            onNewAgent={() => { setPalette(null); requestOpenAgents({ create: true, whiteboard: boardSlug }); }}
           />
-        )}
-        {newAgentAt && createPortal(
-          <AgentDialog
-            agent={null}
-            initial={{ title: '', description: '', mode: 'call', whiteboard: boardSlug }}
-            onClose={() => setNewAgentAt(null)}
-            onToast={toast}
-            onCreated={(slug) => addWidget({ v: 1, kind: 'agent', ref: slug, title: humaniseSlug(slug) }, newAgentAt)}
-          />,
-          document.body,
         )}
       </div>
     </WhiteboardHostContext.Provider>

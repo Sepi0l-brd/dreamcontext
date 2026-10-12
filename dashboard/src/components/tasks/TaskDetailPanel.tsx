@@ -20,6 +20,10 @@ import { tagHue } from '../../lib/tagColor';
 import { initMermaid, normalizeMermaidSvg } from '../../lib/mermaidRender';
 import { TaskSection, TaskField, EmptyField, RequiredField } from './detail/TaskSection';
 import { useSectionCollapse } from './detail/useSectionCollapse';
+import { AssignToAgentComposer, TaskAgentFace } from './AssignToAgentComposer';
+import { useAgents, findAgent } from '../../hooks/useAgents';
+import { taskAgent } from './boardModel';
+import { tr } from '../../lib/assignToAgent';
 import './TaskDetailPanel.css';
 
 marked.setOptions({ gfm: true, breaks: true });
@@ -445,6 +449,20 @@ export function TaskDetailPanel({ task, onClose, initialRiceExpanded }: TaskDeta
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [riceExpanded, setRiceExpanded] = useState(initialRiceExpanded ?? !!task.rice);
   const [fullScreen, setFullScreen] = useState(false);
+  // "Assign to agent": the composer, and the agent the task is assigned to (its face + name).
+  const [assigningAgent, setAssigningAgent] = useState(false);
+  const { data: agents } = useAgents();
+  const agentSlug = taskAgent(task);
+  const agentName = agentSlug ? findAgent(agents, agentSlug)?.title ?? agentSlug : '';
+  // Clearing goes through the plain task PATCH (`agent: null`): it stops nothing and logs nothing,
+  // it only takes the agent's face off the task.
+  const clearAgent = () => {
+    setMutationError(null);
+    updateTask.mutate(
+      { slug: task.slug, updates: { agent: null } },
+      { onError: () => setMutationError(tr(t, 'tasks.unassignAgentFailed', "Couldn't remove the agent. Try again.")) },
+    );
+  };
   const sections = useSectionCollapse();
 
   // A `backlog` tag means "undated by rule". That rule is real, but it used to be enforced by
@@ -969,6 +987,7 @@ export function TaskDetailPanel({ task, onClose, initialRiceExpanded }: TaskDeta
   }, [bodyHtml, task.slug, theme]);
 
   return (
+    <>
     <div
       className={`detail-overlay ${fullScreen ? 'detail-overlay--fullscreen' : ''}`}
       onClick={onClose}
@@ -980,6 +999,17 @@ export function TaskDetailPanel({ task, onClose, initialRiceExpanded }: TaskDeta
         <div className="detail-header">
           <h2 className="detail-title">{task.name}</h2>
           <div className="detail-header-actions">
+            <button
+              type="button"
+              className="detail-icon-btn"
+              onClick={() => setAssigningAgent(true)}
+              title={t('tasks.assignToAgent')}
+              aria-label={t('tasks.assignToAgent')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="8" width="16" height="12" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6" />
+              </svg>
+            </button>
             <button
               type="button"
               className="detail-icon-btn"
@@ -1129,10 +1159,39 @@ export function TaskDetailPanel({ task, onClose, initialRiceExpanded }: TaskDeta
             </TaskSection>
 
             <TaskSection
-              id="ownership" title="Ownership" count={3}
+              id="ownership" title="Ownership" count={4}
               open={sections.isOpen('ownership')}
               onToggle={() => sections.toggle('ownership')}
             >
+            {/* The agent is NOT an assignee: assignees are people (and sync); the agent is
+                local-only and shows as its own face. */}
+            <TaskField label={t('tasks.agent')}>
+              {agentSlug ? (
+                <div className="task-agent-row">
+                  <TaskAgentFace slug={agentSlug} size={24} />
+                  <span className="task-agent-row-name">{agentName}</span>
+                  <button type="button" className="task-agent-btn" onClick={() => setAssigningAgent(true)}>
+                    {t('tasks.assignToAgent')}
+                  </button>
+                  <button
+                    type="button"
+                    className="task-agent-btn"
+                    onClick={clearAgent}
+                    disabled={updateTask.isPending}
+                    aria-label={`${t('tasks.unassignAgent')}: ${agentName}`}
+                  >
+                    {t('tasks.unassignAgent')}
+                  </button>
+                </div>
+              ) : (
+                <div className="task-agent-row">
+                  <button type="button" className="task-agent-btn" onClick={() => setAssigningAgent(true)}>
+                    {t('tasks.assignToAgent')}
+                  </button>
+                </div>
+              )}
+            </TaskField>
+
             <TaskField label="Assignees">
               <div className="assignee-multi">
                 {effectiveAssignees.length > 0 && (
@@ -1411,5 +1470,10 @@ export function TaskDetailPanel({ task, onClose, initialRiceExpanded }: TaskDeta
       </div>
 
     </div>
+    {/* A sibling of the overlay, not a child: a click on its backdrop must close only it. */}
+    {assigningAgent && (
+      <AssignToAgentComposer task={task} onClose={() => setAssigningAgent(false)} />
+    )}
+    </>
   );
 }

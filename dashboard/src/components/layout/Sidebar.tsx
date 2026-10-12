@@ -20,7 +20,7 @@ import type { ProjectRollup } from '../sleepy/agentStatus';
 import { readScopedRaw, writeScopedRaw } from '../../lib/scopedStorage';
 import './Sidebar.css';
 
-export type Page = 'tasks' | 'roadmap' | 'hypotheses' | 'lab' | 'automations' | 'core' | 'knowledge' | 'sleep' | 'brain' | 'council' | 'settings' | 'packs' | 'about' | 'taxonomy' | 'announcements' | 'whiteboards';
+export type Page = 'tasks' | 'roadmap' | 'hypotheses' | 'lab' | 'automations' | 'agents' | 'core' | 'knowledge' | 'sleep' | 'brain' | 'council' | 'settings' | 'packs' | 'about' | 'taxonomy' | 'announcements' | 'whiteboards';
 
 interface SidebarProps {
   activePage: Page;
@@ -75,13 +75,19 @@ const NAV_GROUPS: NavGroup[] = [
     hue: '--nav-hue-workspace',
     items: [
       // Chat, Tasks, Automations (owner, 2026-10-02): what you drive yourself leads, what
-      // runs without you follows. "Agents" is retired as a rail word — next to Chat it read
-      // as the same thing twice. Automations keeps the hero weight, not position.
+      // runs without you follows. Automations keeps the hero weight, not position.
+      // REVERSED (2026-10-12): ad04364c (14998f3a after the history scrub) ("the rail says Automations, not Agents", 2026-09-29)
+      // retired "Agents" as a rail word, because next to Chat it named the same page as
+      // Automations. That reason is gone: an agent is now its own entity
+      // (`_dream_context/agents/<slug>.md`) with its own page, the roster you create, edit,
+      // approve and talk to, while Automations is only WHEN an agent runs and on what. So
+      // "Agents" returns as its own row, right after the Automations that pick one.
       // Then the beta pages (Insights, Roadmap), and the alpha ones last, so maturity reads
       // top to bottom instead of alternating.
       { launch: 'chat', labelKey: 'nav.chat' },
       { page: 'tasks', labelKey: 'nav.tasks' },
       { page: 'automations', labelKey: 'nav.automations', maturity: 'beta', hero: true },
+      { page: 'agents', labelKey: 'nav.agents', maturity: 'beta' },
       { page: 'lab', labelKey: 'nav.labpage', maturity: 'beta' },
       { page: 'roadmap', labelKey: 'nav.roadmap', maturity: 'beta' },
       { page: 'hypotheses', labelKey: 'nav.hypotheses', maturity: 'alpha' },

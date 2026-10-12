@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentDraft, AutomationMode, AutomationSummary, Weekday } from '../../hooks/useAutomations';
+import type { AutomationDraft, AutomationMode, AutomationSummary, Weekday } from '../../hooks/useAutomations';
 import {
   useAutomation,
   useCreateAgent,
@@ -7,6 +7,10 @@ import {
   useUpdateAgent,
   useUploadAgentPhoto,
 } from '../../hooks/useAutomations';
+import { findAgent, useAgents } from '../../hooks/useAgents';
+import { RequestError } from '../../api/client';
+import { requestOpenAgents } from '../../lib/openAgents';
+import { useI18n } from '../../context/I18nContext';
 import { PHOTO_PRESETS, renderPreset } from '../../lib/agentPhotoPresets';
 import {
   DELETE_ARM_MS,
@@ -23,7 +27,7 @@ import {
 } from '../../lib/agentDraft';
 import { formatSchedule } from '../../../../src/lib/automations/schedule.js';
 import { AgentAvatar, initialsFor } from './AgentAvatar';
-import './AgentDialog.css';
+import './AutomationDialog.css';
 
 /** The model list the composer offers, mirrored (the dashboard has no import
  *  path into the CLI's model registry). A closed dropdown, not a chip rail —
@@ -174,10 +178,17 @@ function SlotRowEditor({
 }
 
 /**
+ * The picker's "describe a new one here" choice: the legacy self-contained create, where the
+ * automation carries its own prompt and the server keeps it as an implicit agent. Not a slug
+ * (a slug is lowercase words and dashes), so it can never collide with a real agent.
+ */
+export const OWN_AGENT = '__own__';
+
+/**
  * What a create opens WITH: one of the first run's starter agents (C9). Name, prompt, mode and
  * schedule arrive filled in; the owner reads them, changes what they like, and approves.
  */
-export interface AgentDialogInitial {
+export interface AutomationDialogInitial {
   title: string;
   description: string;
   mode: AutomationMode;
@@ -190,11 +201,22 @@ export interface AgentDialogInitial {
 }
 
 /**
- * New agent / Edit agent.
+ * New automation / Edit automation.
  *
  * ONE dialog for both, because they are the same form with two verbs — a
  * separate Edit dialog is how the two drift until a field exists in one and
- * not the other. `agent === null` is create; anything else is edit.
+ * not the other. `automation === null` is create; anything else is edit.
+ *
+ * A CREATE PICKS AN AGENT. An agent is who does the work (its own page holds its
+ * name, face, prompt and model); an automation is when it runs and what it is
+ * asked to do there (`job`). So a create with an agent picked shows only Name,
+ * Job and the schedule, and sends `agent` + `job`; the server refuses with 409
+ * `agent_unapproved` while that agent is not approved here for conversation,
+ * and the refusal is shown in place with a way to that agent's profile. The
+ * picker's last choice, "a new agent, described here" (`OWN_AGENT`), keeps the
+ * self-contained form a starter or a whiteboard opens with; a create started
+ * from a whiteboard never shows the picker at all (its home board is the
+ * answer). An EDIT is the form it always was, for legacy and bound alike.
  *
  * Larkspur rules this implements, and where:
  *  - K2  — every field is one 40px row, and Name · Model · Effort share a
@@ -212,26 +234,50 @@ export interface AgentDialogInitial {
  *  - K92 — Model and Effort are closed dropdowns (values); mode and days are
  *          chips (they change what the form shows).
  */
-export function AgentDialog({
-  agent,
+export function AutomationDialog({
+  automation: agent,
   onClose,
   onToast,
   onCreated,
   initial,
 }: {
   /** null ⇒ create. */
-  agent: AutomationSummary | null;
+  automation: AutomationSummary | null;
   onClose: () => void;
   onToast: (msg: string) => void;
   /** Fired after a CREATE lands (never after an edit), so the surface that
-   *  opened this can show the owner the agent they just made rather than
+   *  opened this can show the owner the automation they just made rather than
    *  leaving them where they were. */
   onCreated?: (slug: string) => void;
-  /** A create's starting values (a starter agent). Ignored on an edit. */
-  initial?: AgentDialogInitial;
+  /** A create's starting values (a starter). Ignored on an edit. */
+  initial?: AutomationDialogInitial;
 }) {
+  const { t } = useI18n();
+  const tx = (key: string, fallback: string) => (t(key) === key ? fallback : t(key));
   const editing = agent !== null;
   const start = editing ? undefined : initial;
+
+  /** Only a plain create picks an agent: an edit keeps what it runs as, and a whiteboard's
+   *  create makes that board's own agent. */
+  const pickable = !editing && !start?.whiteboard;
+  const roster = useAgents({ enabled: pickable });
+  // A starter arrives with its own description, so it opens on the self-contained form.
+  const [choice, setChoice] = useState<string>(start ? OWN_AGENT : '');
+  const bound = pickable && choice !== OWN_AGENT;
+  const pickedAgent = bound ? findAgent(roster.data, choice) : null;
+  /** The agent the server just refused (409 `agent_unapproved`), so the notice can stay up
+   *  even when the roster still says otherwise. Cleared by picking again. */
+  const [refusedSlug, setRefusedSlug] = useState<string | null>(null);
+  const [job, setJob] = useState('');
+  // Nothing to pick from: the only way forward in the dialog is the self-contained form.
+  useEffect(() => {
+    if (pickable && roster.isSuccess && roster.data.length === 0 && choice === '') setChoice(OWN_AGENT);
+  }, [pickable, roster.isSuccess, roster.data, choice]);
+  const unapprovedAgent = bound && choice
+    ? (pickedAgent && !pickedAgent.approvedForChat) || refusedSlug === choice
+      ? { slug: choice, title: pickedAgent?.title ?? choice }
+      : null
+    : null;
 
   const [title, setTitle] = useState(agent?.title ?? start?.title ?? '');
   // NEVER seeded from `agent.description` on an edit. That field is the list's 600-character
@@ -251,6 +297,18 @@ export function AgentDialog({
     setPrompt(fullPrompt);
   }, [fullPrompt]);
   const promptReady = !editing || promptSeeded.current || fullPrompt !== undefined;
+  // An edited automation that picks an agent edits its Job here (its identity is the agent's,
+  // edited on the Agents page). Seeded from the same fresh read as the prompt, and sent only
+  // when it changed, so a save that never touched it never rewrites the section.
+  const fullJob = detail.isFetchedAfterMount ? detail.data?.automation.job ?? '' : undefined;
+  const editsJob = editing && fullJob !== undefined
+    && ((!!agent.agent && agent.agent !== agent.slug) || fullJob.trim() !== '');
+  const jobSeed = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editing || jobSeed.current !== null || fullJob === undefined) return;
+    jobSeed.current = fullJob;
+    setJob(fullJob);
+  }, [editing, fullJob]);
   const [mode, setMode] = useState<AutomationMode>(agent?.mode ?? start?.mode ?? 'sched');
   const [rows, setRows] = useState<SlotRow[]>(() =>
     initialSlotRows(agent?.schedule?.slots, agent ? undefined : start, new Date()));
@@ -324,6 +382,17 @@ export function AgentDialog({
    */
   const handleDescription = (value: string) => {
     setPrompt(value);
+    prefillFrom(value);
+  };
+
+  /** The Job is the bound form's description: it names the automation and finds its time the
+   *  same way, under the same touched rules. */
+  const handleJob = (value: string) => {
+    setJob(value);
+    prefillFrom(value);
+  };
+
+  const prefillFrom = (value: string) => {
     if (shouldPrefill({ touched: atTouched.current, editing })) {
       const found = timeFromDescription(value);
       if (found) setRows((cur) => cur.map((r, i) => (i === 0 ? { ...r, at: found } : r)));
@@ -359,6 +428,14 @@ export function AgentDialog({
    *  happen, including that nothing runs until it is approved here. */
   const summary = useMemo(() => {
     const name = title.trim() || 'this agent';
+    if (bound) {
+      const when = 'error' in parsedSlots ? 'at no valid time yet' : formatSchedule({ slots: parsedSlots.slots });
+      return pickedAgent ? (
+        <>
+          Runs <b>{when}</b> as <b>{pickedAgent.title}</b>, and is approved on this Mac the moment you save.
+        </>
+      ) : <>Pick the agent this automation runs as.</>;
+    }
     if (mode === 'call') {
       return (
         <>
@@ -374,22 +451,57 @@ export function AgentDialog({
         until {name} is approved on this Mac.
       </>
     );
-  }, [mode, parsedSlots, model, effort, title]);
+  }, [bound, pickedAgent, mode, parsedSlots, model, effort, title]);
 
-  const canSave = promptReady
-    && title.trim().length > 0
-    && prompt.trim().length > 0
-    && (mode === 'call' || !('error' in parsedSlots));
+  const canSave = bound
+    // A bound create: an agent that may speak here, a name, and a valid schedule. The agent's
+    // prompt is its own, so there is no prompt to wait for.
+    ? !!pickedAgent && pickedAgent.approvedForChat
+      && title.trim().length > 0
+      && !('error' in parsedSlots)
+    : promptReady
+      && title.trim().length > 0
+      && prompt.trim().length > 0
+      && (mode === 'call' || !('error' in parsedSlots));
 
-  const draft: AgentDraft = {
-    title: title.trim(),
-    prompt: prompt.trim(),
-    mode,
-    ...(mode === 'sched' && !('error' in parsedSlots) ? { slots: parsedSlots.slots } : {}),
-    model,
-    effort: effort as AgentDraft['effort'],
-    // Create only: `start` is undefined on an edit, and the server never moves a home board.
-    ...(start?.whiteboard ? { whiteboard: start.whiteboard } : {}),
+  const draft: AutomationDraft = bound
+    // Identity fields are the agent's (edited on the Agents page), so none travel here; a bound
+    // automation always runs on a schedule (an agent you only call IS the agent).
+    ? {
+      title: title.trim(),
+      agent: choice,
+      job: job.trim(),
+      mode: 'sched',
+      ...(!('error' in parsedSlots) ? { slots: parsedSlots.slots } : {}),
+    }
+    : {
+      title: title.trim(),
+      prompt: prompt.trim(),
+      mode,
+      ...(mode === 'sched' && !('error' in parsedSlots) ? { slots: parsedSlots.slots } : {}),
+      model,
+      effort: effort as AutomationDraft['effort'],
+      // Edit only: a changed Job ('' removes it). The server re-approves the edit like any other.
+      ...(editsJob && job.trim() !== (jobSeed.current ?? '').trim() ? { job: job.trim() } : {}),
+      // Create only: `start` is undefined on an edit, and the server never moves a home board.
+      ...(start?.whiteboard ? { whiteboard: start.whiteboard } : {}),
+    };
+
+  /** A create refusal that names the agent, not the form: shown in place with a way to it. */
+  const onCreateError = (err: unknown) => {
+    if (bound && err instanceof RequestError && err.code === 'agent_unapproved') {
+      setRefusedSlug(choice);
+      void roster.refetch();
+      return;
+    }
+    setError((err as Error).message);
+  };
+
+  /** Leave for the Agents page (its create flow, or one agent's profile). The dialog closes so
+   *  the page that opens is not sitting under a scrim. */
+  const openAgents = (focus: { slug?: string; create?: boolean }) => {
+    requestOpenAgents(focus);
+    onClose();
   };
 
   /**
@@ -410,7 +522,7 @@ export function AgentDialog({
       onClose();
     };
     const savedMsg = (saved: AutomationSummary) =>
-      editing ? `${saved.title}: saved and re-approved on this Mac.` : `${saved.title} joined your agents.`;
+      editing ? `${saved.title}: saved and re-approved on this Mac.` : `${saved.title} joined your ${start?.whiteboard ? 'agents' : 'automations'}.`;
 
     const afterSave = (saved: AutomationSummary) => {
       if (!pendingPhoto) {
@@ -421,7 +533,7 @@ export function AgentDialog({
         onSuccess: () => done(saved, savedMsg(saved)),
         // The agent IS saved — only its picture is not. Saying so and moving
         // on beats rolling back a manifest the owner just wrote.
-        onError: (err) => done(saved, `${saved.title} was saved, but the photo did not upload — ${(err as Error).message}`),
+        onError: (err) => done(saved, `${saved.title} was saved, but the photo did not upload. ${(err as Error).message}`),
       });
     };
 
@@ -433,7 +545,7 @@ export function AgentDialog({
     } else {
       createAgent.mutate(draft, {
         onSuccess: afterSave,
-        onError: (err) => setError((err as Error).message),
+        onError: onCreateError,
       });
     }
   };
@@ -447,13 +559,113 @@ export function AgentDialog({
     });
   };
 
+  /** A bound automation always runs on a schedule, so its form never shows the on-call pane
+   *  (an agent you only call is the agent itself, made on the Agents page). */
+  const shownMode: AutomationMode = bound ? 'sched' : mode;
+  const heading = editing
+    ? `Edit ${agent?.title}`
+    : start?.whiteboard ? t('automations.newAgent') : tx('automations.new', 'New automation');
+  /** The agent an edited automation runs as, when that is not the automation itself (an
+   *  unsplit file, or an older backend that sends no `agent`). */
+  const runsAs = agent?.agent && agent.agent !== agent.slug
+    ? { slug: agent.agent, title: agent.agentTitle ?? agent.agent }
+    : null;
+
   return (
     <div className="agent-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="agent-modal" role="dialog" aria-modal="true" aria-label={editing ? `Edit ${agent?.title}` : 'New agent'}>
+      <div className="agent-modal" role="dialog" aria-modal="true" aria-label={heading}>
         {/* K1: one title. The verb lives on the primary button, not in a
             second heading repeating it. */}
-        <h2 className="agent-modal-title">{editing ? `Edit ${agent?.title}` : 'New agent'}</h2>
+        <h2 className="agent-modal-title">{heading}</h2>
 
+        {pickable && (
+          <div className="agent-field">
+            <span className="agent-label" id="automation-agent-label">{t('automations.pickAgent')}</span>
+            <div className="automation-agent-row">
+              {pickedAgent && (
+                <AgentAvatar
+                  slug={pickedAgent.slug}
+                  title={pickedAgent.title}
+                  hasPhoto={pickedAgent.hasPhoto}
+                  size={40}
+                  of="agent"
+                />
+              )}
+              <select
+                className="agent-select automation-agent-select"
+                value={choice}
+                onChange={(e) => { setChoice(e.target.value); setRefusedSlug(null); setError(null); }}
+                aria-labelledby="automation-agent-label"
+                autoFocus
+              >
+                <option value="" disabled>{t('automations.pickAgentPlaceholder')}</option>
+                {(roster.data ?? []).map((a) => (
+                  /* The approval state rides on the option itself: a native select draws no
+                     badges, and a choice that cannot be saved must say so before it is picked. */
+                  <option key={a.slug} value={a.slug}>
+                    {a.approvedForChat ? a.title : `${a.title} · ${t('agents.picker.unapproved')}`}
+                  </option>
+                ))}
+                <option value={OWN_AGENT}>{tx('automations.pickAgentOwn', 'A new agent, described here')}</option>
+              </select>
+              <button type="button" className="agent-btn" onClick={() => openAgents({ create: true })}>
+                {t('automations.newAgent')}
+              </button>
+            </div>
+            <span className="agent-note">
+              {roster.isSuccess && roster.data.length === 0 ? t('automations.pickAgentNone') : t('automations.pickAgentHint')}
+            </span>
+            {unapprovedAgent && (
+              /* The 409 `agent_unapproved`, in place: what is wrong and the one way to fix it. */
+              <p className="automation-agent-refused" role="alert">
+                <span>{t('automations.agentUnapproved').replace('{name}', unapprovedAgent.title)}</span>
+                <button
+                  type="button"
+                  className="automation-agent-link"
+                  onClick={() => openAgents({ slug: unapprovedAgent.slug })}
+                >
+                  {t('automations.openAgent').replace('{name}', unapprovedAgent.title)}
+                </button>
+              </p>
+            )}
+          </div>
+        )}
+
+        {editing && runsAs && (
+          /* A bound automation's identity is its agent's: say whose, and how to get there. */
+          <p className="agent-note automation-runs-as">
+            <AgentAvatar slug={runsAs.slug} title={runsAs.title} hasPhoto={!!agent?.hasPhoto} size={20} of="agent" />
+            <span>{t('automations.runsAs').replace('{name}', runsAs.title)}</span>
+            <button type="button" className="automation-agent-link" onClick={() => openAgents({ slug: runsAs.slug })}>
+              {t('automations.openAgent').replace('{name}', runsAs.title)}
+            </button>
+          </p>
+        )}
+
+        {bound ? (
+          <>
+            <label className="agent-field">
+              <span className="agent-label">Name</span>
+              <input
+                className="agent-input"
+                value={title}
+                onChange={(e) => { titleTouched.current = true; setTitle(e.target.value); }}
+                placeholder="Daily insight digest"
+              />
+            </label>
+            <label className="agent-field">
+              <span className="agent-label">{t('automations.job')}</span>
+              <textarea
+                className="agent-textarea"
+                value={job}
+                onChange={(e) => handleJob(e.target.value)}
+                placeholder={t('automations.jobPlaceholder')}
+              />
+              <span className="agent-note">{t('automations.jobHint')}</span>
+            </label>
+          </>
+        ) : (
+        <>
         <div className="agent-photo-row">
           {preview
             ? <span className="agent-av agent-photo-preview"><img src={preview} alt="" /></span>
@@ -498,10 +710,23 @@ export function AgentDialog({
             placeholder={promptReady
               ? "Her sabah 09:00'da dünkü PostHog insight'larını oku, 3 maddelik özet çıkar; düşüş varsa nedenini araştır."
               : detail.isError ? 'The prompt could not be read, so this agent cannot be saved from here.' : 'Reading the prompt…'}
-            autoFocus={!editing}
+            autoFocus={!editing && !pickable}
           />
           <span className="agent-note">This becomes the prompt the run actually sends.</span>
         </label>
+
+        {editsJob && (
+          <label className="agent-field">
+            <span className="agent-label">{t('automations.job')}</span>
+            <textarea
+              className="agent-textarea"
+              value={job}
+              onChange={(e) => setJob(e.target.value)}
+              placeholder={t('automations.jobPlaceholder')}
+            />
+            <span className="agent-note">{t('automations.jobHint')}</span>
+          </label>
+        )}
 
         {/* K2: three short fields, one 40px row — not three stacked rows.
             K92: Model and Effort are values, so they are closed dropdowns. */}
@@ -529,10 +754,14 @@ export function AgentDialog({
           </label>
         </div>
 
+        </>
+        )}
+
         <div className="agent-field">
           <span className="agent-label">When does it run?</span>
           {/* K92: mode IS a mode — picking it changes the shape of the form
               below, so it stays two visible chips rather than a dropdown. */}
+          {!bound && (
           <div className="agent-chips">
             <button
               type="button"
@@ -551,6 +780,7 @@ export function AgentDialog({
               Only when I call it
             </button>
           </div>
+          )}
 
           {/* K18: height + opacity, 220ms in / 180ms out, fade only under
               reduced motion. Both panes are always mounted so the transition
@@ -560,9 +790,9 @@ export function AgentDialog({
               and in the accessibility tree, so a keyboard user would tab
               through seven day chips that are not on screen. */}
           <div
-            className={`agent-reveal${mode === 'sched' ? ' agent-reveal--on' : ''}`}
-            aria-hidden={mode !== 'sched'}
-            inert={mode !== 'sched' ? true : undefined}
+            className={`agent-reveal${shownMode === 'sched' ? ' agent-reveal--on' : ''}`}
+            aria-hidden={shownMode !== 'sched'}
+            inert={shownMode !== 'sched' ? true : undefined}
           >
             <div>
               {/* Several rows = several times; the agent fires at every one
@@ -590,13 +820,13 @@ export function AgentDialog({
           </div>
 
           <div
-            className={`agent-reveal${mode === 'call' ? ' agent-reveal--on' : ''}`}
-            aria-hidden={mode !== 'call'}
-            inert={mode !== 'call' ? true : undefined}
+            className={`agent-reveal${shownMode === 'call' ? ' agent-reveal--on' : ''}`}
+            aria-hidden={shownMode !== 'call'}
+            inert={shownMode !== 'call' ? true : undefined}
           >
             <div>
               <p className="agent-note agent-note--reveal">
-                It stays quiet until you run it yourself — <b>no schedule, and the dispatcher never fires it</b>.
+                It stays quiet until you run it yourself: <b>no schedule, and nothing fires it on its own</b>.
               </p>
             </div>
           </div>
@@ -618,7 +848,7 @@ export function AgentDialog({
               onClick={remove}
               disabled={busy}
             >
-              {armedDelete ? 'Click again to delete' : 'Delete agent'}
+              {armedDelete ? 'Click again to delete' : 'Delete automation'}
             </button>
           )}
           <span className="agent-modal-spacer" />

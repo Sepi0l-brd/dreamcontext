@@ -3,7 +3,7 @@ import { useI18n } from '../context/I18nContext';
 import { useApi, useVault } from '../context/VaultContext';
 import { useFocusTarget, type FocusTarget } from '../hooks/useFocusTarget';
 import { useDefaultWhiteboard, useWhiteboardEditor, useWhiteboardList } from '../hooks/useWhiteboards';
-import { useAutomations } from '../hooks/useAutomations';
+import { useAgents } from '../hooks/useAgents';
 import type { SaveState } from '../hooks/whiteboardSaveLoop';
 import type { ExportNote } from '../lib/exportDownload';
 import { LazyWhiteboardCanvas } from '../components/whiteboard/LazyWhiteboardCanvas';
@@ -96,13 +96,15 @@ function WhiteboardsPageBody({ focus }: WhiteboardsPageProps) {
   // Only the open board's agents' conversations stay alive (one `claude` each): its home agents
   // and the agents with a card on it. The rest end once idle, so boards visited with the panel
   // open, deleted boards, removed cards and re-homed agents never pile up.
-  const { data: automations } = useAutomations();
+  // Read from the agent roster, the list the panel and the cards read, so the sweep and the
+  // panel agree on who is on the board.
+  const { data: roster } = useAgents();
   const openCards = useBoardCards(vault, openSlug ?? undefined);
   useEffect(() => {
-    if (!vault || !openSlug || !automations) return;
-    sweepHomeSessions(vault, (board, agent) => board === openSlug && automations.some((a) => a.slug === agent
+    if (!vault || !openSlug || !roster) return;
+    sweepHomeSessions(vault, (board, agent) => board === openSlug && roster.some((a) => a.slug === agent
       && (a.whiteboard === board || openCards.some((c) => c.agent === agent))));
-  }, [vault, openSlug, automations, openCards]);
+  }, [vault, openSlug, roster, openCards]);
 
   if (openSlug) {
     // Keyed on the slug: switching boards unmounts this editor first, so its save loop's

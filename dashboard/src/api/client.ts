@@ -226,6 +226,19 @@ export function automationPhotoUrl(vault: string | null, slug: string, v?: strin
 }
 
 /**
+ * An AGENT's photo (`GET /api/agents/:slug/photo`), for the same `<img>` reasons as
+ * {@link automationPhotoUrl}. Distinct because an agent may exist with no automation file of
+ * its own slug (a new-format agent you only call), where the automations route answers 404.
+ */
+export function agentPhotoUrl(vault: string | null, slug: string, v?: string | number): string {
+  const params = new URLSearchParams();
+  if (vault) params.set('vault', vault);
+  if (v !== undefined) params.set('v', String(v));
+  const qs = params.toString();
+  return `${BASE_URL}/agents/${encodeURIComponent(slug)}/photo${qs ? `?${qs}` : ''}`;
+}
+
+/**
  * The unpinned client — no vault header, so the server answers for its own pinned root.
  * This is what the launcher, the capture bar, the perch and the checklist window use (and
  * what `useApi()` returns outside a `VaultProvider`), which is why it must stay exported.

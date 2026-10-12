@@ -13,6 +13,7 @@ import { RoadmapPage } from './pages/RoadmapPage';
 import { HypothesesPage } from './pages/HypothesesPage';
 import { LabPage } from './pages/LabPage';
 import { AutomationsPage, type AutomationsFocus } from './pages/AutomationsPage';
+import { AgentsPage } from './pages/AgentsPage';
 import { SleepPage } from './pages/SleepPage';
 import { CorePage } from './pages/CorePage';
 import { KnowledgePage } from './pages/KnowledgePage';
@@ -27,6 +28,8 @@ import { WhiteboardsPage } from './pages/WhiteboardsPage';
 import { dropBoardAgentScratch } from './components/whiteboard/boardAgentScratch';
 import type { Page } from './components/layout/Sidebar';
 import { parseAppLink } from './lib/appLink';
+import { OPEN_AGENTS_EVENT, readOpenAgentsDetail, type AgentsFocus, type OpenAgentsDetail } from './lib/openAgents';
+import { TALK_TO_AGENT_REQUEST_EVENT, forwardTalkToAgent } from './lib/talkToAgent';
 import { OPEN_SESSION_EVENT, type OpenSessionDetail } from './lib/openSession';
 import {
   START_CHAT_INTENT_EVENT, START_CHAT_REFUSED_EVENT, type StartChatIntentDetail,
@@ -97,6 +100,71 @@ function RollupBridge({
   vault, onRollup,
 }: { vault: string; onRollup?: (vault: string, rollup: ProjectRollup) => void }) {
   useInstanceEvent<ProjectRollup>(PROJECT_ROLLUP_EVENT, (rollup) => onRollup?.(vault, rollup));
+  return null;
+}
+
+/**
+ * The listener half of `requestOpenAgents` (`lib/openAgents.ts`). The request rings on the
+ * WINDOW (its callers hold no bus), so every mounted project hears it; only the ACTIVE one acts.
+ * That is exact: a hidden instance is `inert`, so the click came from the visible project.
+ *
+ * Rendered inside Shell's children for `nav`. Renders nothing.
+ */
+function OpenAgentsBridge({
+  nav, onAgentsFocus,
+}: {
+  nav: ShellNavigation;
+  onAgentsFocus: (focus: OpenAgentsDetail) => void;
+}) {
+  const { isActive } = useVault();
+  useEffect(() => {
+    if (!isActive) return;
+    const listener = (event: Event) => {
+      nav.navigate('agents', null);
+      onAgentsFocus(readOpenAgentsDetail((event as CustomEvent<unknown>).detail));
+    };
+    window.addEventListener(OPEN_AGENTS_EVENT, listener);
+    return () => window.removeEventListener(OPEN_AGENTS_EVENT, listener);
+  }, [isActive, nav, onAgentsFocus]);
+  return null;
+}
+
+/**
+ * A plain `nav.navigate('agents', slug)` (the command palette opening an `agent` recall hit) as
+ * the Agents page's OWN focus. The page reads only `AgentsFocus`, so without this a navigation
+ * carrying an id would land on the roster and drop the slug. Once per `nav.nonce`, slug-checked
+ * like every other request. Renders nothing.
+ */
+function NavFocusAgentsBridge({
+  nav, onAgentsFocus,
+}: {
+  nav: ShellNavigation;
+  onAgentsFocus: (focus: OpenAgentsDetail) => void;
+}) {
+  const landed = useRef(-1);
+  const { page, focusId, nonce } = nav;
+  useEffect(() => {
+    if (page !== 'agents' || !focusId || nonce === landed.current) return;
+    landed.current = nonce;
+    const focus = readOpenAgentsDetail({ slug: focusId });
+    if (focus.slug) onAgentsFocus(focus);
+  }, [page, focusId, nonce, onAgentsFocus]);
+  return null;
+}
+
+/**
+ * The instance hop of `requestTalkToAgent` (`lib/talkToAgent.ts`): heard on the window, answered
+ * only by the ACTIVE instance, which re-emits it on its own bus for its `AgentSurface` and hands
+ * the surface's ACK back. Renders nothing.
+ */
+function TalkToAgentBridge() {
+  const { isActive, bus } = useVault();
+  useEffect(() => {
+    if (!isActive) return;
+    const listener = (event: Event) => forwardTalkToAgent(bus, (event as CustomEvent<unknown>).detail);
+    window.addEventListener(TALK_TO_AGENT_REQUEST_EVENT, listener);
+    return () => window.removeEventListener(TALK_TO_AGENT_REQUEST_EVENT, listener);
+  }, [isActive, bus]);
   return null;
 }
 
@@ -198,7 +266,8 @@ const OPEN_SESSION_ATTEMPTS = 40;
  * `WindowChrome` brings this project's chip forward and hands it down). Re-parsed here and
  * checked against THIS instance's vault — a link for another project is not ours to land.
  *
- *  - `page`       → that page, and the item when the link names one;
+ *  - `page`       → that page, and the item when the link names one (`agents/<slug>` opens
+ *                   that agent's profile, through the Agents page's own focus);
  *  - `automation` → the Agents page, with that agent's newest thread open;
  *  - `session`    → the chat tab, through the agent surface (brought forward, or resumed);
  *  - `project`    → nothing more: the chip coming forward was the whole landing.
@@ -206,12 +275,13 @@ const OPEN_SESSION_ATTEMPTS = 40;
  * Rendered inside Shell's children, like `AgentPageNavBridge`, for `nav` and the bus.
  */
 function AppLinkBridge({
-  nav, link, onConsumed, onAutomationFocus,
+  nav, link, onConsumed, onAutomationFocus, onAgentsFocus,
 }: {
   nav: ShellNavigation;
   link: PendingAppLink | null;
   onConsumed: (nonce: number) => void;
   onAutomationFocus: (slug: string) => void;
+  onAgentsFocus: (focus: OpenAgentsDetail) => void;
 }) {
   const { vault, bus } = useVault();
   const landed = useRef(0);
@@ -224,7 +294,10 @@ function AppLinkBridge({
     onConsumed(link.nonce);
     const parsed = parseAppLink(link.raw);
     if (!parsed || parsed.kind === 'inbox' || parsed.kind === 'view' || parsed.vault !== vault) return;
-    if (parsed.kind === 'page') {
+    if (parsed.kind === 'page' && parsed.page === 'agents') {
+      nav.navigate('agents', null);
+      onAgentsFocus(parsed.id ? { slug: parsed.id } : {});
+    } else if (parsed.kind === 'page') {
       nav.navigate(parsed.page, parsed.id);
     } else if (parsed.kind === 'automation') {
       nav.navigate('automations', null);
@@ -248,16 +321,18 @@ function AppLinkBridge({
       };
       ask();
     }
-  }, [link, vault, bus, nav, onConsumed, onAutomationFocus]);
+  }, [link, vault, bus, nav, onConsumed, onAutomationFocus, onAgentsFocus]);
   return null;
 }
 
 function PageRouter({
-  nav, automationFocus, onAutomationFocusDone,
+  nav, automationFocus, onAutomationFocusDone, agentsFocus, onAgentsFocusDone,
 }: {
   nav: ShellNavigation;
   automationFocus: AutomationsFocus | null;
   onAutomationFocusDone: () => void;
+  agentsFocus: AgentsFocus | null;
+  onAgentsFocusDone: () => void;
 }) {
   const handleBrainNavigate = (target: BrainNavigatePage, nodeId: string) => {
     const pageMap: Record<BrainNavigatePage, Page> = {
@@ -287,6 +362,8 @@ function PageRouter({
       return <LabPage focus={focus} />;
     case 'automations':
       return <AutomationsPage focus={automationFocus} onFocusDone={onAutomationFocusDone} />;
+    case 'agents':
+      return <AgentsPage focus={agentsFocus} onFocusDone={onAgentsFocusDone} />;
     case 'sleep':
       return <SleepPage />;
     case 'core':
@@ -369,6 +446,14 @@ export function ProjectInstance({
     setAutomationFocus({ slug, nonce: focusSeq.current });
   }, []);
   const clearAutomationFocus = useCallback(() => setAutomationFocus(null), []);
+  // What the Agents page was asked to open (a profile or the create flow), held here for the
+  // same reason: the page mounts only after the navigation the request triggers.
+  const [agentsFocus, setAgentsFocus] = useState<AgentsFocus | null>(null);
+  const focusAgents = useCallback((focus: OpenAgentsDetail) => {
+    focusSeq.current += 1;
+    setAgentsFocus({ ...focus, nonce: focusSeq.current });
+  }, []);
+  const clearAgentsFocus = useCallback(() => setAgentsFocus(null), []);
   const consumeLink = useCallback((nonce: number) => onLinkConsumed?.(vault, nonce), [onLinkConsumed, vault]);
   const consumeStart = useCallback((nonce: number) => onStartConsumed?.(vault, nonce), [onStartConsumed, vault]);
   // A project opened (or reached) by "Start with Claude" is about to show the initializer chat,
@@ -412,13 +497,19 @@ export function ProjectInstance({
                       nav={nav}
                       automationFocus={automationFocus}
                       onAutomationFocusDone={clearAutomationFocus}
+                      agentsFocus={agentsFocus}
+                      onAgentsFocusDone={clearAgentsFocus}
                     />
                     <AgentPageNavBridge nav={nav} />
+                    <OpenAgentsBridge nav={nav} onAgentsFocus={focusAgents} />
+                    <NavFocusAgentsBridge nav={nav} onAgentsFocus={focusAgents} />
+                    <TalkToAgentBridge />
                     <AppLinkBridge
                       nav={nav}
                       link={pendingLink}
                       onConsumed={consumeLink}
                       onAutomationFocus={focusAutomation}
+                      onAgentsFocus={focusAgents}
                     />
                     <StartIntentBridge start={pendingStart} onConsumed={consumeStart} />
                     {!suppressAnnouncements && (

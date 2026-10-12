@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
-import { useAutomations, type AutomationSummary } from '../../hooks/useAutomations';
+import { useAgents, type AgentSummary } from '../../hooks/useAgents';
 import { readAgentSettings } from '../../lib/agentSettings';
 import { useVault } from '../../context/VaultContext';
 import type { ChatSession } from '../sleepy/chatSession';
 import { boardAgentsOf, panelAgentOf, useBoardCards, usePanelPick, type BoardCard } from './agentPanelState';
 import { homeCardId, openCardSession, peekCardSession, subscribeCardSession, type CardSpec } from './boardAgentScratch';
 
-/** Every agent on `board` (home agents and agents with a card), and the one the panel shows. */
+/**
+ * Every agent on `board` (home agents and agents with a card), and the one the panel shows.
+ * Read from the agent roster (`/api/agents`), the same list Chat's picker reads: an agent you
+ * only talk to has no automation, and a board must still know its face.
+ */
 export function useBoardAgents(board: string | undefined): {
-  agents: AutomationSummary[];
-  agent: AutomationSummary | null;
+  agents: AgentSummary[];
+  agent: AgentSummary | null;
   cards: readonly BoardCard[];
   isLoading: boolean;
 } {
   const { vault } = useVault();
-  const { data: automations, isLoading } = useAutomations();
+  const { data: roster, isLoading } = useAgents();
   const cards = useBoardCards(vault, board);
-  const agents = useMemo(() => (board ? boardAgentsOf(automations, board, cards) : []), [automations, board, cards]);
+  const agents = useMemo(() => (board ? boardAgentsOf(roster, board, cards) : []), [roster, board, cards]);
   const agent = panelAgentOf(agents, usePanelPick(vault, board));
   return { agents, agent, cards, isLoading };
 }
@@ -25,7 +29,7 @@ export function useBoardAgents(board: string | undefined): {
  * An agent's conversation on a board, as the panel and its cards read it: the live session (or
  * null before the panel first opens it) and the open. Only the panel opens; a card listens.
  */
-export function useAgentSession(vault: string | null, board: string | undefined, agent: AutomationSummary | null) {
+export function useAgentSession(vault: string | null, board: string | undefined, agent: AgentSummary | null) {
   const spec = useMemo<CardSpec | null>(
     () => (vault && board && agent ? { vault, board, elementId: homeCardId(agent.slug) } : null),
     [vault, board, agent?.slug], // eslint-disable-line react-hooks/exhaustive-deps
@@ -34,7 +38,8 @@ export function useAgentSession(vault: string | null, board: string | undefined,
   useEffect(() => (spec ? subscribeCardSession(spec, force) : undefined), [spec]);
   const session = spec ? peekCardSession(spec) : null;
   useEffect(() => (session ? session.subscribe(force) : undefined), [session]);
-  const approved = !!agent?.approved;
+  // Card chat is CONVERSATION, so the chat verdict gates it, never the run one.
+  const approved = !!agent?.approvedForChat;
   const slug = agent?.slug;
   const open = useCallback((how: 'continue' | 'new' | 'resume' = 'continue'): ChatSession | null => {
     if (!spec || !approved || !slug) return null;

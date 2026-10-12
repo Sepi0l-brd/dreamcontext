@@ -39,6 +39,9 @@ export interface FeedChip {
   slug?: string;
   title?: string;
   hasPhoto?: boolean;
+  /** Whose face the chip wears: the agent the automation runs as (`agentFaceOf`). Absent, the
+   *  chip falls back to the automation's own slug and title. */
+  face?: { slug: string; title: string; of: 'agent' | 'automation' };
 }
 
 /** The "+N agents" chip's key in the width cache. */
@@ -222,7 +225,15 @@ export function AgentsFeedFilters({
         // The label is capped and ellipsised (a long agent name), so the whole name rides on it.
         title={c.label}
       >
-        {c.slug && <AgentAvatar slug={c.slug} title={c.title ?? c.slug} hasPhoto={c.hasPhoto ?? false} size={20} />}
+        {c.slug && (
+          <AgentAvatar
+            slug={c.face?.slug ?? c.slug}
+            title={c.face?.title ?? c.title ?? c.slug}
+            hasPhoto={c.hasPhoto ?? false}
+            of={c.face?.of}
+            size={20}
+          />
+        )}
         <span className="agents-chip-label">{c.label}</span>
         <span className="agents-chip-count">{c.count}</span>
       </button>
@@ -285,7 +296,13 @@ export function AgentsFeedFilters({
                 title={c.label}
                 onClick={() => pick(c)}
               >
-                <AgentAvatar slug={c.slug as string} title={c.title ?? c.label} hasPhoto={c.hasPhoto ?? false} size={20} />
+                <AgentAvatar
+                  slug={c.face?.slug ?? (c.slug as string)}
+                  title={c.face?.title ?? c.title ?? c.label}
+                  hasPhoto={c.hasPhoto ?? false}
+                  of={c.face?.of}
+                  size={20}
+                />
                 <span className="agents-chips-menu-label">{c.label}</span>
                 <span className="agents-chip-count">{c.count}</span>
               </button>

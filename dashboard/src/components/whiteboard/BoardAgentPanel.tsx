@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import type { AutomationSummary } from '../../hooks/useAutomations';
-import { buildAppLink, routeAppLink } from '../../lib/appLink';
+import type { AgentSummary } from '../../hooks/useAgents';
+import { requestOpenAgents } from '../../lib/openAgents';
 import { useVault } from '../../context/VaultContext';
 import { useI18n } from '../../context/I18nContext';
 import { AgentAvatar } from '../agents/AgentAvatar';
@@ -18,7 +18,7 @@ type Tx = (key: string, fallback: string) => string;
 /**
  * The board's agents, in a panel on the right of the board (owner, 2026-10-05: "agent side
  * menu"; 2026-10-06: "card = identity, the conversation always in the panel"). It knows every
- * agent on the board: its home agents (whose manifest names the board) and every agent with a
+ * agent on the board: its home agents (whose identity names the board) and every agent with a
  * card there, one avatar each along the top, each with ONE conversation on this board
  * (boardAgentScratch `homeCardId`). That conversation stays alive while the owner is on another
  * page: coming back shows it where it was. A card on the board is the agent's face: clicking it
@@ -104,12 +104,12 @@ export function BoardAgentPanel({ board }: { board: string }) {
 function AgentTab({ vault, board, agent, selected, tx }: {
   vault: string | null;
   board: string;
-  agent: AutomationSummary;
+  agent: AgentSummary;
   selected: boolean;
   tx: Tx;
 }) {
   const { session } = useAgentSession(vault, board, agent);
-  const state = agentCardState({ approved: agent.approved, busy: !!session?.busy, asking: !!session?.asking });
+  const state = agentCardState({ approved: agent.approvedForChat, busy: !!session?.busy, asking: !!session?.asking });
   const label = `${agent.title} · ${stateText(state, tx)}`;
   return (
     <button
@@ -122,7 +122,7 @@ function AgentTab({ vault, board, agent, selected, tx }: {
       data-agent={agent.slug}
       onClick={() => setPanelAgent(vault, board, agent.slug)}
     >
-      <AgentAvatar slug={agent.slug} title={agent.title} hasPhoto={agent.hasPhoto} size={28} />
+      <AgentAvatar slug={agent.slug} title={agent.title} hasPhoto={agent.hasPhoto} size={28} of="agent" />
       <span className={`wb-agent-tab-dot wb-agent-tab-dot--${state.kind}`} aria-hidden="true" />
     </button>
   );
@@ -132,13 +132,13 @@ function AgentTab({ vault, board, agent, selected, tx }: {
 function PanelBar({ vault, board, agent, cards, tx }: {
   vault: string;
   board: string;
-  agent: AutomationSummary;
+  agent: AgentSummary;
   cards: readonly BoardCard[];
   tx: Tx;
 }) {
   const { session, open } = useAgentSession(vault, board, agent);
-  const state = agentCardState({ approved: agent.approved, busy: !!session?.busy, asking: !!session?.asking });
-  const openInAgents = () => { void routeAppLink(buildAppLink({ kind: 'automation', vault, slug: agent.slug, file: null })).catch(() => {}); };
+  const state = agentCardState({ approved: agent.approvedForChat, busy: !!session?.busy, asking: !!session?.asking });
+  const openInAgents = () => requestOpenAgents({ slug: agent.slug });
   // An agent with several cards: each press points at the next one.
   const nextCard = useRef(0);
   const locate = () => {
@@ -166,7 +166,7 @@ function PanelBar({ vault, board, agent, cards, tx }: {
           tx={tx}
           items={[
             { label: tx('whiteboard.agent.openInAgents', 'Open in Agents'), run: openInAgents },
-            ...(agent.approved ? [{ label: tx('whiteboard.agent.newConversation', 'New conversation'), run: () => { open('new'); } }] : []),
+            ...(agent.approvedForChat ? [{ label: tx('whiteboard.agent.newConversation', 'New conversation'), run: () => { open('new'); } }] : []),
           ]}
         />
       </span>
@@ -174,17 +174,17 @@ function PanelBar({ vault, board, agent, cards, tx }: {
   );
 }
 
-function PanelChat({ vault, board, agent, tx }: { vault: string; board: string; agent: AutomationSummary; tx: Tx }) {
+function PanelChat({ vault, board, agent, tx }: { vault: string; board: string; agent: AgentSummary; tx: Tx }) {
   const { t } = useI18n();
   const { session, open } = useAgentSession(vault, board, agent);
   // Opening the panel on an agent is the activation: continue the live conversation, or resume
   // it. Not before the board's file is read: a card's conversation from before is handed to the
   // agent's board conversation first (adoptBoardCards), never shadowed by a fresh one.
   const adopted = useSyncExternalStore(subscribeAdoption, () => boardCardsAdopted(vault, board));
-  useEffect(() => { if (!session && agent.approved && adopted) open(); }, [session, agent.approved, adopted, open]);
-  if (!agent.approved) {
-    const review = () => { void routeAppLink(buildAppLink({ kind: 'automation', vault, slug: agent.slug, file: null })).catch(() => {}); };
-    return <Blocked agent={agent} onReview={review} tx={tx} />;
+  useEffect(() => { if (!session && agent.approvedForChat && adopted) open(); }, [session, agent.approvedForChat, adopted, open]);
+  if (!agent.approvedForChat) {
+    // Approval lives on the agent's own page, in place: the panel never approves.
+    return <Blocked agent={agent} onReview={() => requestOpenAgents({ slug: agent.slug })} tx={tx} />;
   }
   if (!session) return <div className="wb-agent-idle"><p className="wb-agent-empty">{t('common.loading')}</p></div>;
   return (

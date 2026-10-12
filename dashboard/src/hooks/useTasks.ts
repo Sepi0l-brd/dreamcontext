@@ -35,6 +35,9 @@ export interface Task {
   start_date?: string | null;
   due_date?: string | null;
   assignee?: string | null;
+  /** The AGENT this task is assigned to (its slug), never a person. Local-only: it never
+   *  reaches ClickUp/GitHub or the members list. Absent when none. */
+  agent?: string | null;
   custom_fields?: Record<string, string | number | null>;
   rice: RiceFields | null;
   why: string;
@@ -69,7 +72,7 @@ interface CreateTaskInput {
 
 interface UpdateTaskInput {
   slug: string;
-  updates: Partial<Pick<Task, 'status' | 'priority' | 'urgency' | 'description' | 'tags' | 'name' | 'related_feature' | 'version' | 'due_date' | 'start_date' | 'assignee' | 'objectives' | 'body'>> & {
+  updates: Partial<Pick<Task, 'status' | 'priority' | 'urgency' | 'description' | 'tags' | 'name' | 'related_feature' | 'version' | 'due_date' | 'start_date' | 'assignee' | 'agent' | 'objectives' | 'body'>> & {
     rice?: RiceInput | null;
     custom_fields?: Record<string, string | number | null>;
   };
@@ -158,6 +161,86 @@ export function useUpdateTask() {
       if (variables.updates.related_feature !== undefined) {
         queryClient.invalidateQueries({ queryKey: ['knowledge'] });
       }
+      // An agent's usage (the Agents page's "Tasks" list) is derived from `agent:` fields.
+      if (variables.updates.agent !== undefined) {
+        queryClient.invalidateQueries({ queryKey: ['agents'] });
+      }
+    },
+  });
+}
+
+/** Every refusal `POST /api/tasks/:slug/assign-agent` can answer with, by its `error` slug. */
+export type AssignAgentRefusal =
+  | 'agent_not_approved_to_run'
+  | 'agent_disabled'
+  | 'agent_busy'
+  | 'unknown_task'
+  | 'unknown_agent'
+  | 'note_too_long'
+  | 'missing_agent'
+  | 'invalid_note'
+  | 'invalid_path'
+  | 'assign_failed';
+
+const ASSIGN_REFUSALS: ReadonlySet<string> = new Set<AssignAgentRefusal>([
+  'agent_not_approved_to_run', 'agent_disabled', 'agent_busy', 'unknown_task', 'unknown_agent',
+  'note_too_long', 'missing_agent', 'invalid_note', 'invalid_path', 'assign_failed',
+]);
+
+/**
+ * A refused assignment, TYPED, so the composer can branch on it rather than toast it. The one
+ * that matters most is `agent_not_approved_to_run`: the composer answers it in place with the
+ * agent's review and "Approve and assign", which a generic error toast would bury.
+ * `code` is `'unknown'` for an answer the route never gives (a proxy page, a network failure).
+ */
+export class AssignAgentError extends Error {
+  constructor(message: string, readonly code: AssignAgentRefusal | 'unknown', readonly status: number) {
+    super(message);
+    this.name = 'AssignAgentError';
+  }
+}
+
+/** Turn whatever the request threw into an {@link AssignAgentError}. Pure, for the tests. */
+export function toAssignAgentError(err: unknown): AssignAgentError {
+  if (err instanceof AssignAgentError) return err;
+  const e = err as { message?: unknown; code?: unknown; status?: unknown } | null;
+  const message = typeof e?.message === 'string' && e.message ? e.message : 'The task could not be assigned.';
+  const status = typeof e?.status === 'number' ? e.status : 0;
+  const code = typeof e?.code === 'string' && ASSIGN_REFUSALS.has(e.code) ? e.code as AssignAgentRefusal : 'unknown';
+  return new AssignAgentError(message, code, status);
+}
+
+/** What a started assignment answers (202). The run itself continues in the background. */
+export interface AssignAgentResult {
+  jobId: string;
+  /** The run's thread id (its fire time, ISO). */
+  runId: string;
+  /** The task moved to its active status (only ever from an open-kind or missing status). */
+  statusMoved: boolean;
+}
+
+/**
+ * "Assign to agent": set `agent:`, log it on the task, and start the agent's run on it. Refusals
+ * reject with an {@link AssignAgentError}; nothing here shows a toast.
+ */
+export function useAssignTaskToAgent() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation<AssignAgentResult, AssignAgentError, { slug: string; agent: string; note?: string }>({
+    mutationFn: async ({ slug, agent, note }) => {
+      const body = note && note.trim() ? { agent, note } : { agent };
+      try {
+        return await api.post<AssignAgentResult>(`/tasks/${encodeURIComponent(slug)}/assign-agent`, body);
+      } catch (err) {
+        throw toAssignAgentError(err);
+      }
+    },
+    onSuccess: (_data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', slug] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      queryClient.invalidateQueries({ queryKey: ['automations-run-job'] });
+      queryClient.invalidateQueries({ queryKey: ['automations-feed'] });
     },
   });
 }

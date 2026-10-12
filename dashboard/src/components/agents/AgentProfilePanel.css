@@ -1,0 +1,282 @@
+/*
+ * One agent's profile, docked to the right of the roster.
+ *
+ * One filled accent at a time: Talk to it, or Approve while the review is open. Approval is two
+ * rows with two chips (the chips are the roster's, from AgentsPage.css), never a single badge.
+ */
+
+.agp-panel {
+  width: min(calc(var(--space-24) * 3.5), 100%);
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: agp-in var(--transition-normal);
+}
+
+@keyframes agp-in {
+  from { transform: translateX(var(--space-4)); opacity: 0; }
+}
+
+.agp-panel-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.agp-ident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.agp-name {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-heading);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agp-muted {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+p.agp-muted {
+  margin: 0;
+}
+
+.agp-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ─── Sections ─── */
+
+.agp-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.agp-h {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.agp-h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+}
+
+.agp-prompt {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agp-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.agp-facts dt {
+  color: var(--color-text-secondary);
+}
+
+.agp-facts dd {
+  margin: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* ─── Approval ─── */
+
+.agp-approval-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.agp-review {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
+
+.agp-review-text {
+  margin: 0;
+  max-height: calc(var(--space-24) * 2);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agp-review-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ─── Usage ─── */
+
+.agp-usage {
+  align-self: stretch;
+}
+
+.agp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.agp-list-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.agp-list-name {
+  color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agp-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-accent-text);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agp-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Buttons ─── */
+
+.agp-btn {
+  height: var(--space-10);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.agp-btn:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-secondary);
+}
+
+.agp-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.agp-btn:focus-visible,
+.agp-link:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.agp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agp-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.agp-btn--primary {
+  background: var(--gradient-brand-strong);
+  border-color: transparent;
+  color: var(--color-accent-text);
+}
+
+.agp-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--gradient-brand-strong);
+}
+
+.agp-btn--danger {
+  color: var(--color-error-ink);
+}
+
+/* Armed: the second click deletes. The label already says so; the tint makes it unmissable. */
+.agp-btn--armed,
+.agp-btn--armed:hover:not(:disabled) {
+  background: var(--color-error-subtle);
+  border-color: var(--color-error);
+}
+
+.agp-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-error-subtle);
+  color: var(--color-error-ink);
+  font-size: var(--font-size-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agp-panel { animation: none; }
+  .agp-btn { transition: none; }
+  .agp-btn:active:not(:disabled) { transform: none; }
+}

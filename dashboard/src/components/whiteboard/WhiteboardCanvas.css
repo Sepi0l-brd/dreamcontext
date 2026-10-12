@@ -378,3 +378,16 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* An agent picker row: its face, then the name and a note, side by side. */
+.wb-picker-row.has-face {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wb-picker-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

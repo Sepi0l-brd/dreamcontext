@@ -1,20 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLabInsights } from '../../hooks/useLab';
-import { useAutomations } from '../../hooks/useAutomations';
+import { useAgents } from '../../hooks/useAgents';
 import { useBoards } from '../../hooks/useBoards';
 import { useKnowledgeList } from '../../hooks/useKnowledge';
 import { useTasks } from '../../hooks/useTasks';
 import { useWhiteboardPages, type WhiteboardPageHit } from '../../hooks/useWhiteboardPages';
 import { isAgentSlugShape, isLabCardRef, type WidgetPayload } from '../../lib/whiteboardWidgets';
 import { isDesktop, pickFiles } from '../../lib/desktop';
+import { requestOpenAgents } from '../../lib/openAgents';
+import { AgentAvatar } from '../agents/AgentAvatar';
 import { WEB_URL_REASON_TEXT, validateWebUrl } from './webUrl';
 import {
   humanizeFileName, isValidRefFor, isValidWidgetRef, knowledgeTitle, pageKindLabel, pageTypeLabel, taskTitle,
 } from './widgetModel';
 import { useWbText } from './whiteboardHost';
 
-/** One pickable row: a slug and what to show for it. */
-interface PickRow { slug: string; title: string; meta?: string }
+/** One pickable row: a slug and what to show for it; `face` leads the row (an agent's avatar). */
+interface PickRow { slug: string; title: string; meta?: string; face?: ReactNode }
 
 const MAX_ROWS = 60;
 
@@ -56,9 +58,21 @@ function PickList({ rows, loading, failed, onPick, emptyText }: {
         {failed && <p className="wb-picker-empty">{tx('whiteboard.widget.loadFailed', 'Could not load this.')}</p>}
         {!loading && !failed && shown.length === 0 && <p className="wb-picker-empty">{emptyText}</p>}
         {shown.map((row) => (
-          <button key={row.slug} type="button" role="option" aria-selected={false} className="wb-picker-row" onClick={() => onPick(row)}>
-            <span className="wb-picker-row-title">{row.title}</span>
-            {row.meta && <span className="wb-picker-row-meta">{row.meta}</span>}
+          <button key={row.slug} type="button" role="option" aria-selected={false} className={`wb-picker-row${row.face ? ' has-face' : ''}`} onClick={() => onPick(row)}>
+            {row.face}
+            {row.face
+              ? (
+                <span className="wb-picker-row-text">
+                  <span className="wb-picker-row-title">{row.title}</span>
+                  {row.meta && <span className="wb-picker-row-meta">{row.meta}</span>}
+                </span>
+              )
+              : (
+                <>
+                  <span className="wb-picker-row-title">{row.title}</span>
+                  {row.meta && <span className="wb-picker-row-meta">{row.meta}</span>}
+                </>
+              )}
           </button>
         ))}
       </div>
@@ -216,15 +230,25 @@ export function TaskPicker({ onPick }: { onPick: Pick }) {
 }
 
 /**
- * The palette's agent picker: an existing agent becomes an agent card on this board, or "New
- * agent" opens the create dialog with this board as the new agent's home (the canvas owns it).
+ * The palette's agent picker, over the agent roster (`/api/agents`, the list Chat reads): an
+ * agent approved for chat becomes an agent card on this board, each row led by its face. One not
+ * approved yet is listed, and picking it opens it on the Agents page, where approval happens in
+ * place; the board never approves. "New agent" opens the Agents page's create flow (the canvas
+ * owns that).
  */
 export function AgentPicker({ onPick, onNew }: { onPick: Pick; onNew: () => void }) {
   const tx = useWbText();
-  const { data, isLoading, isError } = useAutomations();
+  const { data, isLoading, isError } = useAgents();
+  const unapproved = tx('agents.picker.unapproved', 'Not approved for chat on this Mac');
+  const ready = useMemo(() => new Set((data ?? []).filter((a) => a.approvedForChat).map((a) => a.slug)), [data]);
   const rows = useMemo(() => data
     ?.filter((a) => isAgentSlugShape(a.slug))
-    .map((a) => ({ slug: a.slug, title: a.title, meta: a.cadenceLabel })), [data]);
+    .map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      meta: a.approvedForChat ? undefined : unapproved,
+      face: <AgentAvatar slug={a.slug} title={a.title} hasPhoto={a.hasPhoto} size={24} of="agent" />,
+    })), [data, unapproved]);
   return (
     <>
       <div className="wb-picker-actions">
@@ -235,7 +259,9 @@ export function AgentPicker({ onPick, onNew }: { onPick: Pick; onNew: () => void
         loading={isLoading}
         failed={isError}
         emptyText={tx('whiteboard.palette.noAgents', 'No agents yet.')}
-        onPick={(r) => onPick({ v: 1, kind: 'agent', ref: r.slug, title: r.title })}
+        onPick={(r) => (ready.has(r.slug)
+          ? onPick({ v: 1, kind: 'agent', ref: r.slug, title: r.title })
+          : requestOpenAgents({ slug: r.slug }))}
       />
     </>
   );

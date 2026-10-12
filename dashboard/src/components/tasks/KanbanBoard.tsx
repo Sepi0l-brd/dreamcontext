@@ -19,6 +19,8 @@ import { SaveScopeDialog } from './SaveScopeDialog';
 import { TaskDetailPanel } from './TaskDetailPanel';
 import { TaskCreateModal } from './TaskCreateModal';
 import { DelegateComposer } from './DelegateComposer';
+import { AssignToAgentComposer } from './AssignToAgentComposer';
+import { useI18n } from '../../context/I18nContext';
 import { AuthorTaskComposer } from './AuthorTaskComposer';
 import { useAgentCapabilities, isSleepAgentReady } from '../../hooks/useAgentCapabilities';
 import { readAgentSettings, AGENT_SETTINGS_EVENT } from '../../lib/agentSettings';
@@ -67,6 +69,7 @@ export function KanbanBoard({ focus }: { focus?: FocusTarget } = {}) {
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; task: Task } | null>(null);
   const [delegateTask, setDelegateTask] = useState<Task | null>(null);
+  const [assignAgentTask, setAssignAgentTask] = useState<Task | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showAuthor, setShowAuthor] = useState(false);
@@ -208,6 +211,9 @@ export function KanbanBoard({ focus }: { focus?: FocusTarget } = {}) {
   // Open the Delegate composer for a task (from the context menu). The composer dispatches
   // the delegate event the always-mounted AgentSurface listens for; we just host the modal.
   const ctxDelegate = useCallback((task: Task) => { setDelegateTask(task); setCtxMenu(null); }, []);
+  // "Assign to agent" runs one of the project's own agents on the task (server-side, so it is
+  // offered on every build, unlike Delegate). The composer answers every refusal in place.
+  const ctxAssignAgent = useCallback((task: Task) => { setAssignAgentTask(task); setCtxMenu(null); }, []);
 
   // ── view actions ────────────────────────────────────────────────────────────────
   const handleRequestSave = useCallback(() => { setPendingSave({ mode: 'save' }); closeAllMenus(); }, [closeAllMenus]);
@@ -370,6 +376,7 @@ export function KanbanBoard({ focus }: { focus?: FocusTarget } = {}) {
           onOpen={(t) => { setSelectedSlug(t.slug); setCtxMenu(null); }}
           onSendToBacklog={ctxSendToBacklog}
           onDelegate={ctxDelegate}
+          onAssignAgent={ctxAssignAgent}
           onSetStatus={ctxSetStatus}
           onSetPriority={ctxSetPriority}
           onDelete={ctxDelete}
@@ -381,6 +388,13 @@ export function KanbanBoard({ focus }: { focus?: FocusTarget } = {}) {
           task={delegateTask}
           onClose={() => setDelegateTask(null)}
           onDelegated={(title) => flash(`Delegated “${title}” to Claude`)}
+        />
+      )}
+
+      {assignAgentTask && (
+        <AssignToAgentComposer
+          task={assignAgentTask}
+          onClose={() => setAssignAgentTask(null)}
         />
       )}
 
@@ -404,22 +418,24 @@ export function KanbanBoard({ focus }: { focus?: FocusTarget } = {}) {
 }
 
 interface CtxMenuState { x: number; y: number; task: Task }
-function TaskContextMenu({ menu, agentReady, onClose, onOpen, onDelegate, onSetStatus, onSetPriority, onSendToBacklog, onDelete }: {
+function TaskContextMenu({ menu, agentReady, onClose, onOpen, onDelegate, onAssignAgent, onSetStatus, onSetPriority, onSendToBacklog, onDelete }: {
   menu: CtxMenuState;
   agentReady?: boolean;
   onClose: () => void;
   onOpen: (t: Task) => void;
   onDelegate: (t: Task) => void;
+  onAssignAgent: (t: Task) => void;
   onSetStatus: (t: Task, status: string) => void;
   onSetPriority: (t: Task, priority: string) => void;
   onSendToBacklog: (t: Task) => void;
   onDelete: (t: Task) => void;
 }) {
   const sm = useStatusModel();
+  const { t } = useI18n();
   const { task } = menu;
-  // The collapsed menu is short now (≈ 220×190px, +34 for the Delegate row); submenus fly
-  // out to the side.
-  const W = 220, H = agentReady ? 224 : 190, SUB_W = 188;
+  // The collapsed menu is short now (≈ 220×224px with Assign to agent, +34 for the Delegate
+  // row); submenus fly out to the side.
+  const W = 220, H = agentReady ? 258 : 224, SUB_W = 188;
   const left = typeof window !== 'undefined' ? Math.min(menu.x, window.innerWidth - W - 8) : menu.x;
   const top = typeof window !== 'undefined' ? Math.min(menu.y, window.innerHeight - H - 8) : menu.y;
   // Flip the flyout to the left when the main menu sits too close to the right edge.
@@ -463,6 +479,12 @@ function TaskContextMenu({ menu, agentReady, onClose, onOpen, onDelegate, onSetS
             <span style={{ flex: 1 }}>Delegate to Claude</span>
           </div>
         )}
+
+        {/* Assign to agent: one of this project's agents takes the task and runs on it. */}
+        <div className="bd-row" onClick={() => onAssignAgent(task)} style={row}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flex: '0 0 auto' }}><rect x="4" y="8" width="16" height="12" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6" /></svg>
+          <span style={{ flex: 1 }}>{t('tasks.assignToAgent')}</span>
+        </div>
 
         <div style={{ height: 1, background: 'var(--color-border)', margin: '5px 4px' }} />
 

@@ -296,6 +296,15 @@ export function taskAssignee(t: Task): string {
   const a = taskAssignees(t);
   return a.length ? a[0] : 'none';
 }
+/**
+ * The AGENT the task is assigned to (its slug), or null. Separate from {@link taskAssignees} on
+ * purpose: an agent is never a person, so it is not part of the assignee filter or grouping; the
+ * card shows it as its own face.
+ */
+export function taskAgent(t: Task): string | null {
+  const slug = typeof t.agent === 'string' ? t.agent.trim() : '';
+  return slug || null;
+}
 export function taskVersion(t: Task): string { return t.version && t.version.trim() ? t.version : 'none'; }
 
 export function levelLabel(k: string): string { return LEVEL_META[k]?.label ?? k; }

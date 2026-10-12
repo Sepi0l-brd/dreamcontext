@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AgentAvatar } from './AgentAvatar';
+import { agentFaceOf } from './AgentMemberCard';
 import { AgentQuestionBlock } from './AgentQuestionBlock';
 import { AgentSummaryBlock } from './AgentSummaryBlock';
 import { BoardEmbed } from '../sleepy/chat/BoardEmbed';
@@ -459,6 +460,7 @@ function ThreadBar({
   onOpen: (opener: HTMLElement) => void;
 }) {
   const { t } = useI18n();
+  const face = agentFaceOf(message);
   return (
     <button
       type="button"
@@ -469,7 +471,7 @@ function ThreadBar({
     >
       {replies > 0 && (
         <span className="agent-thread-bar-faces" aria-hidden="true">
-          <AgentAvatar slug={message.slug} title={message.title} hasPhoto={message.hasPhoto} size={20} version={message.runId} />
+          <AgentAvatar slug={face.slug} title={face.title} hasPhoto={message.hasPhoto} of={face.of} size={20} version={message.runId} />
         </span>
       )}
       {replies > 0 ? (
@@ -529,6 +531,8 @@ export function AgentMessage({
   runStartedAt?: number | null;
 }) {
   const { t } = useI18n();
+  // The face and name are the AGENT's, the one that spoke; actions still address the automation.
+  const face = agentFaceOf(message);
   const report = useThreadReport(message.slug, message.runId, onToast);
   const running = message.status === 'running';
   // Called on every render, before the ask row's early return: a hook's order cannot depend on
@@ -585,7 +589,7 @@ export function AgentMessage({
             <span className="agent-msg-meta">
               to{' '}
               <button type="button" className="agent-msg-to" onClick={() => onOpenAgent(message.slug)}>
-                {message.title}
+                {face.title}
               </button>
             </span>
           </div>
@@ -601,11 +605,11 @@ export function AgentMessage({
             type="button"
             className={`agent-reply-preview${message.status === 'running' ? ' agent-reply-preview--running' : ''}`}
             onClick={(e) => onOpenThread(message, e.currentTarget)}
-            aria-label={t('agents.preview.open').replace('{name}', message.title)}
+            aria-label={t('agents.preview.open').replace('{name}', face.title)}
           >
             <span className="agent-reply-preview-head">
-              <AgentAvatar slug={message.slug} title={message.title} hasPhoto={message.hasPhoto} size={20} version={message.runId} />
-              <span className="agent-reply-preview-name">{message.title}</span>
+              <AgentAvatar slug={face.slug} title={face.title} hasPhoto={message.hasPhoto} of={face.of} size={20} version={message.runId} />
+              <span className="agent-reply-preview-name">{face.title}</span>
               {statusWord}
               {metaLine}
             </span>
@@ -669,9 +673,10 @@ export function AgentMessage({
     >
       <div className="agent-msg-av">
         <AgentAvatar
-          slug={message.slug}
-          title={message.title}
+          slug={face.slug}
+          title={face.title}
           hasPhoto={message.hasPhoto}
+          of={face.of}
           size={32}
           version={message.runId}
         />
@@ -682,7 +687,7 @@ export function AgentMessage({
           // THE THREAD'S ROOT is named and timed like every row under it. The name is
           // plain text here: the panel is already about this agent, so it opens nothing.
           <div className="agent-msg-head">
-            <span className="agent-msg-name agent-msg-name--plain">{message.title}</span>
+            <span className="agent-msg-name agent-msg-name--plain">{face.title}</span>
             <span className="agent-msg-time">{hhmm(message.at)}</span>
             {statusWord}
             {metaLine}
@@ -693,7 +698,7 @@ export function AgentMessage({
                 name" affordance. A button, not a link: it changes what this
                 page shows, it does not navigate anywhere. */}
             <button type="button" className="agent-msg-name" onClick={() => onOpenAgent(message.slug)}>
-              {message.title}
+              {face.title}
             </button>
             <span className="agent-msg-time">{hhmm(message.at)}</span>
             {statusWord}

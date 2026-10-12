@@ -35,6 +35,31 @@ function statusTone(summary: AutomationSummary): 'idle' | 'ok' | 'bad' | 'attent
   return 'idle';
 }
 
+/** Who a run target speaks as: the slug, name and photo route of its FACE.
+ *
+ *  An automation runs as an agent, and the face is the agent's (`hasPhoto` on the summary is
+ *  already resolved off the agent's identity), so it is read from the agent route under the
+ *  agent's slug. An older backend sends no `agent`: the automation and its agent were one file
+ *  then, and the automation route under its own slug is the same picture. One helper, so a
+ *  card, a popover, a feed chip and a thread row can never disagree about whose face it is. */
+export function agentFaceOf(target: { slug: string; title: string; agent?: string; agentTitle?: string }): {
+  slug: string;
+  title: string;
+  of: 'agent' | 'automation';
+} {
+  return target.agent
+    ? { slug: target.agent, title: target.agentTitle || target.title, of: 'agent' }
+    : { slug: target.slug, title: target.title, of: 'automation' };
+}
+
+/** The agent's name when it is not the automation's own (a bound automation), else null: an
+ *  unsplit file runs as itself, and "Runs as <its own name>" would say nothing. */
+export function runsAsTitle(target: { slug: string; title: string; agent?: string; agentTitle?: string }): string | null {
+  if (!target.agent || target.agent === target.slug) return null;
+  const name = target.agentTitle || target.agent;
+  return name === target.title ? null : name;
+}
+
 /** "2 hours ago" / "Sep 19, 09:15" — relative while it is recent enough for
  *  relative to mean something, absolute once it isn't. A card's question is
  *  "is this thing alive", and "3 days ago" answers it faster than a date. */
@@ -103,6 +128,8 @@ export function AgentMemberCard({
   // three-slot agent says when it NEXT runs, not when its first slot does.
   const nextWhen = scheduled && summary.enabled ? nextFireWords(summary.nextFireAt, new Date()) : null;
   const tone = statusTone(summary);
+  const face = agentFaceOf(summary);
+  const runsAs = runsAsTitle(summary); // null for an unsplit file: it runs as itself
   const description = summarize(summary.description, 150);
   // The key lands in the strings file in a later wave; until then `t` hands the key back.
   const boardWords = summary.whiteboard
@@ -133,9 +160,10 @@ export function AgentMemberCard({
       <header className="agent-card-head">
         <button type="button" className="agent-card-face" onClick={openProfile} aria-label={`${summary.title} profile`}>
           <AgentAvatar
-            slug={summary.slug}
-            title={summary.title}
+            slug={face.slug}
+            title={face.title}
             hasPhoto={summary.hasPhoto}
+            of={face.of}
             size={44}
             /* The last run time, not `Date.now()`: a per-render buster would
                re-download every photo on every poll. */
@@ -149,6 +177,8 @@ export function AgentMemberCard({
             {summary.title}
           </button>
           <p className="agent-card-meta">
+            {/* The agent it runs as leads the meta: who does the work, then when. */}
+            {runsAs && <><span className="agent-card-agent">{t('automations.runsAs').replace('{name}', runsAs)}</span> · </>}
             <span className={scheduled ? '' : 'agent-card-oncall'}>{summary.cadenceLabel}</span>
             {summary.model && <> · {summary.model}</>}
             {/* Its home board: the one place this agent can change anything, so the list

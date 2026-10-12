@@ -51,6 +51,15 @@ function automationSlug(hit: RecallHit): string {
   return hit.slug;
 }
 
+/**
+ * The agent an `agent` hit names. Agent files are flat at `agents/<slug>.md`, so the file name
+ * IS the slug (the `page/agents/<slug>` link shape); `hit.slug` is the fallback.
+ */
+function agentSlug(hit: RecallHit): string {
+  const m = hit.path.match(/(?:^|\/)agents\/([^/]+)\.md$/);
+  return m ? m[1] : hit.slug;
+}
+
 export function recallNavTarget(hit: RecallHit): RecallNavTarget {
   switch (hit.type) {
     case 'knowledge':
@@ -74,6 +83,9 @@ export function recallNavTarget(hit: RecallHit): RecallNavTarget {
       // A run-output hit (`run#<automation>-<date>`) opens the automation it
       // belongs to — the run detail lives inside that automation's panel.
       return { page: 'automations', slug: automationSlug(hit) };
+    case 'agent':
+      // The Agents page with that agent's profile open: the slug becomes the page's focus.
+      return { page: 'agents', slug: agentSlug(hit) };
     case 'whiteboard':
       // The board slug IS the Whiteboard page's focus id: the hit opens that board.
       return { page: 'whiteboards', slug: hit.slug };

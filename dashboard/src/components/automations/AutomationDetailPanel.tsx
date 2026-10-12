@@ -656,6 +656,15 @@ export function AutomationDetailPanel({ summary, autoOpenLatestRun, onClose, onT
                         <span className="adp-review-label">outputInstructions</span>
                         <pre className="adp-review-block">{automation.outputInstructions || <em>(none)</em>}</pre>
                       </div>
+                      {/* Hashed when present: what this automation asks of its agent on
+                          top of the agent's own prompt. Empty is not hashed at all, so
+                          there is nothing to review then. */}
+                      {automation.job && (
+                        <div className="adp-review-row adp-review-row--block">
+                          <span className="adp-review-label">job</span>
+                          <pre className="adp-review-block">{automation.job}</pre>
+                        </div>
+                      )}
                     </div>
                     {/* The duplicate-run warning, directly above the consent it
                         qualifies. Approval is machine-local and shared
@@ -718,6 +727,12 @@ export function AutomationDetailPanel({ summary, autoOpenLatestRun, onClose, onT
                     <details className="adp-prompt-details">
                       <summary className="adp-prompt-summary">Prompt</summary>
                       <pre className="adp-review-block adp-review-block--static">{automation.prompt}</pre>
+                      {automation.job && (
+                        <>
+                          <div className="adp-section-label">Job</div>
+                          <pre className="adp-review-block adp-review-block--static">{automation.job}</pre>
+                        </>
+                      )}
                       {automation.outputInstructions && (
                         <>
                           <div className="adp-section-label">Output instructions</div>

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AgentsMembers } from '../components/agents/AgentsMembers';
 import { AgentAvatar } from '../components/agents/AgentAvatar';
-import { AgentDialog, type AgentDialogInitial } from '../components/agents/AgentDialog';
+import { agentFaceOf } from '../components/agents/AgentMemberCard';
+import { AutomationDialog, type AutomationDialogInitial } from '../components/agents/AutomationDialog';
 import { useFloaterClearance } from '../components/agents/useFloaterClearance';
 import { AgentsFeed } from '../components/agents/AgentsFeed';
 import { SlideOver } from '../components/sleepy/chat/SlideOver';
@@ -15,7 +16,7 @@ import { dropScratch } from '../components/sleepy/chat/composerScratch';
 import { dropThreadScratch } from '../components/agents/agentsChannelHost';
 import { classifyReference } from '../components/sleepy/chat/chatEntities';
 import '../components/sleepy/chat/overlays.css';
-import { useAgentFeed, useAutomations } from '../hooks/useAutomations';
+import { isAutomationRow, useAgentFeed, useAutomations } from '../hooks/useAutomations';
 import { AutomationsEmptyState } from '../components/automations/AutomationsEmptyState';
 import { AutomationsDispatcherBar } from '../components/automations/AutomationsDispatcherBar';
 import { useI18n } from '../context/I18nContext';
@@ -161,7 +162,7 @@ export function AutomationsPage({
   const [toast, setToast] = useState<string | null>(null);
   /** The create dialog, open or not, and what it opens with: nothing (a blank agent) or one
    *  of the first run's starters, prefilled. */
-  const [creating, setCreating] = useState<{ initial?: AgentDialogInitial } | null>(null);
+  const [creating, setCreating] = useState<{ initial?: AutomationDialogInitial } | null>(null);
   /** The page element, held in state so the floater clearance follows it across the switch
    *  between the zero-state and the channel (two branches, one page). */
   const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
@@ -190,28 +191,29 @@ export function AutomationsPage({
     return () => clearTimeout(t);
   }, [toast]);
 
-  const agents = useMemo(() => automations ?? [], [automations]);
-  const scheduledCount = agents.filter((a) => a.mode === 'sched' && a.enabled).length;
-  /** Agents holding an unanswered question, or blocked on a first approval —
-   *  the two states where nothing moves until a human acts. */
+  /** Real automations only: the list also carries every agent's own call target (Messages
+   *  and Files still read it whole), and on-call agents live on the Agents page. */
+  const agents = useMemo(() => (automations ?? []).filter(isAutomationRow), [automations]);
+  /** Automations holding an unanswered question, or blocked on a first approval —
+   *  the two states where nothing moves until a human acts. Same rows as the roster
+   *  this tray opens, so it never points at a card that is not there. */
   const needYou = useMemo(
     () => agents.filter((a) => a.pendingQuestion || (!a.approved && a.approvalReason === 'never-approved')),
     [agents],
   );
 
-  /** "3 agents · 2 on a schedule". It LEADS the header now: the sidebar already names the
-   *  page, so the row opens on what is in it rather than repeating the title (K31, C6). Two
-   *  spans so a narrow header drops the schedule half whole instead of cutting it mid-word. */
+  /** "3 automations". It LEADS the header now: the sidebar already names the page, so the
+   *  row opens on what is in it rather than repeating the title (K31, C6). Every row is
+   *  scheduled, so the old "· N on a schedule" half would only repeat the count. */
   const subtitleCount = agents.length === 0
-    ? t('agents.head.count.none')
-    : agents.length === 1 ? t('agents.head.count.one') : t('agents.head.count.many').replace('{n}', String(agents.length));
-  const subtitleSched = agents.length > 0 && scheduledCount > 0
-    ? ` · ${t('agents.head.sched').replace('{n}', String(scheduledCount))}`
-    : '';
+    ? t('automations.head.count.none')
+    : agents.length === 1
+      ? t('automations.head.count.one')
+      : t('automations.head.count.many').replace('{n}', String(agents.length));
 
   // The zero-state replaces the whole page: with nothing created, a channel
   // header over an empty channel and an empty roster is two dead ends where
-  // one door belongs.
+  // one door belongs. Agents existing does not count: they are not automations.
   if (!isLoading && agents.length === 0) {
     return (
       <div ref={setPageEl} className="agents-page agents-page--empty">
@@ -221,7 +223,7 @@ export function AutomationsPage({
           onStart={(initial) => setCreating({ initial })}
         />
         {creating && (
-          <AgentDialog agent={null} initial={creating.initial} onClose={() => setCreating(null)} onToast={setToast} />
+          <AutomationDialog automation={null} initial={creating.initial} onClose={() => setCreating(null)} onToast={setToast} />
         )}
         {toast && <div className="agents-toast" role="status">{toast}</div>}
       </div>
@@ -237,7 +239,6 @@ export function AutomationsPage({
         <div className="agents-head-row">
           <span className="agents-channel-sub">
             <span className="agents-channel-sub-count">{subtitleCount}</span>
-            {subtitleSched && <span className="agents-channel-sub-sched">{subtitleSched}</span>}
           </span>
           <span className="agents-head-spacer" />
 
@@ -249,7 +250,7 @@ export function AutomationsPage({
               "AI MI SM 3" — three clipped monograms that say nothing about what
               the control does. Both destinations are named and both are always
               visible, so the choice is readable without being clicked. */}
-          <div className="agents-switch" role="tablist" aria-label="Agents view">
+          <div className="agents-switch" role="tablist" aria-label="Automations view">
             <button
               type="button"
               role="tab"
@@ -266,7 +267,8 @@ export function AutomationsPage({
               className={`agents-switch-opt${view === 'agents' ? ' agents-switch-opt--on' : ''}`}
               onClick={() => setView('agents')}
             >
-              Agents
+              {/* The roster of AUTOMATIONS: the agents themselves have their own page now. */}
+              Automations
               <span className="agents-switch-count">{agents.length}</span>
             </button>
             <button
@@ -280,8 +282,9 @@ export function AutomationsPage({
             </button>
           </div>
 
+          {/* An automation picks its agent in the dialog; a new AGENT is made on the Agents page. */}
           <button type="button" className="agents-new-btn" onClick={() => setCreating({})}>
-            New agent
+            {t('automations.new') === 'automations.new' ? 'New automation' : t('automations.new')}
           </button>
         </div>
 
@@ -298,16 +301,20 @@ export function AutomationsPage({
             <button type="button" className="agents-needyou" onClick={() => setView('agents')}>
               <span className="agents-needyou-dot" aria-hidden="true" />
               <span className="agents-needyou-faces" aria-hidden="true">
-                {needYou.slice(0, 3).map((a) => (
-                  <AgentAvatar
-                    key={a.slug}
-                    slug={a.slug}
-                    title={a.title}
-                    hasPhoto={a.hasPhoto}
-                    size={20}
-                    version={a.cache?.lastRunAt ?? undefined}
-                  />
-                ))}
+                {needYou.slice(0, 3).map((a) => {
+                  const face = agentFaceOf(a);
+                  return (
+                    <AgentAvatar
+                      key={a.slug}
+                      slug={face.slug}
+                      title={face.title}
+                      hasPhoto={a.hasPhoto}
+                      of={face.of}
+                      size={20}
+                      version={a.cache?.lastRunAt ?? undefined}
+                    />
+                  );
+                })}
               </span>
               <span className="agents-needyou-text">
                 <strong>
@@ -342,8 +349,8 @@ export function AutomationsPage({
       )}
 
       {creating && (
-        <AgentDialog
-          agent={null}
+        <AutomationDialog
+          automation={null}
           onClose={() => setCreating(null)}
           onToast={setToast}
           /* Creating from the CHANNEL and landing back on an empty channel is

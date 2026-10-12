@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { automationPhotoUrl } from '../../api/client';
+import { agentPhotoUrl, automationPhotoUrl } from '../../api/client';
 import { useVault } from '../../context/VaultContext';
 import './AgentAvatar.css';
 
@@ -32,6 +32,11 @@ export function initialsFor(title: string): string {
  *
  * `version` busts the browser cache. A photo is replaced in place at a stable
  * URL, so without it an owner uploads a new picture and keeps seeing the old.
+ *
+ * `of` says which route the slug names: `'automation'` (the default, every existing caller) reads
+ * `/api/automations/:slug/photo`, `'agent'` reads `/api/agents/:slug/photo`. An agent you only
+ * call has no automation file of its own slug, so the Agents page, the pickers and a task's
+ * agent face pass `of="agent"`.
  */
 export function AgentAvatar({
   slug,
@@ -39,6 +44,7 @@ export function AgentAvatar({
   hasPhoto,
   size = 40,
   version,
+  of = 'automation',
 }: {
   slug: string;
   title: string;
@@ -48,6 +54,7 @@ export function AgentAvatar({
    *  different shape from a small one. */
   size?: number;
   version?: string | number;
+  of?: 'agent' | 'automation';
 }) {
   const { vault } = useVault();
   const [failed, setFailed] = useState(false);
@@ -68,7 +75,7 @@ export function AgentAvatar({
   return (
     <span className="agent-av" style={style}>
       <img
-        src={automationPhotoUrl(vault, slug, version)}
+        src={of === 'agent' ? agentPhotoUrl(vault, slug, version) : automationPhotoUrl(vault, slug, version)}
         alt=""
         onError={() => setFailed(true)}
       />

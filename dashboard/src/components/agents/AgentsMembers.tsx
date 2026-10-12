@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useAutomations } from '../../hooks/useAutomations';
+import { isAutomationRow, useAutomations } from '../../hooks/useAutomations';
 import type { AutomationSummary } from '../../hooks/useAutomations';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import { AutomationDetailPanel } from '../automations/AutomationDetailPanel';
-import { AgentDialog } from './AgentDialog';
+import { AutomationDialog } from './AutomationDialog';
 import { AgentMemberCard } from './AgentMemberCard';
 import { AgentProfilePopover } from './AgentProfilePopover';
 import './AgentsMembers.css';
@@ -57,7 +57,8 @@ export function AgentsMembers({
   const [profile, setProfile] = useState<ProfileAnchor | null>(null);
   const [detailSlug, setDetailSlug] = useState<string | null>(null);
 
-  const ordered = useMemo(() => applyOrder(automations ?? [], order), [automations, order]);
+  // Real automations only: on-call agents live on the Agents page (the list still carries them).
+  const ordered = useMemo(() => applyOrder((automations ?? []).filter(isAutomationRow), order), [automations, order]);
 
   /** Always re-derived from the live list, never captured in state: an agent
    *  edited, paused or deleted while a popover or panel is open must not leave
@@ -74,11 +75,11 @@ export function AgentsMembers({
   const profileAgent = bySlug(profile?.slug ?? null);
   const detailAgent = bySlug(detailSlug);
 
-  if (isLoading) return <div className="agents-members-note">Loading agents…</div>;
+  if (isLoading) return <div className="agents-members-note">Loading automations…</div>;
   if (isError) {
     // A fetch failure is an outage, not onboarding — never show the "no agents
     // yet" explainer over an error.
-    return <div className="agents-members-note agents-members-note--error">Failed to load agents. {(error as Error)?.message}</div>;
+    return <div className="agents-members-note agents-members-note--error">Failed to load automations. {(error as Error)?.message}</div>;
   }
 
   return (
@@ -107,11 +108,11 @@ export function AgentsMembers({
       )}
 
       {editing && (
-        <AgentDialog
+        <AutomationDialog
           /* Keyed by slug so the form state can never carry over from one
-             agent to another. */
+             automation to another. */
           key={editing.slug}
-          agent={editing}
+          automation={editing}
           onClose={() => setDialog({ kind: 'closed' })}
           onToast={onToast}
         />

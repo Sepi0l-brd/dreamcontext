@@ -69,6 +69,18 @@ export type AutomationMode = 'sched' | 'call';
 export interface AutomationSummary {
   slug: string;
   title: string;
+  /** The agent this automation runs as: its own slug for an unsplit (legacy) file or an
+   *  agent's own call target. Optional because an older backend sends none; read it as
+   *  `s.agent ?? s.slug`. */
+  agent?: string;
+  /** That agent's display name (`s.agentTitle ?? s.title` on an older backend). */
+  agentTitle?: string;
+  /** The automation's `## Job`: what it asks of its agent on top of the agent's own prompt.
+   *  `''` when it has none. */
+  job?: string;
+  /** `'agent'` for an agent's own call target, which this list still carries for threads
+   *  and run history. Optional because an older backend sends none. */
+  runKind?: 'automation' | 'agent';
   mode: AutomationMode;
   /** The agent has a photo that RESOLVES right now — server-checked, not just
    *  a string in its frontmatter. False ⇒ render initials. */
@@ -110,6 +122,16 @@ export interface AutomationSummary {
    *  null for an agent with no home. Optional because a backend from before the
    *  field reads as "no home", which is what it was. */
   whiteboard?: string | null;
+}
+
+/**
+ * A real automation: a job with a schedule, never an agent's own call target. The
+ * Automations page shows only these (on-call agents live on the Agents page), while
+ * Messages and Files keep reading the whole list. An older backend sends no `runKind`;
+ * its call targets are the `'call'` rows.
+ */
+export function isAutomationRow(s: AutomationSummary): boolean {
+  return s.runKind !== 'agent' && s.mode === 'sched';
 }
 
 /**
@@ -253,6 +275,10 @@ export interface AutomationManifestDetail {
    *  is a change of where the agent can write, so it is reviewed like the
    *  rest. `null`, or absent on an older backend, means no home board. */
   whiteboard?: string | null;
+  /** Hashed when non-empty: the automation's `## Job`, what it asks of its agent
+   *  on top of the agent's own prompt. `''`, or absent on an older backend,
+   *  means no job. */
+  job?: string;
   prompt: string;
   outputInstructions: string;
   pattern: AutomationPattern;
@@ -518,39 +544,54 @@ export function useSetAutomationEnabled() {
 }
 
 /**
- * What the New agent / Edit agent dialog sends. Every field optional on the
- * edit path (it is a PATCH in spirit), so a dialog that knows nothing about
+ * What the New automation / Edit automation dialog sends. Every field optional on
+ * the edit path (it is a PATCH in spirit), so a dialog that knows nothing about
  * `catchup_hours`, `shared`, `review` or the flow can never blank them by
  * omitting them.
+ *
+ * TWO CREATE SHAPES share this type. With `agent` set, the automation is a JOB
+ * bound to that existing agent: the server takes `title`, `job` and the schedule
+ * and ignores any identity field (prompt, model, effort are the agent's, edited
+ * on the Agents page); it answers 409 `agent_unapproved` while the agent is not
+ * approved here for conversation. Without `agent`, it is the legacy self-contained
+ * shape, where `prompt` is required.
  */
-export interface AgentDraft {
+export interface AutomationDraft {
   title: string;
-  prompt: string;
+  /** The agent this automation runs as (its slug). */
+  agent?: string;
+  /** What this automation asks of its agent, on top of the agent's own prompt. */
+  job?: string;
+  /** The legacy shape's prompt; ignored when `agent` is set. */
+  prompt?: string;
   mode: AutomationMode;
   /** Every time it fires. Wins over the one-slot `days`/`at`. */
   slots?: ScheduleSlot[];
   days?: 'daily' | Weekday[];
   at?: string;
-  model: string | null;
-  effort: 'low' | 'medium' | 'high' | null;
+  timeoutMinutes?: number;
+  model?: string | null;
+  effort?: 'low' | 'medium' | 'high' | null;
   /** The home board, set at CREATE only (the server never changes it on an
    *  update, and the edit dialog never sends it). */
   whiteboard?: string;
 }
 
 /**
- * Create an agent — writes the manifest and approves it ON THIS MACHINE, which
- * is why the dialog's button says exactly that. Invalidates the list, so the
- * new card appears without a refresh.
+ * Create an automation — writes the manifest and approves it ON THIS MACHINE,
+ * which is why the dialog's button says exactly that. Invalidates the list, so
+ * the new card appears without a refresh, and the roster, whose usage lists the
+ * automations that run as each agent.
  */
 export function useCreateAgent() {
   const queryClient = useQueryClient();
   const api = useApi();
   return useMutation({
-    mutationFn: (draft: AgentDraft) =>
+    mutationFn: (draft: AutomationDraft) =>
       api.post<{ automation: AutomationSummary }>('/automations', draft).then((r) => r.automation),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
   });
 }
@@ -565,11 +606,13 @@ export function useUpdateAgent() {
   const queryClient = useQueryClient();
   const api = useApi();
   return useMutation({
-    mutationFn: ({ slug, draft }: { slug: string; draft: Partial<AgentDraft> }) =>
+    mutationFn: ({ slug, draft }: { slug: string; draft: Partial<AutomationDraft> }) =>
       api.post<{ automation: AutomationSummary }>(`/automations/${slug}/update`, draft).then((r) => r.automation),
     onSuccess: (_data, { slug }) => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
       queryClient.invalidateQueries({ queryKey: ['automations', slug] });
+      // An identity edit through an automation re-stamps its agent too.
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
   });
 }
@@ -581,9 +624,11 @@ export function useDeleteAgent() {
   const queryClient = useQueryClient();
   const api = useApi();
   return useMutation({
-    mutationFn: (slug: string) => api.post<{ ok: true; slug: string }>(`/automations/${slug}/delete`, {}),
+    mutationFn: (slug: string) =>
+      api.post<{ ok: true; slug: string; agentKept?: string | null }>(`/automations/${slug}/delete`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
   });
 }
@@ -606,6 +651,8 @@ export function useUploadAgentPhoto() {
     onSuccess: (_data, { slug }) => {
       queryClient.invalidateQueries({ queryKey: ['automations'] });
       queryClient.invalidateQueries({ queryKey: ['automations', slug] });
+      // The photo lands on the agent the automation runs as.
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
   });
 }
@@ -847,6 +894,10 @@ export interface FeedMessage {
   key: string;
   slug: string;
   title: string;
+  /** The agent that spoke (its slug and name). Optional: absent on an older backend, where
+   *  the automation and its agent were one file and `slug`/`title` say the same. */
+  agent?: string;
+  agentTitle?: string;
   hasPhoto: boolean;
   runId: string;
   at: string;
@@ -902,7 +953,10 @@ export interface AgentFeed {
    *  never re-derived client-side, or two screens would disagree about one
    *  channel the way `unread` already proved they can. */
   needsYouTotal: number;
-  agents: { slug: string; title: string; hasPhoto: boolean }[];
+  /** Every automation in the channel, with the agent that runs it (its slug and
+   *  name). `agent`/`agentTitle` are optional for the same older-backend reason
+   *  as on `FeedMessage`. Mirrors `AgentFeed.agents` in `src/lib/automations/feed.ts`. */
+  agents: { slug: string; title: string; agent?: string; agentTitle?: string; hasPhoto: boolean }[];
   /** One entry per AGENT with a run in flight (an @mention, "run now", another tab),
    *  keyed by slug; `{}` when nothing runs. Rides on the feed so the channel shows who
    *  is busy with no poll of its own. Different agents run side by side; only the

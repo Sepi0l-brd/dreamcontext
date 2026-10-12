@@ -48,6 +48,8 @@ import { PaneComposer } from './PaneComposer';
 import { quotePath, FALLBACK_MODEL_CONFIG } from '../../lib/agentComposer';
 import { CHAT_MODE_ROWS, DEFAULT_CHAT_MODE, type ChatMode } from '../../lib/chatModes';
 import { bindChatAgent } from '../../lib/chatAgentBinding';
+import { TALK_TO_AGENT_EVENT, type TalkToAgentDetail } from '../../lib/talkToAgent';
+import { useAgents, findAgent } from '../../hooks/useAgents';
 import { preparePrompt, promptFitsInline, developKickoffPrompt, trainKickoffPrompt, initializerKickoffPrompt } from '../../lib/agentPrompt';
 import { agentCanSpawn } from '../../lib/agentReady';
 import {
@@ -141,7 +143,7 @@ interface SessionMeta {
    *  so a legacy roster needs no migration. Round-tripped through the server roster so a
    *  Develop tab reopens as one after a relaunch. */
   mode?: ChatMode;
-  /** The automation agent this CHAT tab speaks as (the composer's agent picker); absent for
+  /** The agent this CHAT tab speaks as (the composer's agent picker, or Talk to it); absent for
    *  plain Claude. Round-tripped through the roster so the agent's tab reopens as that agent. */
   agent?: string;
   /** The current title was set by the tab's own agent (a `title` dream-view block), so the
@@ -1611,7 +1613,7 @@ export function AgentSurface() {
   }, [spawn, modelForSession, effortForSession]);
 
   /**
-   * The composer's agent picker: talk to one of this project's automation agents in a Chat tab.
+   * The composer's agent picker: talk to one of this project's agents (`/api/agents`) in a Chat tab.
    *
    * A NEW conversation, never a respawn of this one. An agent is a system prompt, and a resumed
    * conversation keeps the system prompt it was born with (see `changeChatMode`'s server note),
@@ -2377,6 +2379,69 @@ export function AgentSurface() {
   useInstanceEvent<TrainChatDetail>(TRAIN_CHAT_EVENT, (detail) => {
     if (detail?.slug && openTrainSession(detail)) detail.accepted = true;
   });
+
+  // ── Talk to an agent (the Agents page's "Talk to it") ─────────────────────────────
+  //
+  // `requestTalkToAgent` rings the window; the visible `ProjectInstance` re-emits it on THIS
+  // bus (`lib/talkToAgent.ts`), so exactly one surface hears it. The act is the composer's
+  // agent pick started from outside the composer: a NEW conversation bound to the agent
+  // (`chatAgentBinding.ts`), never a respawn of one that exists, and never a chat mode (an agent
+  // is who you talk to, the mode is how it works). The server decides approval and briefing
+  // from the slug at spawn (`prepareAgentChat`), exactly as for a pick.
+  //
+  // TAKEN AT ONCE, ACTED ON WHEN READY, like the session link above: the ACK is written in the
+  // listener so the sender stops asking, and the chat opens once caps, settings, the saved
+  // roster and the agent list have loaded (bounded). The one refusal is a surface already known
+  // unable to start Claude here: it leaves `accepted` false, so the sender says so instead of a
+  // silent no-op.
+  const [talkRequest, setTalkRequest] = useState<{ slug: string; since: number } | null>(null);
+  const [talkWaitTick, bumpTalkWait] = useReducer((x: number) => x + 1, 0);
+  const agentRoster = useAgents({ enabled: talkRequest !== null });
+  useInstanceEvent<TalkToAgentDetail>(TALK_TO_AGENT_EVENT, (detail) => {
+    if (!detail || typeof detail.slug !== 'string' || !detail.slug) return;
+    if (caps !== null && settingsReady && !canSpawn) return;
+    setTalkRequest({ slug: detail.slug, since: Date.now() });
+    detail.accepted = true;
+  });
+
+  /** Open a new Chat tab speaking as `slug`, in the focused pane, and show it. */
+  const openAgentChat = useCallback((slug: string, title: string): boolean => {
+    if (!canSpawn) return false;
+    const claudeId = newClaudeId();
+    bindChatAgent(claudeId, slug);
+    const s = spawn(false, claudeId, false, 'chat') as ChatSession;
+    setSessionList((prev) => [...prev, {
+      id: s.id, title, titleByAgent: true, kind: 'chat', bypass: s.bypass, claudeId, agent: slug,
+    }]);
+    if (panes.length === 0) {
+      const pid = nextPaneId();
+      setPanes([{ id: pid, tabs: [s.id], active: s.id }]);
+      setActivePaneId(pid);
+    } else {
+      const apid = panes.some((p) => p.id === activePaneId) ? activePaneId : panes[0].id;
+      setPanes((prev) => prev.map((p) => (p.id === apid ? { ...p, tabs: [...p.tabs, s.id], active: s.id } : p)));
+      setActivePaneId(apid);
+    }
+    setExpanded(true);
+    return true;
+  }, [canSpawn, spawn, panes, activePaneId]);
+
+  useEffect(() => {
+    if (talkRequest === null) return undefined;
+    const loaded = caps !== null && settingsReady;
+    const ready = loaded && hydratedRef.current && !agentRoster.isLoading;
+    if (!ready && !(loaded && !canSpawn) && Date.now() - talkRequest.since < START_INTENT_WAIT_MS) {
+      const timer = window.setTimeout(bumpTalkWait, LINKED_SESSION_POLL_MS);
+      return () => window.clearTimeout(timer);
+    }
+    setTalkRequest(null);
+    // A name the roster does not know still opens: the chat then says why the server refused.
+    const title = findAgent(agentRoster.data, talkRequest.slug)?.title ?? talkRequest.slug;
+    if (!openAgentChat(talkRequest.slug, title)) {
+      console.warn('[talk-to-agent] cannot open a chat with', talkRequest.slug, 'here: the agent surface is unavailable');
+    }
+    return undefined;
+  }, [talkRequest, talkWaitTick, caps, settingsReady, canSpawn, agentRoster.isLoading, agentRoster.data, openAgentChat]);
 
   // ── Checklist submit bridge (T8, plan §1.11/§1.12) ────────────────────────────────
   // The pinned checklist window is a SEPARATE OS window with no WebSocket of its own; its

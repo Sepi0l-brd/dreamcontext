@@ -116,6 +116,12 @@
   color: var(--color-text);
 }
 
+/* The agent it runs as: primary ink, regular weight, so it reads as a name without
+   competing with the card's own title above it. */
+.agent-card-agent {
+  color: var(--color-text);
+}
+
 /* ─── body ─── */
 
 .agent-card-desc {
