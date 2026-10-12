@@ -257,9 +257,9 @@ Who does the work: `_dream_context/agents/<slug>.md` (title, prompt, model, effo
 | Command | Description |
 |---|---|
 | `agents list` | Every agent with `may run`, `chat only` or `needs approval` on this machine, and the automations that run as it. `--json` (`approvedForChat`, `approvedToRun`, `implicit`, `automations`). |
-| `agents show <slug>` | Its settings, both verdicts, its automations, boards and assigned tasks, then its prompt. `--json`. |
-| `agents create <slug>` | Create an agent, approved on this machine. `--title <title>` and `--prompt <text>` (required), `--model <model>`, `--effort <level>`, `--whiteboard <board>` (home board), `--no-learning`. |
-| `agents edit <slug>` | Edit identity: `--title`, `--prompt`, `--model` (`""` = default), `--effort` (`none` = default), `--whiteboard` (`""` = none), `--learning` / `--no-learning`. What was approved directly here stays approved; nothing edits call settings. |
+| `agents show <slug>` | Its settings, both verdicts, its automations, boards and assigned tasks, a pattern summary, then its prompt and its soul. `--json` adds `soul` and the parsed `pattern`. |
+| `agents create <slug>` | Create an agent, approved on this machine. `--title <title>` and `--prompt <text>` (required), one of `--soul <text>`, `--soul-file <path>` or `--soul-template <id>` (`harsh-reviewer`, `fast-doer`, `careful-researcher`, `plain-writer`, `calm-helper`), `--model <model>`, `--effort <level>`, `--whiteboard <board>` (home board), `--no-learning`. |
+| `agents edit <slug>` | Edit identity: `--title`, `--prompt`, one of `--soul` (`""` removes it) / `--soul-file` / `--soul-template`, `--model` (`""` = default), `--effort` (`none` = default), `--whiteboard` (`""` = none), `--learning` / `--no-learning`. What was approved directly here stays approved; nothing edits call settings. |
 | `agents approve <slug>` | Review every hashed field of the agent's own run target (call settings included) and approve it to run here. `-y/--yes`. **Refused inside a Claude session or an agent run**, like `automations approve`: approve on the Agents page. |
 | `agents share <slug>` / `agents unshare <slug>` | Publish the agent file to the synced brain / stop. `unshare` is refused while a shared automation runs as it. |
 | `agents remove <slug>` | Delete an agent (and its approval). Refused while an automation runs as it. `-y/--yes`. |
