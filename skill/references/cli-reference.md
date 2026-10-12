@@ -502,6 +502,22 @@ Verbs for the Assistant that lives in the desktop app's notch, above every proje
 
 Autonomy (`ask \| auto \| bypass`, set in the wizard) decides whether `send` / `agent` / `answer` / `broadcast` run or become a proposal the owner approves in the notch; project-derived output comes back wrapped in `<untrusted-project-output>`.
 
+## Window control — a chat drives its own window
+
+`dreamcontext window …` lets the agent in a **dreamcontext Chat tab** drive the chat surface it is drawn in: one project, one window, the one showing that chat. Every project chat spawn carries `DREAMCONTEXT_WINDOW_URL` + `DREAMCONTEXT_WINDOW_TOKEN`; the token names that chat's own socket, so a verb can only reach its window. From a terminal, `claude -p`, a whiteboard card or the Assistant it refuses (`not_a_chat`); with no window showing the chat it answers `no_window`. Desktop app and local dashboard only (the hands-free cloud does not serve it). Tabs are addressed by the `tab` id `window state` lists (the chat's conversation id); no `--tab` means the calling chat. Act on the user's request, never unprompted.
+
+| Command | What it does |
+|---|---|
+| `window state` | Panes left to right; each tab's `tab`, `title`, `kind`, `mode`, `model`, `status` (`idle\|working\|asking\|dormant`), `visible`, and `self` on the caller. |
+| `window new [--prompt "…"] [--mode basic\|plan\|develop] [--model <id>] [--effort <level>] [--split] [--terminal]` | Open a chat as a tab of the focused pane, or in a new pane beside it (`--split`); returns its `tab`. `--terminal` opens a shell tab instead. |
+| `window split [--tab <id>]` | Move a tab into its own pane beside its current one (side by side). |
+| `window join --into <id> [--tab <id>]` | Move a tab into another tab's pane (undo a split). |
+| `window focus <tab>` | Bring a tab to the front of its pane. |
+| `window mode <basic\|plan\|develop> [--tab <id>]` | Switch a chat's mode: a restart on the same conversation, deferred to the end of the current turn when it is busy (always the case for the caller itself). |
+| `window model <id> [--tab <id>]` / `window effort <level> [--tab <id>]` | Live switch, from the next turn. |
+| `window send <tab> "<text>"` | Message another chat tab; queued when it is busy. |
+| `window close <tab> [--force]` | Close a tab; a working or asking chat needs `--force`, only on the user's word. A chat cannot close itself. |
+
 ---
 
 ## Brain — team collaboration / shared brain repo (see [integrations.md](integrations.md))
@@ -608,6 +624,7 @@ Every posted banner is appended to `~/.dreamcontext/notifications.jsonl` (`{id, 
 | `DREAMCONTEXT_SKILLS_HOOK=0` | Disable skill-suggestion injection on prompts. |
 | `DREAMCONTEXT_DRIFT_CHECK` / `DREAMCONTEXT_APP_AUTO_UPDATE` | Asset-drift check / desktop app auto-update toggles. |
 | `DREAMCONTEXT_AGENT_BOARD` / `DREAMCONTEXT_AGENT_SELF` / `DREAMCONTEXT_AGENT_SCRATCH` | Set by the runner on every spawn of a **board agent** (an automation with a home `whiteboard`), built from its manifest and approval, never from a caller: its board, its own slug, and its scratch folder (removed after the spawn). The CLI's second layer reads them: `whiteboard` writes refuse other boards and any `--file` outside the scratch folder and `automations/output/<self>/`, `automations post\|learn\|propose` refuse other slugs. Never set them by hand. |
+| `DREAMCONTEXT_WINDOW_URL` / `DREAMCONTEXT_WINDOW_TOKEN` | Set by the server on every project chat spawn; `dreamcontext window …` uses them to drive the window showing that chat. Never set them by hand. |
 | `DREAMCONTEXT_DEBUG` | Verbose diagnostics (e.g. recall decisions to stderr). |
 | `DREAMCONTEXT_SPAWNED` | Set by dreamcontext on the headless sessions it launches (`develop` on Develop builders, `peer` on peer runs, `lab` on report commentary). The hooks record such a session with a `spawn` marker, add no sleep debt for it, skip bookmark auto-capture and inject no sleep directive. Never set it in your own shell: every session under it would stop counting. The dashboard server clears it at boot so no pane inherits it. |
 

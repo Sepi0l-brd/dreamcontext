@@ -361,9 +361,16 @@ describe('CHAT_SURFACE_BRIEFING', () => {
    * headless and the user watches it live above the composer (chat/BrowserLive.tsx), so the
    * agent stops sending the owner to a Chrome window that no longer exists. Written as one
    * clause after a 230-character draft would have needed a raise.
+   *
+   * 12900 -> 13300 on 2026-10-12, a RAISE for "Your window" (247 characters): the chat's own
+   * agent can drive the surface it is drawn in (`dreamcontext window`: open a chat beside this
+   * one, split, switch a tab's mode or model). Owner-asked, and this file is the only way a
+   * chat agent learns its window answers to it. Cut from a 600-character first draft to one
+   * sentence of verbs plus `--help`; the rules (deferred self restart, --force) live in the
+   * verbs' own answers and help text. Actual 13,112; 13,300 keeps ~190 of headroom.
    */
   it('stays small enough to ride in every chat turn', () => {
-    expect(CHAT_SURFACE_BRIEFING.length).toBeLessThan(12900);
+    expect(CHAT_SURFACE_BRIEFING.length).toBeLessThan(13300);
   });
 
   /**
@@ -374,7 +381,7 @@ describe('CHAT_SURFACE_BRIEFING', () => {
    * is.
    */
   it('is the length its docstring claims — within a wording tweak', () => {
-    expect(Math.abs(CHAT_SURFACE_BRIEFING.length - 12865)).toBeLessThanOrEqual(20);
+    expect(Math.abs(CHAT_SURFACE_BRIEFING.length - 13112)).toBeLessThanOrEqual(20);
   });
 
   /**

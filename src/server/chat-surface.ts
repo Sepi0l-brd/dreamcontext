@@ -298,10 +298,18 @@ never a slug or hyphens. Re-send only when the subject truly moves. A name the u
 Only name paths that exist — a wrong one renders as a dead card. At most ~4 buttons, and only
 for a real next step. Don't narrate the mechanism ("I'll draw you a diagram"), just write it.`;
 
+const BRIEFING_WINDOW = `## Your window — \`dreamcontext window\`
+
+On the user's word only, drive this chat surface from Bash: \`state\`, \`new [--split] [--mode]
+[--model] [--prompt]\`, \`split|join|focus\`, \`mode|model|effort <v> [--tab]\`, \`send\`, \`close\`.
+\`--help\` has the rest.`;
+
 export const CHAT_SURFACE_BRIEFING = `${BRIEFING_HEAD}
 ${BRIEFING_DRAW_HTML}
 ${BRIEFING_ASK}
 ${BRIEFING_REST}
+
+${BRIEFING_WINDOW}
 `;
 
 
