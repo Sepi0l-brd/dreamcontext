@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -43,16 +43,15 @@ const INTEGRATIONS_MD = readFileSync(join(ROOT, 'skill', 'references', 'integrat
  *  drift here means someone edited the mirror (which is clobbered on the next update)
  *  or shipped a source edit without propagating it. Either way the agent that loads
  *  the skill reads the stale half. */
-const MIRROR_SKILL_MD = readFileSync(join(ROOT, '.claude', 'skills', 'dreamcontext', 'SKILL.md'), 'utf-8');
-const MIRROR_AUTOMATIONS_MD = readFileSync(
-  join(ROOT, '.claude', 'skills', 'dreamcontext', 'references', 'automations.md'), 'utf-8',
-);
-const MIRROR_CLI_REFERENCE_MD = readFileSync(
-  join(ROOT, '.claude', 'skills', 'dreamcontext', 'references', 'cli-reference.md'), 'utf-8',
-);
-const MIRROR_INTEGRATIONS_MD = readFileSync(
-  join(ROOT, '.claude', 'skills', 'dreamcontext', 'references', 'integrations.md'), 'utf-8',
-);
+const MIRROR_DIR = join(ROOT, '.claude', 'skills', 'dreamcontext');
+/** `.claude/` is gitignored since the brain moved to its own repo, so a fresh clone (CI, a
+ *  release worktree) has no mirror to compare; the drift check runs wherever one exists. */
+const HAS_MIRROR = existsSync(join(MIRROR_DIR, 'SKILL.md'));
+const mirrorOf = (rel: string): string => (HAS_MIRROR ? readFileSync(join(MIRROR_DIR, rel), 'utf-8') : '');
+const MIRROR_SKILL_MD = mirrorOf('SKILL.md');
+const MIRROR_AUTOMATIONS_MD = mirrorOf('references/automations.md');
+const MIRROR_CLI_REFERENCE_MD = mirrorOf('references/cli-reference.md');
+const MIRROR_INTEGRATIONS_MD = mirrorOf('references/integrations.md');
 const SLEEP_MD = readFileSync(join(ROOT, 'skill', 'references', 'sleep.md'), 'utf-8');
 const SLEEP_PRODUCT_MD = readFileSync(join(ROOT, 'agents', 'sleep-product.md'), 'utf-8');
 
@@ -764,7 +763,7 @@ describe('skill/SKILL.md — the channel clause stays inside the capabilities ro
  * failure feature-integration-pattern item 9 exists to prevent — so the two are pinned
  * byte-identical rather than trusted to a remembered manual step.
  */
-describe('.claude/skills/dreamcontext — the installed mirror matches its source', () => {
+describe.skipIf(!HAS_MIRROR)('.claude/skills/dreamcontext — the installed mirror matches its source', () => {
   for (const [name, source, mirror] of [
     ['SKILL.md', SKILL_MD, MIRROR_SKILL_MD],
     ['references/automations.md', AUTOMATIONS_MD, MIRROR_AUTOMATIONS_MD],
