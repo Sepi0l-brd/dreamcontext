@@ -38,6 +38,19 @@ export const PICKER_MODES = CHAT_MODES.filter((m) => m !== 'assistant');
 export const DEFAULT_CHAT_MODE: ChatMode = 'basic';
 
 /**
+ * The version of each picker mode's BRIEF — what the composer prints beside the mode's name,
+ * the way a model picker prints a model's (owner, 2026-10-12: "Planner 1.1").
+ *
+ * Bump it when `modeBriefing` for that mode changes what the agent is told. Not a promise
+ * about the UI or the server, only about the brief. `tests/unit/chat-mode-mirror.test.ts`
+ * pins a fingerprint of every brief to its version, so an edited brief with an unbumped
+ * version fails there, and it pins this map to `CHAT_MODE_ROWS[].version` on the client.
+ */
+export const MODE_VERSIONS: Record<Exclude<ChatMode, 'assistant'>, string> = {
+  basic: '1.0', plan: '1.0', develop: '1.0', train: '0.1',
+};
+
+/**
  * goal-skill's PLANNING half — Phases 0-3, compressed. Ends by creating a real task and
  * offering the handoff, so implementation runs in its own session and the plan transcript
  * stays auditable.

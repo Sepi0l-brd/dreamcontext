@@ -45,81 +45,64 @@ export interface ChatAgentPick {
   title: string;
 }
 
+const Check = () => (
+  <svg className="chat-cmp-pickrow-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /**
- * WHO this chat talks to, under the modes (owner, 2026-10-07, picked from three drawn options):
- * ONE row naming the current agent, which opens the roster right under itself. The closed menu
- * grows by a single row and carries no explanatory text; the list exists only while it is open.
+ * WHO this chat talks to, listed under the modes the way a model picker lists models (owner,
+ * 2026-10-12). Every approved agent is one row; an unapproved one is listed but unpickable,
+ * and its tooltip says where to fix it.
  *
- * Picking an agent opens a NEW conversation with it (AgentSurface's `pickChatAgent`). An
- * unapproved agent is listed but unpickable; its tooltip says where to fix it.
+ * Picking an agent opens a NEW conversation with it (AgentSurface's `pickChatAgent`). "Claude"
+ * is the way back, so it is only listed while an agent holds the chat: otherwise the modes
+ * above already ARE Claude, and a row repeating them would be a second answer to one question.
  */
-function AgentSelect({ agent, onPick, close }: {
+function AgentList({ agent, onPick, close }: {
   agent: string;
   onPick: (agent: ChatAgentPick | null) => void;
   close: () => void;
 }) {
   const { data: agents = [] } = useAutomations();
-  const [open, setOpen] = useState(false);
   if (agents.length === 0 && !agent) return null;
-  const current = agent ? agents.find((a) => a.slug === agent) : undefined;
   const pick = (next: ChatAgentPick | null) => { onPick(next); close(); };
-  const face = (slug: string | null, title: string, hasPhoto: boolean) => (
-    <span className={`chat-cmp-agentface${slug ? '' : ' is-claude'}`} aria-hidden>
-      {slug
-        ? <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={24} />
-        : <SleepyMascot size={24} mood="idle" compact mode="basic" />}
-    </span>
-  );
-  const option = (slug: string | null, title: string, hasPhoto: boolean, opts: { disabled?: boolean; tip?: string } = {}) => {
+  const row = (slug: string | null, title: string, hasPhoto: boolean, opts: { disabled?: boolean; tip?: string } = {}) => {
     const selected = (slug ?? '') === agent;
     return (
       <button
         key={slug ?? 'claude'}
         type="button"
-        role="option"
-        aria-selected={selected}
+        role="menuitemradio"
+        aria-checked={selected}
         disabled={opts.disabled}
         title={opts.tip}
-        className={`chat-cmp-agentoption${selected ? ' is-selected' : ''}`}
+        className={`chat-cmp-pickrow${selected ? ' is-active' : ''}`}
         onClick={() => pick(slug ? { slug, title } : null)}
       >
-        {face(slug, title, hasPhoto)}
-        <span className="chat-cmp-agentoption-name">{title}</span>
-        {selected && (
-          <svg className="chat-cmp-agentoption-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        <span className={`chat-cmp-agentface${slug ? '' : ' is-claude'}`} aria-hidden>
+          {slug
+            ? <AgentAvatar slug={slug} title={title} hasPhoto={hasPhoto} size={24} />
+            : <SleepyMascot size={24} mood="idle" compact mode="basic" />}
+        </span>
+        <span className="chat-cmp-pickrow-body">
+          <span className="chat-cmp-pickrow-name">{title}</span>
+        </span>
+        {selected && <Check />}
       </button>
     );
   };
   return (
     <>
       <div className="chat-cmp-menu-divider" />
-      <div className={`chat-cmp-agentpicker${open ? ' is-open' : ''}`}>
-        <button
-          type="button"
-          className="chat-cmp-agentselect"
-          aria-label="Agent"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          {face(agent || null, current?.title ?? agent, !!current?.hasPhoto)}
-          <span className="chat-cmp-agentselect-name">{agent ? current?.title ?? agent : 'Claude'}</span>
-          <svg className="chat-cmp-agentselect-chevron" width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        {open && (
-          <div className="chat-cmp-agentlist" role="listbox" aria-label="Agent">
-            {option(null, 'Claude', false)}
-            {agents.map((a) => option(a.slug, a.title, a.hasPhoto, {
-              disabled: !a.approved,
-              tip: a.approved ? a.cadenceLabel : 'Approve it in Automations first',
-            }))}
-          </div>
-        )}
+      <span className="chat-cmp-grouplabel">Agents</span>
+      <div className="chat-cmp-picklist is-agents">
+        {agent && row(null, 'Claude', false, { tip: 'Back to Claude, in a new chat' })}
+        {agents.map((a) => row(a.slug, a.title, a.hasPhoto, {
+          disabled: !a.approved,
+          tip: a.approved ? a.cadenceLabel : 'Approve it in Automations first',
+        }))}
       </div>
     </>
   );
@@ -175,46 +158,51 @@ export function ModeMenu({
     : null;
   return (
     <div className="chat-cmp-modemenu chat-cmp-modelmenu" role="menu" aria-label="Mode and permission">
-      <span className="chat-cmp-grouplabel">Mode</span>
-      <div className="chat-cmp-scroll is-grid">
-        {CHAT_MODE_ROWS.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            role="menuitemradio"
-            aria-checked={row.id === mode}
-            disabled={row.disabled}
-            className={`chat-cmp-modelrow${row.id === mode ? ' is-active' : ''}`}
-            onClick={() => { onModeChange(row.id); close(); }}
-          >
-            {/* The mode SHOWS itself: the same face the dock chip will wear, doing the same
-                thing. Basic draws the bare face, which is the point — you can
-                see what you are turning on and what you are turning off. */}
-            <span className="chat-cmp-moderow-face" aria-hidden>
-              <SleepyMascot size={54} mood="idle" compact mode={row.id} />
-            </span>
-            <span className="chat-cmp-modelrow-head">
-              <span className="chat-cmp-modelrow-name">{row.name}</span>
-              {/* `label`, so the chip is MUTED whichever field it came from — `badge` is a
-                  mode you cannot pick, `maturity` is one that is not finished, and neither
-                  is a recommendation. chatModes.ts owns the distinction between the two
-                  fields; this surface only has to not blur it. */}
-              <MaturityTag label={row.badge ?? row.maturity} className="chat-cmp-badge" />
-            </span>
-            <span className="chat-cmp-modelrow-insight">{row.insight}</span>
-          </button>
-        ))}
+      <span className="chat-cmp-grouplabel">Modes</span>
+      {/* One row per mode, the way a model picker lists models: face, name, the version of
+          its brief. Only the CHOSEN row says what it does; the rest say it on hover, so the
+          list reads at a glance and the sentence you need is the one under your pick.
+
+          A mode is a system-prompt append, applied when the process starts, so switching
+          restarts the conversation under the new brief. The transcript survives (`--resume`)
+          and so does a half-typed draft (AgentSurface's `carryDraftInto`). That used to be a
+          paragraph under the grid; it is now each row's tooltip, beside the click it is
+          about. */}
+      <div className="chat-cmp-picklist">
+        {CHAT_MODE_ROWS.map((row) => {
+          const active = row.id === mode;
+          return (
+            <button
+              key={row.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={active}
+              disabled={row.disabled}
+              title={active ? undefined : `${row.insight} Switching reloads this conversation; the transcript and your draft are kept.`}
+              className={`chat-cmp-pickrow is-mode${active ? ' is-active' : ''}`}
+              onClick={() => { if (!active) onModeChange(row.id); close(); }}
+            >
+              <span className="chat-cmp-pickrow-face" aria-hidden>
+                <SleepyMascot size={28} mood="idle" compact mode={row.id} />
+              </span>
+              <span className="chat-cmp-pickrow-body">
+                <span className="chat-cmp-pickrow-line">
+                  <span className="chat-cmp-pickrow-name">{row.name}</span>
+                  <span className="chat-cmp-pickrow-version">{row.version}</span>
+                  {/* `label`, so the chip is MUTED whichever field it came from: `badge` is a
+                      mode you cannot pick, `maturity` one that is not finished, and neither
+                      is a recommendation. chatModes.ts owns the distinction. */}
+                  <MaturityTag label={row.badge ?? row.maturity} className="chat-cmp-badge" />
+                </span>
+                {active && <span className="chat-cmp-pickrow-insight">{row.insight}</span>}
+              </span>
+              {active && <Check />}
+            </button>
+          );
+        })}
       </div>
 
-      {/* A mode is a system-prompt append, applied when the process starts — so switching one
-          restarts the conversation under the new brief. Said out loud here rather than
-          discovered as a surprise reconnect; the transcript survives (`--resume`) and so does
-          a half-typed draft (AgentSurface's `carryDraftInto`), which is why this line promises
-          both by name. Switching to Bypass below reloads for the same reason — CLI 2.1.220
-          refuses that switch live — and its own note says so. */}
-      <p className="chat-cmp-permnote">Switching mode reloads this conversation — the transcript and what you&apos;ve typed are kept.</p>
-
-      {onAgentPick && <AgentSelect agent={agent} onPick={onAgentPick} close={close} />}
+      {onAgentPick && <AgentList agent={agent} onPick={onAgentPick} close={close} />}
 
       <div className="chat-cmp-menu-divider" />
 

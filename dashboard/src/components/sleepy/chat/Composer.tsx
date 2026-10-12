@@ -45,6 +45,7 @@ import {
 import { Popover } from '../SkillPickerPopover';
 import { AgentTriggerName, ModeMenu, ModelMenu, UsageMenu, type AccountOption, type ChatAgentPick } from './ComposerMenus';
 import { useAnchoredMenu, MENU_TRIGGER_ATTR } from './useAnchoredMenu';
+import { SleepyMascot } from '../SleepyMascot';
 import type { ComposerHost } from './composerHost';
 import './composer.css';
 
@@ -181,6 +182,9 @@ function MicIcon() {
     </svg>
   );
 }
+
+/** Set once the mode menu has been opened; the trigger's first-run ring reads it. */
+const MODE_MENU_SEEN_KEY = 'dreamcontext.chat.modeMenuSeen';
 
 export function Composer({
   session, model, effort, modelConfig, onModelChange, onEffortChange, busy, connected,
@@ -1241,6 +1245,17 @@ export function Composer({
   // useAnchoredMenu.ts for why these are not `Popover`s (the Attach menu still is: it clamps
   // to its trigger rather than spanning the card).
   const menu = useAnchoredMenu();
+  // The mode trigger asks to be opened ONCE (owner, 2026-10-12): it carries a soft ring until
+  // the menu has been opened on this machine, then never again. Remembered globally, not per
+  // chat or per vault: "you have seen what this button holds" is a fact about the person.
+  const [modeMenuSeen, setModeMenuSeen] = useState(() => {
+    try { return localStorage.getItem(MODE_MENU_SEEN_KEY) === '1'; } catch { return true; }
+  });
+  useEffect(() => {
+    if (menu.open !== 'mode' || modeMenuSeen) return;
+    setModeMenuSeen(true);
+    try { localStorage.setItem(MODE_MENU_SEEN_KEY, '1'); } catch { /* no storage: seen for this session only */ }
+  }, [menu.open, modeMenuSeen]);
   // "Saved as default" is a receipt, so it is only ever shown for a write that HAPPENED. Any
   // subsequent model/effort change clears it: a receipt next to a value you have since
   // changed is a false one.
@@ -1604,17 +1619,28 @@ export function Composer({
             <button
               type="button"
               {...{ [MENU_TRIGGER_ATTR]: '' }}
-              className="chat-cmp-modeltrigger"
+              className={`chat-cmp-modeltrigger chat-cmp-modetrigger${modeMenuSeen ? '' : ' is-unseen'}`}
               onClick={() => menu.toggle('mode')}
-              title={`${agent ? `Agent: ${agentName} · ` : ''}Mode: ${modeRow.name} · Permission: ${permissionMode}`}
+              title={`${agent ? `Agent: ${agentName} · ` : ''}Mode: ${modeRow.name} ${modeRow.version} · Permission: ${permissionMode}`}
               aria-haspopup="menu"
               aria-expanded={menu.open === 'mode'}
             >
               {/* Who you are talking to comes first: an agent's face and name when the chat is
-                  bound to one, with its mode beside it only when that is not Basic. */}
-              {agent ? <AgentTriggerName slug={agent} title={agentName} hasPhoto={!!agentSummary?.hasPhoto} /> : null}
+                  bound to one, otherwise the mode's own face. The mode and the version of its
+                  brief follow, the way a model picker names a model; for an agent only when
+                  the mode is not the default. */}
+              {agent
+                ? <AgentTriggerName slug={agent} title={agentName} hasPhoto={!!agentSummary?.hasPhoto} />
+                : (
+                  <span className="chat-cmp-modetrigger-face" aria-hidden>
+                    <SleepyMascot size={20} mood="idle" compact mode={mode} />
+                  </span>
+                )}
               {(!agent || mode !== DEFAULT_CHAT_MODE) && (
-                <span className="chat-cmp-modeltrigger-model">{agent ? `· ${modeRow.name}` : modeRow.name}</span>
+                <>
+                  <span className="chat-cmp-modeltrigger-model">{agent ? `· ${modeRow.name}` : modeRow.name}</span>
+                  <span className="chat-cmp-modetrigger-version">{modeRow.version}</span>
+                </>
               )}
               {/* THIS SESSION's permission, handed down already resolved — see the prop's doc. */}
               <span className="chat-cmp-modeltrigger-effort">{permissionMode}</span>

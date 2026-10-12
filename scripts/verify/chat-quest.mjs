@@ -796,7 +796,7 @@ async function runThemeIn(browser, base, theme, report) {
   // by its name, not its position. A mode change restarts the process, so the composer is
   // gone for a moment: wait for it to come back before the first message.
   await vis('.chat-cmp-modeltrigger').first().click();
-  const planRow = vis('.chat-cmp-modemenu .chat-cmp-modelrow').filter({ has: page.locator('.chat-cmp-modelrow-name', { hasText: /^Plan$/ }) });
+  const planRow = vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode').filter({ has: page.locator('.chat-cmp-pickrow-name', { hasText: /^Planner$/ }) });
   await planRow.first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   await planRow.first().click({ timeout: 10000 }).catch((e) => report.note(`[mode] ${String(e).split('\n')[0]}`));
   // PRE-EXISTING SERVER RACE, not this suite's subject: a mode switch disposes the chat and
@@ -806,12 +806,12 @@ async function runThemeIn(browser, base, theme, report) {
   // so whenever the new upgrade beats the old close the pane lands on "Session ended". The
   // refusal names its own recovery ("press Resume in a moment"), which is what a person does.
   const resumeBtn = vis('button').filter({ hasText: /^Resume session$/ });
-  await until(async () => (await modeWord()) === 'Plan' || (await resumeBtn.count()) > 0, 10000);
+  await until(async () => (await modeWord()) === 'Planner' || (await resumeBtn.count()) > 0, 10000);
   if (await resumeBtn.count()) {
     report.note('[pre-existing] the mode switch was refused by the server hand-off race (agent-chat.ts awaitResumeHandoff vs its refusal guard); pressing Resume, as the refusal says');
     await resumeBtn.first().click();
   }
-  ok('the chat is in Plan mode', await until(async () => (await modeWord()) === 'Plan', 25000), await modeWord().catch(() => '?'));
+  ok('the chat is in Plan mode', await until(async () => (await modeWord()) === 'Planner', 25000), await modeWord().catch(() => '?'));
   ok('the composer is back after the mode restart', await until(async () => (await vis('.chat-cmp-input').count()) > 0, 30000));
   if (!(await vis('.chat-cmp-input').count())) await page.screenshot({ path: join(SHOTS, `mode-restart-${theme}.png`) });
   await page.waitForTimeout(800);
@@ -1218,7 +1218,7 @@ async function runThemeIn(browser, base, theme, report) {
   ok('the fixture task passes the hand-off readiness gate (GET /api/tasks/:slug/readiness)', ready.ready === true, JSON.stringify(ready));
   const dialogsBefore = dialogs.length;
   await vis('.chat-action-btn[data-action="develop"]').first().click();
-  ok('a Develop session opens', await until(async () => (await modeWord()) === 'Develop', 25000),
+  ok('a Develop session opens', await until(async () => (await modeWord()) === 'Developer', 25000),
     `${await modeWord().catch(() => '?')} ${dialogs.slice(dialogsBefore).join(' | ').replace(/\s+/g, ' ').slice(0, 300)}`);
   const devMap = () => vis('.chat-live-rail .quest-map[data-kind="develop"]');
   ok('the Develop quest map is on the rail', await until(async () => (await devMap().count()) === 1, 20000));

@@ -22,8 +22,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { CHAT_MODES, DEFAULT_CHAT_MODE, PICKER_MODES } from '../../src/server/chat-modes.js';
+import {
+  CHAT_MODES, DEFAULT_CHAT_MODE, MODE_VERSIONS, PICKER_MODES, modeBriefing,
+} from '../../src/server/chat-modes.js';
 import {
   CHAT_MODE_ROWS, DEFAULT_CHAT_MODE as CLIENT_DEFAULT_CHAT_MODE, chatModeRow,
 } from '../../dashboard/src/lib/chatModes.js';
@@ -35,7 +38,7 @@ describe('chat modes — client menu <-> server allowlist mirror', () => {
   it('the menu offers exactly the modes the server accepts, in the same order', () => {
     // PICKER_MODES, not CHAT_MODES: `assistant` is bound to the hidden vault and never offered.
     expect(CHAT_MODE_ROWS.map((r) => r.id)).toEqual([...PICKER_MODES]);
-    // Four rows fill the composer's 2×2 grid; Train Me is the 4th cell.
+    // Basic leads the list; Train Me is last.
     expect(CHAT_MODE_ROWS.map((r) => r.id)).toEqual(['basic', 'plan', 'develop', 'train']);
     expect([...CHAT_MODES]).toEqual(['basic', 'plan', 'develop', 'train', 'assistant']);
     expect([...CHAT_MODES]).toContain('assistant');
@@ -100,6 +103,32 @@ describe('chat modes — client menu <-> server allowlist mirror', () => {
     // total — including for a mode a future server adds before this build knows about it.
     expect(chatModeRow('plan').id).toBe('plan');
     expect(chatModeRow('nope' as never).id).toBe(DEFAULT_CHAT_MODE);
+  });
+
+  it('every row prints the version its brief carries on the server', () => {
+    for (const row of CHAT_MODE_ROWS) {
+      expect(row.version, `mode "${row.id}"`).toBe(MODE_VERSIONS[row.id as keyof typeof MODE_VERSIONS]);
+      expect(row.version, `mode "${row.id}"`).toMatch(/^\d+\.\d+$/);
+    }
+  });
+
+  it('a brief cannot change without its version moving', () => {
+    // The version in the picker is only worth printing if it moves when the brief does. Edited
+    // a brief on purpose? Bump `MODE_VERSIONS` (and the client row), then record the new
+    // fingerprint here under the new version.
+    const PINNED: Record<string, [version: string, fingerprint: string]> = {
+      basic: ['1.0', '7c497717dfe1'],
+      plan: ['1.0', '3be9405fc278'],
+      develop: ['1.0', '9c9c44247b3c'],
+      train: ['0.1', 'f613cadc20e7'],
+    };
+    for (const mode of PICKER_MODES) {
+      const text = modeBriefing(mode, { worktreeAllowed: true }) + '\u0000' + modeBriefing(mode, { worktreeAllowed: false });
+      const fingerprint = createHash('sha256').update(text).digest('hex').slice(0, 12);
+      const [version, pinned] = PINNED[mode];
+      expect(MODE_VERSIONS[mode as keyof typeof MODE_VERSIONS], `mode "${mode}": version moved, re-pin its fingerprint`).toBe(version);
+      expect(fingerprint, `mode "${mode}": brief changed, bump MODE_VERSIONS.${mode}`).toBe(pinned);
+    }
   });
 
   it('both files carry the MIRRORED comment that sends the next reader to the other one', () => {

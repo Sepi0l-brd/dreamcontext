@@ -299,20 +299,14 @@ async function runTheme(chromium, base, theme, report) {
   await idle();
   await modeTrigger().click();
   await page.waitForTimeout(400);
-  const rows = vis('.chat-cmp-modemenu .chat-cmp-scroll.is-grid .chat-cmp-modelrow');
-  ok('the mode menu opens as a 2×2 grid of four rows', (await rows.count()) === 4, `rows=${await rows.count()}`);
+  const rows = vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode');
+  ok('the mode menu lists four modes', (await rows.count()) === 4, `rows=${await rows.count()}`);
   const fourth = rows.nth(3);
-  const fourthName = (await fourth.locator('.chat-cmp-modelrow-name').innerText().catch(() => '')).trim();
-  ok('the 4th cell is "Train Me"', fourthName === 'Train Me', fourthName);
+  const fourthName = (await fourth.locator('.chat-cmp-pickrow-name').innerText().catch(() => '')).trim();
+  ok('the last row is "Train Me"', fourthName === 'Train Me', fourthName);
   const chip = (await fourth.locator('.chat-cmp-badge').innerText().catch(() => '')).trim();
   ok('…wearing the ALPHA chip', /^alpha$/i.test(chip), chip || '<no chip>');
   ok('…and it is selectable (not disabled)', (await fourth.getAttribute('disabled')) === null);
-  const gridBoxes = [];
-  for (let i = 0; i < 4; i++) gridBoxes.push(await rows.nth(i).boundingBox());
-  ok('…laid out in the grid\'s bottom-right cell',
-    gridBoxes.every(Boolean) && Math.abs(gridBoxes[3].y - gridBoxes[2].y) < 2 && gridBoxes[3].x > gridBoxes[2].x
-      && gridBoxes[3].y > gridBoxes[1].y,
-    JSON.stringify(gridBoxes.map((b) => b && [Math.round(b.x), Math.round(b.y)])));
   await vis('.chat-cmp-modemenu').first().screenshot({ path: join(SHOTS, `${theme}-mode-menu.png`) }).catch(() => {});
   const socketsBefore = sockets.length;
   await fourth.click();

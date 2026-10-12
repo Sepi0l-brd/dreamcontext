@@ -23,8 +23,13 @@ export type ChatMode = 'basic' | 'plan' | 'develop' | 'train' | 'assistant';
 
 export interface ChatModeRow {
   id: ChatMode;
-  /** What the trigger prints and the menu row is titled. */
+  /** What the trigger prints and the menu row is titled. Display only: the id is what
+   *  sessions store, so a renamed row never changes what a saved chat means. */
   name: string;
+  /** The version of this mode's BRIEF, printed beside its name the way a model picker prints
+   *  a model's. Mirrors `MODE_VERSIONS` in `src/server/chat-modes.ts`, where the brief lives;
+   *  the mirror test fails when a brief changes and its version does not. */
+  version: string;
   /** One line under the name: what picking this actually changes about how the agent works. */
   insight: string;
   /** Chip beside the name for a mode that is ANNOUNCED BUT NOT OFFERED — J.A.R.V.I.S wore
@@ -52,17 +57,20 @@ export interface ChatModeRow {
 }
 
 /**
- * The menu's rows, in the order they are drawn (a 2×2 grid — see `.chat-cmp-scroll.is-grid`).
+ * The menu's rows, in the order they are drawn (one list, the way a model picker lists models).
  *
  * ORDER IS PART OF THE MIRROR: the test compares this list's ids to `CHAT_MODES` positionally,
  * so "add a mode to one side only" and "reorder one side only" both fail loudly rather than
  * leaving a mode the server accepts and the menu never shows.
  */
 export const CHAT_MODE_ROWS: readonly ChatModeRow[] = [
-  { id: 'basic', name: 'Basic', insight: 'Plain Claude. No mode enabled.' },
-  { id: 'plan', name: 'Plan', insight: 'Asks, drafts, gets reviewed, ends with a task.' },
-  { id: 'develop', name: 'Develop', insight: 'Builds in waves, checks each one, then a clean review.' },
-  { id: 'train', name: 'Train Me', insight: 'Learns your taste from swipes and picks, then writes a pattern.', maturity: 'ALPHA' },
+  // Basic stays Basic until it can switch modes by itself (owner, 2026-10-12). When the
+  // dreamcontext MCP lets a chat change its own mode, this row becomes Pilot 2.0: a name that
+  // promises the capability only once it exists.
+  { id: 'basic', name: 'Basic', version: '1.0', insight: 'Plain Claude. No mode enabled.' },
+  { id: 'plan', name: 'Planner', version: '1.0', insight: 'Asks, drafts, gets reviewed, ends with a task.' },
+  { id: 'develop', name: 'Developer', version: '1.0', insight: 'Builds in waves, checks each one, then a clean review.' },
+  { id: 'train', name: 'Train Me', version: '0.1', insight: 'Learns your taste from swipes and picks, then writes a pattern.', maturity: 'ALPHA' },
 ];
 
 /** What a chat is in when nothing asked for anything else. There is deliberately no

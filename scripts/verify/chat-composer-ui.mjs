@@ -310,11 +310,11 @@ async function run(chromium, base, report) {
   // which half broke, which is exactly the debugging cost a verify script exists to remove.
   // The mode GRID only: the Agent section below it draws rows of the same class.
   ok('…with one row per mode',
-    (await vis('.chat-cmp-modemenu .chat-cmp-scroll.is-grid .chat-cmp-modelrow').count()) === 4,
-    `rows=${await vis('.chat-cmp-modemenu .chat-cmp-scroll.is-grid .chat-cmp-modelrow').count()}`);
+    (await vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode').count()) === 4,
+    `rows=${await vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode').count()}`);
   ok('…J.A.R.V.I.S is rendered but unpickable',
-    (await page.locator('.chat-cmp-modemenu .chat-cmp-modelrow[disabled]').count()) === 1,
-    `disabled=${await page.locator('.chat-cmp-modemenu .chat-cmp-modelrow[disabled]').count()}`);
+    (await page.locator('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode[disabled]').count()) === 1,
+    `disabled=${await page.locator('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode[disabled]').count()}`);
   // Case-INSENSITIVE on purpose: `.chat-cmp-badge` is `text-transform: uppercase`, so
   // `innerText` returns "SOON" while the source says "Soon". Asserting the rendered casing
   // would pin a style rule from a test that is about the CONTENT of the badge.
@@ -452,7 +452,7 @@ async function run(chromium, base, report) {
     await until(async () => (await vis('.chat-action-btn[data-action="develop"]').count()) > 0, 20000));
   await vis('.chat-action-btn[data-action="develop"]').first().click();
   ok('a Develop session opens',
-    await until(async () => (await modeWord()) === 'Develop', 25000), await modeWord());
+    await until(async () => (await modeWord()) === 'Developer', 25000), await modeWord());
   await page.waitForTimeout(900);
   ok('the plan tab is gone and the tab count is unchanged — replaced in place, not stacked',
     (await vis('.agent-tab').count()) === tabsBefore,
@@ -499,9 +499,9 @@ async function run(chromium, base, report) {
   console.log('\n── §10 the mode switch keeps the session\'s own permission');
   await modeTrigger().click();
   await page.waitForTimeout(250);
-  await vis('.chat-cmp-modemenu .chat-cmp-modelrow').nth(1).click(); // Plan
+  await vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode').nth(1).click(); // Plan
   ok('the session comes back in Plan mode',
-    await until(async () => (await modeWord()) === 'Plan', 25000), await modeWord());
+    await until(async () => (await modeWord()) === 'Planner', 25000), await modeWord());
   await page.waitForTimeout(700);
   await say('WHOAMI');
   ok('the respawn is STILL auto — a mode switch cannot escalate (B3)',
@@ -580,9 +580,9 @@ async function run(chromium, base, report) {
     // …now respawn the process under a new brief.
     await modeTrigger().click();
     await page.waitForTimeout(250);
-    await vis('.chat-cmp-modemenu .chat-cmp-modelrow').nth(2).click();   // Plan → Develop
+    await vis('.chat-cmp-modemenu .chat-cmp-pickrow.is-mode').nth(2).click();   // Plan → Develop
     ok('the session comes back in Develop mode',
-      await until(async () => (await modeWord()) === 'Develop', 25000), await modeWord());
+      await until(async () => (await modeWord()) === 'Developer', 25000), await modeWord());
     // Proof the pane really was replaced rather than re-rendered: a second WS upgrade. Without
     // this, a switch that silently no-op'd would make every assertion below vacuous.
     ok('…having genuinely respawned the process (a new WS upgrade)',

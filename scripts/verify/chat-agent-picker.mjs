@@ -14,7 +14,7 @@
  *      ahead of the tab's mode brief, under the tab's own permission mode.
  *   §1b server: every chat gets `--agents` for the approved agents (never an unapproved one,
  *      never the tab's own agent) and a roster in its briefing saying it can call them.
- *   §2 browser: the mode menu lists Claude and every agent, the unapproved one unpickable;
+ *   §2 browser: the mode menu lists every agent under the modes, the unapproved one unpickable;
  *      picking an agent in an EMPTY chat reuses the tab, the trigger names the agent, and the
  *      socket carries `chatAgent`; the agent answers from its identity.
  *   §3 browser: picking Claude in a chat WITH history opens a new tab beside it, without
@@ -241,21 +241,15 @@ async function browserLeg(chromium, base) {
   console.log('\n── §2 the menu, and an agent picked in an empty chat');
   await modeTrigger().click();
   await page.waitForTimeout(400);
-  const select = () => vis('.chat-cmp-modemenu .chat-cmp-agentselect').first();
-  const rows = vis('.chat-cmp-modemenu .chat-cmp-agentoption');
+  const rows = vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents .chat-cmp-pickrow');
   const chip = (name) => rows.filter({ hasText: name }).first();
-  const grid = await vis('.chat-cmp-modemenu .chat-cmp-scroll.is-grid').first().boundingBox();
-  const sel = await select().boundingBox();
-  ok('the agent selector is ONE row under the modes, naming Claude',
-    sel.y > grid.y + grid.height && sel.height <= 40 && (await select().innerText()).includes('Claude'),
-    `grid=${JSON.stringify(grid)} select=${JSON.stringify(sel)}`);
-  ok('…and the closed menu draws no roster', (await rows.count()) === 0);
-  if (shots) await page.screenshot({ path: `${shots}/chat-agent-picker-closed.png` });
-  await select().click();
-  await page.waitForTimeout(250);
+  const modes = await vis('.chat-cmp-modemenu .chat-cmp-picklist:not(.is-agents)').first().boundingBox();
+  const agentsBox = await vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents').first().boundingBox();
+  ok('the agents are listed under the modes', !!modes && !!agentsBox && agentsBox.y > modes.y + modes.height,
+    `modes=${JSON.stringify(modes)} agents=${JSON.stringify(agentsBox)}`);
   const names = (await rows.allInnerTexts()).map((t) => t.trim().split('\n').pop().trim());
-  ok('opened, it lists Claude and every agent, by name', names[0] === 'Claude' && [...names.slice(1)].sort().join('|') === 'Draft agent|Funnel watch|Weekly brief', names.join('|'));
-  ok('…Claude is the selected one', (await rows.first().getAttribute('aria-selected')) === 'true');
+  ok('…every agent by name, and no Claude row while Claude holds the chat',
+    !names.includes('Claude') && [...names].sort().join('|') === 'Draft agent|Funnel watch|Weekly brief', names.join('|'));
   ok('…the unapproved agent cannot be picked, and says where to fix it',
     (await chip('Draft agent').isDisabled())
     && ((await chip('Draft agent').getAttribute('title')) ?? '').includes('Approve it in Automations first'));
@@ -276,11 +270,8 @@ async function browserLeg(chromium, base) {
   const tabsMid = await tabCount();
   await modeTrigger().click();
   await page.waitForTimeout(300);
-  ok('…the selector names the agent now',
-    (await select().innerText()).includes('Funnel watch'));
-  await select().click();
-  await page.waitForTimeout(250);
-  ok('…and is the selected one in the list', (await chip('Funnel watch').getAttribute('aria-selected')) === 'true');
+  ok('…the agent is the checked one in the list', (await chip('Funnel watch').getAttribute('aria-checked')) === 'true');
+  ok('…and Claude is listed first, as the way back', (await rows.first().innerText()).includes('Claude'));
   await chip('Claude').click();
   ok('picking Claude opens a new tab beside it', await until(async () => (await tabCount()) === tabsMid + 1), `${tabsMid} → ${await tabCount()}`);
   ok('…on a socket without chatAgent', !(await lastSocket()).includes('chatAgent='), await lastSocket());

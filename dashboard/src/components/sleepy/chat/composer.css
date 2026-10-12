@@ -674,6 +674,56 @@
   white-space: nowrap;
 }
 
+/* The MODE trigger: the mode's face, its name, the version of its brief. It is the control
+   that decides how the agent works, so it is drawn as one (owner, 2026-10-12: "I want people
+   to click it once"). The face sleeps until hover, like the rows in its menu. */
+.chat-cmp-modetrigger { position: relative; gap: 5px; padding-left: 5px; }
+.chat-cmp-modetrigger-face {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  overflow: hidden;
+}
+.chat-cmp-modetrigger-face .smascot,
+.chat-cmp-modetrigger-face .smascot * { animation-play-state: paused; }
+.chat-cmp-modetrigger:hover .chat-cmp-modetrigger-face .smascot,
+.chat-cmp-modetrigger:hover .chat-cmp-modetrigger-face .smascot * { animation-play-state: running; }
+.chat-cmp-modetrigger .chat-cmp-modeltrigger-model { color: var(--color-text); }
+.chat-cmp-modetrigger-version {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+/* Version and permission are both small mono readouts; side by side "1.0 auto" read as one
+   token. A dot keeps them two facts, drawn by CSS so the permission word itself stays bare. */
+.chat-cmp-modetrigger-version + .chat-cmp-modeltrigger-effort::before {
+  content: '·';
+  margin-right: 5px;
+  color: var(--color-text-tertiary);
+}
+/* First run only: a soft accent ring that breathes until the menu has been opened once on
+   this machine (Composer's MODE_MENU_SEEN_KEY), then is gone for good. */
+.chat-cmp-modetrigger.is-unseen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1.5px var(--color-accent);
+  pointer-events: none;
+  animation: chat-cmp-modetrigger-breathe 2.4s ease-in-out infinite;
+}
+@keyframes chat-cmp-modetrigger-breathe {
+  0%, 100% { opacity: 0.35; box-shadow: 0 0 0 1.5px var(--color-accent); }
+  50% { opacity: 1; box-shadow: 0 0 0 1.5px var(--color-accent), 0 0 0 5px color-mix(in srgb, var(--color-accent) 18%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-cmp-modetrigger.is-unseen::after { animation: none; opacity: 0.8; }
+}
+
 /* Attach — the row's only icon-only control, so it needs no label to avoid reading as a
    loose part (there is nothing labelled beside it any more). */
 .chat-cmp-iconbtn {
@@ -889,25 +939,108 @@
   min-height: 0;
   overflow-y: auto;
 }
-/* Four modes read as a 2×2 block rather than a list — they are peers, not a ranking. */
-.chat-cmp-scroll.is-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* The mode card's own face — the character doing that mode's work, so the grid is read by
-   LOOKING rather than by parsing four sentences. Fixed height so all four cards line up no
-   matter how far a scene hangs below the face's layout box. */
-.chat-cmp-moderow-face {
+/* ── The mode menu's list (modes, then agents) ─────────────────────────────────────────
+   Read like a model picker (owner, 2026-10-12): one quiet row per choice, a face, a name,
+   the version of its brief, a check on the chosen one. No border per row: a border on every
+   row said "four separate things" in a list that is one question. The chosen row is the only
+   one with a tint and the only one with a sentence under its name. */
+.chat-cmp-picklist {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -6px;
+}
+.chat-cmp-picklist.is-agents {
+  max-height: 168px;   /* four and a half rows: a fifth that is cut says "scroll" */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-hover) transparent;
+}
+.chat-cmp-pickrow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px 4px 6px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), transform 80ms ease-out;
+}
+.chat-cmp-pickrow:hover:not(:disabled) { background: var(--color-bg-tertiary); color: var(--color-text); }
+.chat-cmp-pickrow:active:not(:disabled) { transform: scale(0.99); }
+.chat-cmp-pickrow:disabled { opacity: 0.5; cursor: not-allowed; }
+.chat-cmp-pickrow:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.chat-cmp-pickrow.is-active {
+  background: var(--color-accent-soft, color-mix(in srgb, var(--color-accent) 12%, transparent));
+  color: var(--color-text);
+}
+.chat-cmp-pickrow.is-mode.is-active { align-items: flex-start; padding-top: 7px; padding-bottom: 8px; }
+
+/* The mode's own face at row size. The box is fixed so a scene hanging below the face's
+   layout box never shifts the name; it sleeps until the row is hovered or chosen, so a list
+   of four faces is not four things moving at once. */
+.chat-cmp-pickrow-face {
+  display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  height: 46px;
-  margin-bottom: 4px;
+  width: 28px;
+  height: 24px;
   overflow: hidden;
+}
+.chat-cmp-pickrow-face .smascot,
+.chat-cmp-pickrow-face .smascot * { animation-play-state: paused; }
+.chat-cmp-pickrow:hover .chat-cmp-pickrow-face .smascot,
+.chat-cmp-pickrow:hover .chat-cmp-pickrow-face .smascot *,
+.chat-cmp-pickrow.is-active .chat-cmp-pickrow-face .smascot,
+.chat-cmp-pickrow.is-active .chat-cmp-pickrow-face .smascot * { animation-play-state: running; }
+
+.chat-cmp-pickrow-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.chat-cmp-pickrow-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.chat-cmp-pickrow-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-cmp-pickrow.is-active .chat-cmp-pickrow-name { font-weight: 650; }
+/* A readout, not a label: mono and small, the same voice the model menu prices in. */
+.chat-cmp-pickrow-version {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--chat-small-ink, var(--color-text-tertiary));
+}
+.chat-cmp-pickrow-line > .chat-cmp-badge { margin-left: 0; margin-right: 0; }
+.chat-cmp-pickrow-insight {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+.chat-cmp-pickrow-check { flex: none; align-self: center; color: var(--color-accent); }
+@media (prefers-reduced-motion: reduce) {
+  .chat-cmp-pickrow { transition: none; }
 }
 
 /* Sentence case, not 9.5px uppercase mono. A section heading is a word the reader has to
@@ -1105,21 +1238,7 @@
 .chat-cmp-segment-opt.is-auto.is-active { color: var(--color-accent); }
 .chat-cmp-segment-opt.is-bypass.is-active { color: var(--color-warning); }
 
-/* WHO this chat talks to, under the modes: ONE card. Closed, it is a single row naming the
-   current agent; open, the roster unfolds inside the same card under a hairline, so trigger and
-   list read as one object. Every face is the same 24px circle, every step is on the 4px grid. */
-.chat-cmp-agentpicker {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-.chat-cmp-agentpicker:hover,
-.chat-cmp-agentpicker.is-open { border-color: var(--color-border-hover); }
-.chat-cmp-agentpicker.is-open { background: color-mix(in srgb, var(--color-bg-tertiary) 40%, transparent); }
-
+/* An agent's face in the mode menu's Agents list: every face the same 24px circle. */
 .chat-cmp-agentface {
   display: inline-flex;
   flex: none;
@@ -1133,92 +1252,6 @@
 }
 .chat-cmp-agentface.is-claude { background: var(--color-bg-tertiary); box-shadow: none; }
 .chat-cmp-agentface .agent-av { border-radius: var(--radius-full); }
-
-.chat-cmp-agentselect {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  height: 40px;
-  padding: 0 12px 0 8px;
-  border: none;
-  background: transparent;
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition-fast), transform 80ms ease-out;
-}
-.chat-cmp-agentselect:hover { background: var(--color-bg-tertiary); }
-.chat-cmp-agentselect:active { transform: scale(0.99); }
-.chat-cmp-agentselect:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: var(--radius-md); }
-.chat-cmp-agentselect-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chat-cmp-agentselect-chevron {
-  flex: none;
-  color: var(--color-text-tertiary);
-  transition: transform 160ms ease-out, color var(--transition-fast);
-}
-.chat-cmp-agentselect:hover .chat-cmp-agentselect-chevron { color: var(--color-text-secondary); }
-.chat-cmp-agentpicker.is-open .chat-cmp-agentselect-chevron { transform: rotate(180deg); }
-
-.chat-cmp-agentlist {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 176px;
-  padding: 4px;
-  overflow-y: auto;
-  border-top: 1px solid var(--color-border);
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-hover) transparent;
-  animation: chat-cmp-agentlist-in 160ms ease-out;
-}
-@keyframes chat-cmp-agentlist-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
-}
-.chat-cmp-agentoption {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-  height: 36px;
-  padding: 0 8px 0 4px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), transform 80ms ease-out;
-}
-.chat-cmp-agentoption:hover:not(:disabled) { background: var(--color-bg-tertiary); color: var(--color-text); }
-.chat-cmp-agentoption:active:not(:disabled) { transform: scale(0.98); }
-.chat-cmp-agentoption.is-selected { color: var(--color-text); font-weight: 600; }
-.chat-cmp-agentoption:disabled { opacity: 0.5; cursor: not-allowed; }
-.chat-cmp-agentoption:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-.chat-cmp-agentoption-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chat-cmp-agentoption-check { flex: none; color: var(--color-accent); }
-@media (prefers-reduced-motion: reduce) {
-  .chat-cmp-agentlist { animation: none; }
-  .chat-cmp-agentselect, .chat-cmp-agentoption, .chat-cmp-agentselect-chevron { transition: none; }
-}
 
 .chat-cmp-permnote {
   margin: 0;
