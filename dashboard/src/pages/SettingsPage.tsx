@@ -574,7 +574,7 @@ export function SettingsPage({ focus }: SettingsPageProps) {
       )}
       {activeSection === 'recall' && (
       <section className="settings-section">
-        <SectionHead titleKey="settings.nav.recall" descKey="settings.desc.recall" />
+        {/* No SectionHead: the dreamcontext Memory card at the top carries the name and the sentence. */}
         <RecallModeCards
           recallMode={recallMode}
           saving={updateSleep.isPending}

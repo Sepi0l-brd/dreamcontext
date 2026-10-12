@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../context/I18nContext';
 import { isCloudSurface } from '../../lib/cloudSurface';
@@ -13,6 +13,7 @@ import {
 } from '../../hooks/useRecallOptions';
 import type { RecallMode } from '../../hooks/useSleep';
 import { MaturityTag } from '../common/MaturityTag';
+import { BrandMark } from '../brand/BrandMark';
 import { SettingChoice } from './SettingRow';
 import { EmbeddingModelCard } from './EmbeddingModelCard';
 import { CloudRecallCard } from './CloudRecallCard';
@@ -21,7 +22,8 @@ import './RecallModeCards.css';
 /**
  * Settings → Recall: every way of fetching memory back, side by side, with the same facts for each
  * (accuracy for English-only and multi-language brains as two bars, then extra time, cost and what
- * leaves this computer as chips) and a personal recommendation on top that shows its own rule. The numbers are the server's (`GET /api/recall/options`); the words are i18n.
+ * leaves this computer as chips), under a "dreamcontext Memory" card that names what runs now and
+ * offers the advised engine as one button. The numbers are the server's (`GET /api/recall/options`); the words are i18n.
  *
  * Choosing keeps the existing mechanisms: `recall_mode` through the sleep settings, and the two cloud
  * tiers through the cloud-recall card (key, disclosure, consent, index) — which this reuses, not
@@ -151,44 +153,119 @@ function Facts({ m, index }: { m: RecallMeasurement; index: VaultIndex }) {
   );
 }
 
-function Recommendation({ options }: { options: RecallOptions }) {
+/** Accuracy for this brain's audience, as the page writes it (Turkish puts the sign first). */
+function usePercent(): (pct: number) => string {
+  const { locale } = useI18n();
+  const percent = new Intl.NumberFormat(numberLocale(locale), { style: 'percent', maximumFractionDigits: 0 });
+  return (pct) => percent.format(Math.round(pct) / 100);
+}
+
+/** Why the advice is what it is: the two readings and the rule they hit. Folded away by default. */
+function RecommendationWhy({ options }: { options: RecallOptions }) {
   const { t } = useI18n();
   const { recommendation: r } = options;
   const name = (id: RecallOptionId): string => t(`settings.recall.opt.${id}.label`);
   const mixLabel = (mix: LanguageMix): string => t(`settings.recall.mix.${audienceOf(mix) ?? 'unknown'}`);
   const known = r.reason !== 'no-language-signal';
-  const lit = (option: RecallOptionId): boolean => option === r.option;
   const keyLine = r.option === 'cloud' ? t(r.keyPresent ? 'settings.recall.rec.key_ready' : 'settings.recall.rec.key_needed') : '';
 
   return (
-    <section className="recall-rec" aria-label={t('settings.recall.rec.title')}>
-      <div className="recall-rec-head">
-        <span className="recall-rec-title">{t('settings.recall.rec.title')}</span>
-        <span className="recall-rec-pick">{name(r.option)}</span>
+    <details className="memory-why">
+      <summary>{t('settings.recall.hero.why')}</summary>
+      <div className="memory-why-body">
+        <div className="recall-rec-signals">
+          <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.prompts')}</span>{mixLabel(r.promptsMix)}</span>
+          <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.docs')}</span>{mixLabel(r.docsMix)}</span>
+        </div>
+        {known ? (
+          <ul className="recall-rules">
+            {RULES.map((rule) => (
+              <li key={rule.id} className={`recall-rule${rule.option === r.option ? ' recall-rule--on' : ''}`}>
+                <span className="recall-rule-when">{t(`settings.recall.rule.${rule.id}`)}</span>
+                <span className="recall-rule-arrow" aria-hidden="true">→</span>
+                <span className="recall-rule-then">{name(rule.option)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="recall-rec-text">{fill(t('settings.recall.rec.no-language-signal'), { option: name(r.option) })}</p>
+        )}
+        {(keyLine || r.note === 'light-machine') && (
+          <p className="recall-rec-note">
+            {[keyLine, r.note === 'light-machine' ? fill(t('settings.recall.rec.note.light-machine'), { option: name('cloud-index') }) : '']
+              .filter(Boolean).join(' ')}
+          </p>
+        )}
       </div>
-      <div className="recall-rec-signals">
-        <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.prompts')}</span>{mixLabel(r.promptsMix)}</span>
-        <span className="recall-signal"><span className="recall-signal-k">{t('settings.recall.sig.docs')}</span>{mixLabel(r.docsMix)}</span>
+    </details>
+  );
+}
+
+/**
+ * The top of the page: what is running now, how well it finds things for THIS brain, and — when a
+ * better engine is advised — one button that switches to it (or opens its setup, for a cloud tier).
+ */
+function MemoryHero({ options, active, onUpgrade }: {
+  options: RecallOptions | undefined;
+  active: RecallOptionId | null;
+  onUpgrade: (id: RecallOptionId) => void;
+}) {
+  const { t } = useI18n();
+  const pct = usePercent();
+  const name = (id: RecallOptionId): string => t(`settings.recall.opt.${id}.label`);
+  const r = options?.recommendation;
+  const audience = options ? audienceOf(options.recommendation.languageMix) : null;
+  const accuracy = (id: RecallOptionId | null): number | null => {
+    if (!options || !audience || !id) return null;
+    const m = options.measurements.options.find((o) => o.id === id);
+    return m ? accuracyFor(m, audience, options.measurements.queries) : null;
+  };
+  const nowAcc = accuracy(active);
+  const recAcc = r ? accuracy(r.option) : null;
+  const upgrade = r && active !== null && r.option !== active ? r.option : null;
+
+  return (
+    // It is also the section's head: one name, one sentence, as every Settings section has.
+    <section className="memory-hero" aria-label={t('settings.nav.recall')}>
+      <div className="memory-hero-head">
+        <BrandMark size={36} glow />
+        <div className="memory-hero-id">
+          <h2 className="memory-hero-name">{t('settings.nav.recall')}</h2>
+          <span className="memory-hero-tag">{t('settings.desc.recall')}</span>
+        </div>
       </div>
-      {known ? (
-        <ul className="recall-rules">
-          {RULES.map((rule) => (
-            <li key={rule.id} className={`recall-rule${lit(rule.option) ? ' recall-rule--on' : ''}`}>
-              <span className="recall-rule-when">{t(`settings.recall.rule.${rule.id}`)}</span>
-              <span className="recall-rule-arrow" aria-hidden="true">→</span>
-              <span className="recall-rule-then">{name(rule.option)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="recall-rec-text">{fill(t('settings.recall.rec.no-language-signal'), { option: name(r.option) })}</p>
-      )}
-      {(keyLine || r.note === 'light-machine') && (
-        <p className="recall-rec-note">
-          {[keyLine, r.note === 'light-machine' ? fill(t('settings.recall.rec.note.light-machine'), { option: name('cloud-index') }) : '']
-            .filter(Boolean).join(' ')}
-        </p>
-      )}
+
+      <div className="memory-hero-stats">
+        <div className="memory-stat">
+          <span className="memory-stat-k">{t('settings.recall.hero.now')}</span>
+          <span className="memory-stat-v">{active ? name(active) : '…'}</span>
+          {nowAcc !== null && (
+            <span className="memory-stat-n">{pct(nowAcc)} <span className="memory-stat-u">{t('settings.recall.hero.accuracy')}</span></span>
+          )}
+        </div>
+        {upgrade && (
+          <>
+            <span className="memory-hero-arrow" aria-hidden="true">→</span>
+            <div className="memory-stat memory-stat--rec">
+              <span className="memory-stat-k">{t('settings.recall.rec.title')}</span>
+              <span className="memory-stat-v">{name(upgrade)}</span>
+              {recAcc !== null && (
+                <span className="memory-stat-n">{pct(recAcc)} <span className="memory-stat-u">{t('settings.recall.hero.accuracy')}</span></span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {upgrade ? (
+        <button type="button" className="memory-hero-cta" onClick={() => onUpgrade(upgrade)}>
+          {fill(t(isCloudTier(upgrade) ? 'settings.recall.hero.cta.setup' : 'settings.recall.hero.cta.switch'), { option: name(upgrade) })}
+        </button>
+      ) : r && active !== null ? (
+        <p className="memory-hero-ok">✓ {t('settings.recall.hero.on-best')}</p>
+      ) : null}
+
+      {options && <RecommendationWhy options={options} />}
     </section>
   );
 }
@@ -220,12 +297,32 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
   const { data: options, isError: optionsFailed } = useRecallOptions();
   const { data: cloud, isPending: cloudPending } = useCloudRecallStatus();
   const disable = useDisableCloudRecall();
-  /** A cloud tier whose card is open for review, before it has consent. */
+  /** A cloud tier whose setup is open, before it has consent. Shown as the pick while it is open. */
   const [openTier, setOpenTier] = useState<CloudTier | null>(null);
+  /** A pick that waits on a step before the mode is written (local hybrid turns cloud off first). */
+  const [pendingPick, setPendingPick] = useState<RecallOptionId | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const cardRefs = useRef(new Map<RecallOptionId, HTMLDivElement>());
+  const [scrollTo, setScrollTo] = useState<RecallOptionId | null>(null);
 
   const consentTier = cloud?.consent === 'valid' && cloud.tier !== 'local' ? cloud.tier : null;
-  // Hybrid is the mode behind three cards: which one it is depends on the consent in force.
-  const selected: RecallOptionId = recallMode === 'hybrid' ? (consentTier ?? 'hybrid') : recallMode;
+  // Hybrid is the mode behind three cards: which one depends on the consent in force, so until the
+  // cloud status is known there is no answer (guessing "local hybrid" flashes the wrong card).
+  const active: RecallOptionId | null = recallMode === 'hybrid'
+    ? (cloudPending ? null : (consentTier ?? 'hybrid'))
+    : recallMode;
+  // What the radio shows: an open setup, then a pick on its way, then what is in force.
+  const shown: RecallOptionId | null = openTier ?? pendingPick ?? active;
+
+  useEffect(() => {
+    if (active === 'hybrid') setAdvancedOpen(true);
+  }, [active]);
+
+  useEffect(() => {
+    if (!scrollTo) return;
+    cardRefs.current.get(scrollTo)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setScrollTo(null);
+  }, [scrollTo]);
 
   const select = (id: RecallOptionId): void => {
     if (isCloudTier(id)) {
@@ -235,11 +332,22 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
     setOpenTier(null);
     if (id === 'hybrid') {
       // Local hybrid means no cloud: turn a cloud tier off first, then pick the mode.
-      if (consentTier) disable.mutate(undefined, { onSuccess: () => onSelectMode('hybrid') });
-      else onSelectMode('hybrid');
+      if (consentTier) {
+        setPendingPick('hybrid');
+        disable.mutate(undefined, {
+          onSuccess: () => onSelectMode('hybrid'),
+          onSettled: () => setPendingPick(null),
+        });
+      } else onSelectMode('hybrid');
       return;
     }
     if (isPlainMode(id)) onSelectMode(id);
+  };
+
+  const upgrade = (id: RecallOptionId): void => {
+    if (id === 'hybrid') setAdvancedOpen(true);
+    select(id);
+    setScrollTo(id);
   };
 
   const mine = options ? audienceOf(options.recommendation.languageMix) : null;
@@ -249,59 +357,78 @@ export function RecallModeCards({ recallMode, saving, onSelectMode }: RecallMode
     loading: cloudPending,
   };
 
-  const refreshMode = (): void => { void queryClient.invalidateQueries({ queryKey: ['sleep'] }); };
+  /** The server changed the mode itself; the open setup stays the pick until the fresh mode is read. */
+  const refreshAfterCloud = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['recall-options'] });
+    void queryClient.invalidateQueries({ queryKey: ['sleep'] }).finally(() => setOpenTier(null));
+  };
 
   const card = (id: RecallOptionId): ReactNode => {
     const m = options?.measurements.options.find((o) => o.id === id);
     const recommended = options?.recommendation.option === id;
-    const showCloud = isCloudTier(id) && (selected === id || openTier === id);
+    const isShown = shown === id;
+    // The card in force keeps a mark while another one is being looked at.
+    const isActiveElsewhere = active === id && shown !== id;
+    const savingThis = isShown && saving;
+    const setup = isCloudTier(id) && isShown
+      ? (
+        <CloudRecallCard
+          tier={id}
+          onEnabled={refreshAfterCloud}
+          onDisabled={() => { setOpenTier(null); onSelectMode(DEFAULT_MODE); }}
+          onCancel={() => setOpenTier(null)}
+        />
+      )
+      : id === 'hybrid' && isShown ? <EmbeddingModelCard /> : null;
     return (
-      <SettingChoice
+      <div
         key={id}
-        name="recall-mode"
-        value={id}
-        checked={selected === id}
-        disabled={saving || disable.isPending}
-        onSelect={() => select(id)}
-        title={t(`settings.recall.opt.${id}.label`)}
-        hint={t(`settings.recall.opt.${id}.hint`)}
-        badge={(
-          <>
-            {id === DEFAULT_MODE && <MaturityTag label={t('settings.recall.opt.default')} />}
-            {id === 'hybrid' && <MaturityTag label={t('settings.recall.experimental')} />}
-            {recommended && <span className="recall-badge">{t('settings.recall.rec.badge')}</span>}
-          </>
-        )}
+        className="recall-card"
+        ref={(el) => { if (el) cardRefs.current.set(id, el); else cardRefs.current.delete(id); }}
       >
-        {m && options && (
-          <span className="recall-option-body">
-            <AccuracyBars m={m} queries={options.measurements.queries} mine={mine} />
-            <Facts m={m} index={vaultIndex} />
-          </span>
-        )}
-        {id === 'hybrid' && selected === 'hybrid' && <EmbeddingModelCard />}
-        {showCloud && isCloudTier(id) && (
-          <CloudRecallCard
-            tier={id}
-            onEnabled={() => { setOpenTier(null); refreshMode(); }}
-            onDisabled={() => { setOpenTier(null); onSelectMode(DEFAULT_MODE); }}
-          />
-        )}
-      </SettingChoice>
+        <SettingChoice
+          name="recall-mode"
+          value={id}
+          checked={isShown}
+          disabled={disable.isPending}
+          onSelect={() => select(id)}
+          title={t(`settings.recall.opt.${id}.label`)}
+          hint={t(`settings.recall.opt.${id}.hint`)}
+          badge={(
+            <>
+              {id === DEFAULT_MODE && <MaturityTag label={t('settings.recall.opt.default')} />}
+              {id === 'hybrid' && <MaturityTag label={t('settings.recall.experimental')} />}
+              {recommended && <span className="recall-badge">{t('settings.recall.rec.badge')}</span>}
+              {isActiveElsewhere && <span className="recall-badge recall-badge--current">{t('settings.recall.current')}</span>}
+              {savingThis && <span className="recall-saving">{t('settings.recall.saving')}</span>}
+            </>
+          )}
+        >
+          {m && options && (
+            <span className="recall-option-body">
+              <AccuracyBars m={m} queries={options.measurements.queries} mine={mine} />
+              <Facts m={m} index={vaultIndex} />
+            </span>
+          )}
+        </SettingChoice>
+        {/* Outside the radio's label: a click inside a setup form must never re-pick the card. */}
+        {setup && <div className="recall-setup">{setup}</div>}
+      </div>
     );
   };
 
   // The cloud tiers cannot be set from the hands-free cloud machine (the routes refuse it).
   const mainOptions = MAIN_OPTIONS.filter((id) => !(cloudSurface && isCloudTier(id)));
+  const heroOptions = options && cloudSurface && isCloudTier(options.recommendation.option) ? undefined : options;
 
   return (
     <div className="recall-cards">
-      {options && <Recommendation options={options} />}
+      <MemoryHero options={heroOptions} active={active} onUpgrade={upgrade} />
       {optionsFailed && <p className="settings-field-hint">{t('settings.recall.m.unavailable')}</p>}
       <div className="setting-choices" role="radiogroup" aria-label={t('settings.nav.recall')}>
         {mainOptions.map(card)}
       </div>
-      <details className="recall-advanced" open={selected === 'hybrid' || undefined}>
+      <details className="recall-advanced" open={advancedOpen} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
         <summary>{t('settings.recall.advanced')}</summary>
         <div className="setting-choices">{card('hybrid')}</div>
       </details>

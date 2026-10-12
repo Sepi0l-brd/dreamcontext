@@ -115,13 +115,37 @@ export function useRecallMode(): RecallMode {
   return data?.recall_mode ?? 'haiku';
 }
 
-/** PATCH /api/sleep — partial update (recall_mode, manual debt). Returns the fresh state. */
+const SLEEP_UPDATE_KEY = ['sleep-update'] as const;
+
+/**
+ * PATCH /api/sleep — partial update (recall_mode, manual debt). Returns the fresh state.
+ *
+ * A recall-mode pick shows at once: the cache takes the new mode before the request leaves, and an
+ * error puts the old one back. With two picks in flight, only the LAST answer is written, so an
+ * earlier reply cannot flip the choice back for a moment.
+ */
 export function useUpdateSleep() {
   const queryClient = useQueryClient();
   const api = useApi();
   return useMutation({
+    mutationKey: SLEEP_UPDATE_KEY,
     mutationFn: (patch: { recall_mode?: RecallMode; debt?: number }) =>
       api.patch<SleepState>('/sleep', patch),
-    onSuccess: (data) => queryClient.setQueryData(['sleep'], data),
+    onMutate: async (patch) => {
+      await queryClient.cancelQueries({ queryKey: ['sleep'] });
+      const prev = queryClient.getQueryData<SleepState>(['sleep']);
+      if (prev && patch.recall_mode) {
+        queryClient.setQueryData<SleepState>(['sleep'], { ...prev, recall_mode: patch.recall_mode });
+      }
+      return { prev };
+    },
+    onError: (_err, _patch, ctx) => {
+      if (queryClient.isMutating({ mutationKey: SLEEP_UPDATE_KEY }) <= 1 && ctx?.prev) queryClient.setQueryData(['sleep'], ctx.prev);
+      else void queryClient.invalidateQueries({ queryKey: ['sleep'] });
+    },
+    onSuccess: (data) => {
+      // Still counted as pending inside its own onSuccess: 1 means no later pick is on its way.
+      if (queryClient.isMutating({ mutationKey: SLEEP_UPDATE_KEY }) <= 1) queryClient.setQueryData(['sleep'], data);
+    },
   });
 }

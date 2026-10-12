@@ -47,9 +47,11 @@ export interface CloudRecallCardProps {
   /** Called after cloud recall was turned on (the server also set the recall mode) or off. */
   onEnabled?: () => void;
   onDisabled?: () => void;
+  /** Called when the person backs out of the review (Cancel): the parent can close the setup. */
+  onCancel?: () => void;
 }
 
-export function CloudRecallCard({ tier: onlyTier, onEnabled, onDisabled }: CloudRecallCardProps = {}) {
+export function CloudRecallCard({ tier: onlyTier, onEnabled, onDisabled, onCancel }: CloudRecallCardProps = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: status, isLoading, isError } = useCloudRecallStatus();
@@ -247,7 +249,7 @@ export function CloudRecallCard({ tier: onlyTier, onEnabled, onDisabled }: Cloud
                 <button type="button" className="embed-model-btn embed-model-btn--primary" disabled={busy} onClick={() => onEnable(reviewing)}>
                   {enable.isPending ? t('settings.recall.cloud.enabling') : t('settings.recall.cloud.enable')}
                 </button>
-                <button type="button" className="embed-model-btn" disabled={busy} onClick={() => setReviewing(null)}>
+                <button type="button" className="embed-model-btn" disabled={busy} onClick={() => { setReviewing(null); onCancel?.(); }}>
                   {t('settings.recall.cloud.cancel')}
                 </button>
               </div>
