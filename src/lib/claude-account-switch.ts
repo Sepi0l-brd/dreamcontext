@@ -648,6 +648,26 @@ export function shouldSwitchAway(
 }
 
 /**
+ * Does a reading of ANY age prove the account is past the threshold?
+ *
+ * Usage only climbs inside a window and drops only at its reset, so an old reading whose
+ * window still has a known FUTURE reset is a lower bound: the account is at least that full
+ * now. Observed 2026-10-11: the preferred account's week sat at 92% in a cache 2 hours old,
+ * the spawn read "too old to trust" as "keep it", and every new chat opened on it only to
+ * move on the first message. A window with no known reset, or one already past it, proves
+ * nothing; neither does a `lockedReason`, which can lift before the reset.
+ */
+export function provenPastThreshold(
+  limits: UsageLimitsResponse,
+  threshold: number = SWITCH_THRESHOLD_PERCENT,
+  now: number = Date.now(),
+): boolean {
+  const w = windows(limits, now);
+  const binds = (r: WindowReading | null): boolean => r !== null && r.resetsAt > now && r.raw >= threshold;
+  return binds(w.session) || binds(w.weekly);
+}
+
+/**
  * Is it worth spending a (free) probe on the active account?
  *
  * Both of these read the ROLLOVER-CORRECTED percent, which is how a session comes home on its

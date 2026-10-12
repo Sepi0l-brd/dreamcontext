@@ -172,6 +172,29 @@ describe('picking the account a new chat opens on', () => {
     expect(chatSpawnAccount({ home, now: NOW.getTime(), readUsage }).id).toBe('first');
   });
 
+  // Reported 2026-10-11: the preferred account's week at 92% in a cache 2 hours old. "Too old
+  // to trust" kept it, and every new chat opened on it only to move on the first message.
+  it('an old reading that already shows the preferred account full still skips it', () => {
+    addAccounts();
+    const readUsage = cacheOf({
+      [home]: { session: 97, ageMs: 2 * 3_600_000 },
+      [sandboxDirFor('second', home)]: { session: 15 },
+    });
+    expect(chatSpawnAccount({ home, now: NOW.getTime(), readUsage }).id).toBe('second');
+  });
+
+  it('an old reading below the threshold, or one whose window has reset, keeps the preferred account', () => {
+    addAccounts();
+    const second = { [sandboxDirFor('second', home)]: { session: 15 } };
+    const low = cacheOf({ [home]: { session: 60, ageMs: 2 * 3_600_000 }, ...second });
+    expect(chatSpawnAccount({ home, now: NOW.getTime(), readUsage: low }).id).toBe('first');
+    // The session window resets 2h after NOW: three hours later the 97% is a closed window.
+    const full = cacheOf({ [home]: { session: 97, ageMs: 2 * 3_600_000 }, ...second });
+    const later = NOW.getTime() + 3 * 3_600_000;
+    const readLater = (dir: string): UsageLimitsResponse => ({ ...full(dir), fetchedAtMs: dir === home ? NOW.getTime() - 2 * 3_600_000 : later });
+    expect(chatSpawnAccount({ home, now: later, readUsage: readLater }).id).toBe('first');
+  });
+
   it('no blind pick: when no other account has a current reading, the preferred one stays', () => {
     addAccounts();
     const readUsage = cacheOf({ [home]: { session: 97 }, [sandboxDirFor('second', home)]: { session: 15, ageMs: 2 * 3_600_000 } });

@@ -4,7 +4,8 @@ import {
   type ClaudeAccount,
 } from '../claude-accounts.js';
 import {
-  chooseAccount, shouldProbe, shouldSwitchAway, SWITCH_THRESHOLD_PERCENT, type AccountReading,
+  chooseAccount, provenPastThreshold, shouldProbe, shouldSwitchAway, SWITCH_THRESHOLD_PERCENT,
+  type AccountReading,
 } from '../claude-account-switch.js';
 import { readAccountRejections } from '../claude-limit-rejections.js';
 import { probeAccountUsage, type ProbeOutcome } from '../claude-usage-probe.js';
@@ -140,7 +141,8 @@ export function automationAccountWithoutProbe(deps: PickDeps = {}): AutomationAc
  * ceiling is 20s). The per-turn check (`maybeSwitchAccount`) is still the safety net, so a
  * cache that is wrong here costs the same restart as before, never worse. Same rules as the
  * turn path otherwise: OFF / one account / `sequential` without a refusal keep the preferred
- * account; only a refusal or a CURRENT reading past the switch threshold moves it; and a blind
+ * account; only a refusal, a CURRENT reading past the switch threshold, or an older one whose
+ * window has not reset yet and already shows it past (`provenPastThreshold`) moves it; and a blind
  * pick (`unmeasured`) is refused, since staying put lets the turn path probe properly.
  */
 export function chatSpawnAccount(deps: Pick<PickDeps, 'home' | 'now'> & {
@@ -156,7 +158,13 @@ export function chatSpawnAccount(deps: Pick<PickDeps, 'home' | 'now'> & {
     if (!rejectedUntil[preferred.id]) {
       if (switchStrategyFor(home) === 'sequential') return fallback;
       const cached = read(dirOf(preferred));
-      if (!usageReadingIsCurrent(cached, now) || !shouldSwitchAway(cached, undefined, now)) return fallback;
+      // A current reading decides as usual. An OLD one still decides when it proves the
+      // account full (`provenPastThreshold`): usage cannot fall before the reset, so "too old
+      // to trust" only ever hides an account that is even fuller.
+      const full = usageReadingIsCurrent(cached, now)
+        ? shouldSwitchAway(cached, undefined, now)
+        : provenPastThreshold(cached, undefined, now);
+      if (!full) return fallback;
     }
     const readings = accounts.map((a): AccountReading => {
       const cached = read(dirOf(a));
