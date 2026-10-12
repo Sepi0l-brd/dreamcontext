@@ -122,6 +122,10 @@ export interface PublicManifest {
   adapter: 'http' | 'script' | null;
   method: 'GET' | 'POST' | null;
   tweaks: PublicTweak[];
+  /** A ready-made card this insight derives as (`funnel-explorer`); absent from an older server. */
+  preset?: string | null;
+  /** The language its preset card speaks; absent from an older server. */
+  locale?: 'en' | 'tr' | null;
 }
 
 export interface InsightDetail {
