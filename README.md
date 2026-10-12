@@ -538,6 +538,14 @@ dreamcontext embed dedup --title "..." --stdin   # semantic near-duplicate check
 
 Freshness is automatic (lazy per-query refresh + an eager re-check at `sleep done`); if the model isn't installed, hybrid silently falls back to plain BM25. The same index powers a **near-duplicate gate during sleep**: before a specialist creates a doc, `embed dedup` scores the candidate against the corpus and advises **MERGE / REVIEW / CREATE** — advisory only, and a no-op on vaults with no embedding cache.
 
+**dreamcontext Memory (Settings).** Every recall engine is listed with its measured accuracy on English and mixed-language prompts, its added time, its cost and what leaves your machine, plus a recommendation read from the language of your recent prompts; switching is one click. Two **cloud tiers** are opt-in and stay off until you enable them yourself at a terminal: `cloud-index` embeds your docs in the cloud once and matches prompts locally, `cloud` searches and re-ranks in the cloud. Agents can never turn them on.
+
+```bash
+dreamcontext recall cloud status          # tier, consent, key source, spend, index coverage (never the key)
+dreamcontext recall cloud enable cloud-index   # shows what leaves this machine, then asks for your consent
+dreamcontext recall cloud disable         # revoke consent; recall falls back to local
+```
+
 **Hook injection is ON by default**: top hits are auto-surfaced to the agent on every non-trivial prompt via the UserPromptSubmit hook (`DREAMCONTEXT_MEMORY_HOOK=0` to opt out). The snapshot's recent-CHANGELOG block is tiered — top 3 detailed, next 10 titles-only — and everything older stays reachable via `memory recall --types changelog`.
 
 ## Lab (Insights)
@@ -609,10 +617,11 @@ An **agent** is who does the work: a name, a photo, a prompt, a model and an opt
 - **Automations pick an agent.** An automation is now a schedule plus a job for the agent it picks (`automations create <slug> --agent <agent>`), so one agent can run several jobs and keep one pattern of lessons.
 - **Assign a task to an agent.** **Assign to agent** on a task (or `dreamcontext tasks assign-agent <task> <agent>`) runs the agent on it now. The task moves to In progress if it had not started, and the result is logged on the task. Agents are not people: they never become assignees in ClickUp or GitHub.
 - **Talk to it anywhere.** Chat, whiteboard cards and Chat sub-agents all read the same roster.
+- **Give it a soul.** The prompt says what an agent does; its **soul** says how: stance, tempo, tone and what it refuses. Write your own or start from a template (`--soul-template harsh-reviewer | fast-doer | careful-researcher | plain-writer | calm-helper`). The soul is approved with the job, and an agent profile shows it beside what the agent has learned from its runs.
 - **Approve on the Agents page.** It shows, per agent, whether it may chat and whether it may run on this machine, and approves in place. A Claude session cannot approve an agent or an automation for you.
 
 ```bash
-dreamcontext agents create reviewer --title "Reviewer" --prompt "You review open tasks and say what is blocked."
+dreamcontext agents create reviewer --title "Reviewer" --prompt "You review open tasks and say what is blocked." --soul-template harsh-reviewer
 dreamcontext agents list
 dreamcontext tasks assign-agent "Fix the login redirect loop" reviewer
 ```
