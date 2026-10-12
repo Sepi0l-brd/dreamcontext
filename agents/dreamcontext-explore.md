@@ -38,8 +38,8 @@ This project has an `_dream_context/` directory. Your Sub-agent Briefing (inject
 **`dreamcontext memory recall` is your first-line tool.** It runs BM25 over the
 entire curated corpus — knowledge files, feature PRDs, task files, memory
 entries, CHANGELOG history, roadmap objectives, Lab insights, hypotheses
-(theses), and automations (their prompts, the lessons their runs learned, and
-each run's output) — and returns the top-N most relevant docs in <100ms with
+(theses), automations (their prompts, the lessons their runs learned, and
+each run's output) and agents (`agents/<slug>.md`: who does the work) — and returns the top-N most relevant docs in <100ms with
 zero token overhead. For any "where did we decide X?", "what do we know about
 Y?", "is there prior design for Z?" type query, recall almost always beats
 blind exploration.

@@ -80,7 +80,7 @@ No setup, no index file, no external service — rebuilt in memory each call (<1
 
 ### recall — your first-line discovery tool
 
-**Run `memory recall` BEFORE grep or blind file reads** whenever the user asks "where did we decide X?", "have we discussed Y?", "what do we know about Z?", or before duplicating work. It ranks across all nine channels in one shot.
+**Run `memory recall` BEFORE grep or blind file reads** whenever the user asks "where did we decide X?", "have we discussed Y?", "what do we know about Z?", or before duplicating work. It ranks across every channel in one shot.
 
 ```bash
 # Plain discovery — top 10 hits with snippets
@@ -308,7 +308,7 @@ SKILL.md keeps one line per capability and one home per rule. This is the fuller
 
 ### Recall and taxonomy rules in full
 
-3. **Recall before grep.** Before grepping `_dream_context/` for prior decisions or "did we already do X?", run `dreamcontext memory recall "<query>"`. It ranks across **all nine channels** in one shot — knowledge, features, tasks, memory, changelog, **objectives, insights, theses (hypotheses), and automations** (manifests, their learned Pattern lessons, and their run outputs) — cheaper and more on-target than blind Grep. Narrow with `--types <csv>`; narrow by importance with `--level 2` (curated only, drops changelog pointers and run logs) or `--level 3` (only what's explicitly marked: pinned knowledge, ★★/★★★ decisions, settled hypotheses, KR-bound insights).
+3. **Recall before grep.** Before grepping `_dream_context/` for prior decisions or "did we already do X?", run `dreamcontext memory recall "<query>"`. It ranks across **every channel** in one shot (knowledge, features, tasks, memory, changelog, **objectives, insights, theses (hypotheses), automations** (manifests, their learned Pattern lessons, and their run outputs), **agents**, whiteboards and core), cheaper and more on-target than blind Grep. Narrow with `--types <csv>`; narrow by importance with `--level 2` (curated only, drops changelog pointers and run logs) or `--level 3` (only what's explicitly marked: pinned knowledge, ★★/★★★ decisions, settled hypotheses, KR-bound insights).
 11. **Tag before you create.** Before tagging a task/feature/knowledge, consult `dreamcontext taxonomy vocab` and reuse canonical faceted tags (`topic:recall`, `domain:security`) before inventing new ones. Fragmenting tags degrades recall. To heal accumulated drift in one shot, run `dreamcontext taxonomy audit --fix` (bulk-normalizes alias/normalizable tags to canonical across the corpus — safe, idempotent, `--dry-run` to preview; orphans are reported, never guessed).
 
 ### Memory and knowledge essentials in full

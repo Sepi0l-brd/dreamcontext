@@ -46,6 +46,7 @@ _dream_context/
                features/<name>.md (feature PRDs, type: feature)
   lab/         insights/<slug>.md (tracked metrics), cache/ (never hand-edit)
   theses/      <slug>.md (hypotheses)
+  agents/      <slug>.md (who does the work; owner-approved)
   automations/ <slug>.md (scheduled jobs)
   state/       <task>.md (tasks), .config.json, .sleep.json
 ```
@@ -61,7 +62,8 @@ _dream_context/
 - Bookmark: `dreamcontext bookmark add "<msg>" -s <1|2|3> --task <slug>`.
 - Pattern (a reusable solution shape): a knowledge file under `knowledge/patterns/`.
 - Trigger (remind when X comes up): `dreamcontext trigger add <when> <remind>`.
-- Automation (runs on a schedule): `dreamcontext automations create <slug>`.
+- Agent (who does the work; automations and tasks pick one): `dreamcontext agents create <slug>`. Not a person; approved by the owner on the Agents page.
+- Automation (runs on a schedule): `dreamcontext automations create <slug> --agent <agent>`.
 - Release or version: `dreamcontext core releases add`.
 - Person: `dreamcontext people add "<Name>" --email <address>`.
 - Report over tracked insights: `dreamcontext lab report create <slug>`.

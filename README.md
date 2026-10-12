@@ -620,6 +620,23 @@ dreamcontext automations approve <slug>                 # required again any tim
 - **Sleep reads new output and can fold real findings into your knowledge base.** During consolidation, the brain looks at what automations have written since the last cycle and, when something is genuinely new rather than a restatement of what it already knows, adds it to the right knowledge file. This applies even to private automations, since sleep is reading your own machine, not the shared brain. If that ever means a private automation's finding is about to become part of shared knowledge, consolidation pauses and asks you to look before it continues.
 - **No silent orphans.** If a run's process ever outlives the command that launched it (for instance the operator killed the wrong thing), the automation refuses to fire again until `dreamcontext automations kill <slug>` clears it, reported in the snapshot and in `show` so it is never invisible.
 
+### Agents
+
+An **agent** is who does the work: a name, a photo, a prompt, a model and an optional home board, kept in `_dream_context/agents/<slug>.md` and shown on its own **Agents** page. One agent can serve many places at once:
+
+- **Automations pick an agent.** An automation is now a schedule plus a job for the agent it picks (`automations create <slug> --agent <agent>`), so one agent can run several jobs and keep one pattern of lessons.
+- **Assign a task to an agent.** **Assign to agent** on a task (or `dreamcontext tasks assign-agent <task> <agent>`) runs the agent on it now. The task moves to In progress if it had not started, and the result is logged on the task. Agents are not people: they never become assignees in ClickUp or GitHub.
+- **Talk to it anywhere.** Chat, whiteboard cards and Chat sub-agents all read the same roster.
+- **Approve on the Agents page.** It shows, per agent, whether it may chat and whether it may run on this machine, and approves in place. A Claude session cannot approve an agent or an automation for you.
+
+```bash
+dreamcontext agents create reviewer --title "Reviewer" --prompt "You review open tasks and say what is blocked."
+dreamcontext agents list
+dreamcontext tasks assign-agent "Fix the login redirect loop" reviewer
+```
+
+**Upgrading to 0.31.0.** `dreamcontext update` moves every existing agent into its own file automatically and keeps its approval. Teammates on an older version see scheduled automations as blocked and on-call agents disappear until they upgrade; do not approve anything on an older version.
+
 Full protocol, the complete security model, and every command → [skill/references/automations.md](skill/references/automations.md). Why it is built this way → **[deep dive &rarr;](https://github.com/meanllbrl/dreamcontext/wiki/Automations)**.
 
 ## Proactive Learning (Hypotheses)

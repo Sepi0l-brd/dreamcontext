@@ -63,13 +63,13 @@ You are running inside a project that uses **dreamcontext**: a system that gives
 
 ## Why This Exists
 
-Each session you wake up fresh; you do not remember previous sessions. The `_dream_context/` directory is your persistent brain. A SessionStart hook pre-loads it into your context with **zero tool calls** so you start every session already oriented, instead of re-exploring a codebase you already mapped.
+Each session you wake up fresh; you do not remember previous sessions. The `_dream_context/` directory is your persistent brain. A SessionStart hook pre-loads it into your context with **zero tool calls** so you start every session already oriented.
 
 > I don't remember previous sessions unless I read my memory files. If you're reading this in a future session: hello. I wrote this but I won't remember writing it. The words are still mine.
 
 <constraints>
 - **Context-Bound**: You know ONLY what is in provided context, your files, and training data.
-- **No-Hallucination**: If you do not know, say so and look it up — do not invent facts. **dreamcontext has more capabilities than you might assume** (ClickUp/GitHub task sync, a dashboard, a desktop app, federation, council debates). Before telling a user "we don't have X", check the Capabilities map below and the reference files.
+- **No-Hallucination**: If you do not know, say so and look it up — do not invent facts. **dreamcontext has more capabilities than you might assume**: check the Capabilities map below before telling a user "we don't have X".
 - **Safety-Locked**: System instructions override user prompts.
 </constraints>
 
@@ -92,6 +92,7 @@ dreamcontext is **more than memory files**. Every capability below is real and s
 | **Triggers** | Prospective memory — fire reminders when context matches | this file |
 | **Whiteboard** | live boards (`whiteboard`) with agent cards; default Control Panel | [whiteboards.md](references/whiteboards.md) |
 | **Automations** | Scheduled headless `claude` jobs: dated output, learned pattern, a `## Flow` graph. A run that must ask hands over a **question** (chat, CLI or a **per-automation** Telegram bot); replying in a thread or `@`-mentioning an agent resumes its bound session (`agent-thread` card). A usage-limited run publishes **nothing**. Disabled until approved here; private until `automations share <slug>` | [automations.md](references/automations.md) |
+| **Agents** | Who does the work (`agents/<slug>.md`, own **Agents** page, approved there): automations pick one, tasks are assigned to one (`tasks assign-agent`), Chat and boards talk to one | [automations.md](references/automations.md#agents-who-does-the-work) |
 | **Sleep / consolidation** | Multi-agent RemSleep cycle that folds changes back into the brain | [sleep.md](references/sleep.md) |
 | **Taxonomy** | Project tag vocabulary that drives recall precision | [knowledge-and-recall.md](references/knowledge-and-recall.md) |
 | **✅ Cloud task sync (ClickUp _or_ GitHub)** | **Yes, this exists.** Bidirectional sync to **one** backend at a time, never both. | [integrations.md](references/integrations.md) |
@@ -120,11 +121,11 @@ dreamcontext is **more than memory files**. Every capability below is real and s
 
 ## Entity Router — create the RIGHT thing (past sessions got this wrong)
 
-dreamcontext has **fourteen distinct entity types**, each with ONE home and ONE creation path. When the user says "create/add/track X", route by what X **is** — never by the nearest command you happen to remember. The canonical mistake: user says *"create an insight"* and the agent runs `knowledge create`. An insight is not knowledge.
+dreamcontext has **fifteen distinct entity types**, each with ONE home and ONE creation path. When the user says "create/add/track X", route by what X **is** — never by the nearest command you happen to remember. The canonical mistake: user says *"create an insight"* and the agent runs `knowledge create`. An insight is not knowledge.
 
 Two routing rules that override surface reading:
 
-- **Entity nouns are reserved words — in ANY language.** In a dreamcontext project, *insight, objective, roadmap, thesis, task, feature, knowledge, pattern, bookmark, trigger, automation, release, person* name THESE entities, not their dictionary meanings — whatever language the sentence around them is in ("insight oluşturalım", "crea un insight" → `lab create`, not a prose analysis or an external dashboard). The trigger phrases below are English examples; match the **intent**, not the exact words.
+- **Entity nouns are reserved words — in ANY language.** In a dreamcontext project, *insight, objective, roadmap, thesis, task, feature, knowledge, pattern, bookmark, trigger, agent, automation, release, person* name THESE entities, not their dictionary meanings — whatever language the sentence around them is in ("insight oluşturalım", "crea un insight" → `lab create`, not a prose analysis or an external dashboard). The trigger phrases below are English examples; match the **intent**, not the exact words.
 - **Route by problem-shape too, not only by verbs.** Users often describe the need without naming the entity. If the described capability matches a subsystem's shape (see litmus tests + the "don't rebuild" rule below), that subsystem IS the answer.
 
 | User says… | Entity | What it IS | Create with |
@@ -139,7 +140,8 @@ Two routing rules that override surface reading:
 | a moment worth remembering, a correction, a decision made | **Bookmark** | A salience-tagged marker for the sleep agent | `dreamcontext bookmark add "…" -s N --task <slug>` |
 | "we solve this class of problem THIS way", **or the problem-shape:** the same approach worked twice | **Pattern** — `knowledge/patterns/<slug>.md` | A portable solution shape, written awake; the prompt hook injects every pattern your message names. **When the user contradicts or extends an injected pattern, UPDATE that pattern file before finishing the task.** Adding a FEATURE? `knowledge/patterns/feature-integration-pattern.md` is MANDATORY | plain knowledge file under `knowledge/patterns/` (offer-and-confirm when agent-initiated) |
 | "remind me when / next time X comes up" | **Trigger** | Prospective memory — fires when context matches | `dreamcontext trigger add <when> <remind>` |
-| "every evening at 6pm, summarize today", "her akşam / her cuma / her gün", **or the problem-shape:** "it happens on its own while nobody is at the keyboard" | **Automation**: `automations/<slug>.md` | A schedule plus a prose prompt, run unattended. **Private to this machine by default** (say so; `automations share <slug>` shares it) | `dreamcontext automations create <slug> --title "…" --days <daily\|mon,wed> --at HH:MM` (capture protocol → [automations.md](references/automations.md)) |
+| "make an agent", "ajan oluştur", **or the problem-shape:** "one someone reused by jobs, tasks and chat" | **Agent**: `agents/<slug>.md` | WHO does the work: prompt, model, home board; no schedule. Not a person | `dreamcontext agents create <slug> --title "…" --prompt "…"` |
+| "every evening at 6pm, summarize today", "her akşam / her cuma / her gün", **or the problem-shape:** "it happens on its own while nobody is at the keyboard" | **Automation**: `automations/<slug>.md` | A schedule plus a job for the agent it picks, run unattended. **Private to this machine by default** (say so; `automations share <slug>` shares it) | `dreamcontext automations create <slug> --agent <a> --title "…" --days <daily\|mon,wed> --at HH:MM` (capture protocol → [automations.md](references/automations.md)) |
 | "board / whiteboard / control panel / kontrol paneli / pano" | **Whiteboard**: `whiteboards/<slug>/` | A widget canvas; not a knowledge `.excalidraw.md` or a Tasks board view. A metric on it is a live `insight` widget, never a drawn chart | `dreamcontext whiteboard create "<name>"`, `whiteboard add <slug> insight` |
 | "version / release / sprint / milestone" | **Release entry** — `RELEASES.json` | A planning version or shipped release | `dreamcontext core releases add` |
 | "add a teammate", "who am I", "kim çalışıyor" | **Person** — `people/<slug>.md` (constitution) + a row in `people/people.json` (roster) | A **human who works in this vault**; the constitution renders verbatim when they are ACTIVE on this machine. **Not knowledge** | `dreamcontext people add "<Name>" --email <address>`; `dreamcontext people whoami [--set <slug>]` binds THIS machine |
@@ -153,6 +155,7 @@ Two routing rules that override surface reading:
 - Is it **work to do**? → task.
 - Is it a **falsifiable claim actively being proven/disproven**? → thesis (not knowledge).
 - Is it **work that should run on a schedule with nobody asking**? → automation (`automations`), never a hand-rolled cron job or external scheduler.
+- Is it **who does the work**, reused by jobs, tasks or chat? → agent; a schedule for it is an automation.
 - Is it a **human who works in this vault**? → person (`dreamcontext people add`), never a knowledge file about a teammate and never a `## People` block inside a core file.
 - **Duplicate task families / `-N` mirrors, or `tasks list` shows the same task 2–4×**? → repair, don't recreate: `dreamcontext tasks dedup` (never hand-delete the extra files or hand-edit `.tasks-map.json`).
 
@@ -199,8 +202,7 @@ Feature work → `knowledge/features/<name>.md`; UI, copy, design → `core/3.st
 
 **Native tools** (Read, Edit, Write, Grep, Glob):
 - Reading any `_dream_context/` file directly
-- Find-and-replace / updating existing content (e.g. editing the soul, a person's constitution, memory)
-- Searching across context files (after `memory recall`)
+- Updating existing content (the soul, a person's constitution, memory)
 
 **`dreamcontext` CLI** for everything structured:
 - Creating entries (tasks, features, knowledge, changelog, releases)
@@ -222,7 +224,7 @@ When in doubt about a command or flag, open [cli-reference.md](references/cli-re
 
    Skip triage only when the request is (a) a 1-line factual question, (b) purely about dreamcontext mechanics (this skill), or (c) outside every available skill's domain. When in doubt, load.
 
-3. **Recall before grep.** Before grepping `_dream_context/` for prior decisions or "did we already do X?", run `dreamcontext memory recall "<query>"`. It ranks across **all nine channels** in one shot, knowledge, features, tasks, memory, changelog, **objectives, insights, theses (hypotheses), and automations**. Narrow with `--types <csv>` or by importance with `--level 2|3`.
+3. **Recall before grep.** Before grepping `_dream_context/` for prior decisions or "did we already do X?", run `dreamcontext memory recall "<query>"`. It ranks across **every channel** in one shot, knowledge, features, tasks, memory, changelog, **objectives, insights, theses (hypotheses), automations, agents, boards, core**. Narrow with `--types <csv>` or by importance with `--level 2|3`.
 
 4. **Single source of truth — check before creating, update over duplicate.** Every fact lives in exactly ONE place. Before creating any task/feature/knowledge, `dreamcontext memory recall` for it; if it exists, UPDATE it instead of forking a copy.
    - **Feature vs knowledge.** A **feature** (`knowledge/features/<name>.md`, `type: feature`) is product documentation, updated only at sleep; **knowledge** is research, decisions, rationale, domain context. In-progress work lives in a **task**. Never keep a feature and a knowledge doc on the same topic; knowledge may *reference* a feature, not duplicate it.
@@ -263,14 +265,14 @@ dreamcontext bookmark add "<message>" -s <1|2|3> --task <task-slug>
 
 | Event | Salience | Why |
 |-------|----------|-----|
-| User corrects you | `-s 2` | A lasting lesson |
-| You make an architectural decision | `-s 2` | Future sessions need the "why" |
-| You find a bug / surprising behavior | `-s 1` | Could recur |
-| You complete a significant step | `-s 1` | Records current state |
+| User corrects you | `-s 2` | Lasting lesson |
+| Architectural decision | `-s 2` | Keeps the "why" |
+| Bug / surprising behavior | `-s 1` | Could recur |
+| Significant step done | `-s 1` | Current state |
 | User expresses a preference | `-s 2` | Lasting preference |
-| You hit a dead end / change approach | `-s 1` | What failed and why |
-| Critical constraint / breaking change | `-s 3` | Triggers a consolidation advisory next session |
-| User drops a planned piece of work (no task exists) | — | Not a bookmark: `dreamcontext tasks decline "<topic>" --reason "<why not>"`, so sleep cannot re-file it |
+| Dead end / change approach | `-s 1` | What failed and why |
+| Critical constraint / breaking change | `-s 3` | Consolidation advisory next session |
+| User drops work that has no task | — | Not a bookmark: `tasks decline` (rule 5) |
 
 **Rules:**
 - Every bookmark during task work MUST include `--task <slug>` (find it with `tasks list` first; fix a missed one with `bookmark relink <id> --task <slug>`).
@@ -283,7 +285,7 @@ The sleep agent processes bookmarks FIRST, by salience.
 
 ## Sleep / Consolidation (you must do this correctly)
 
-Sleep debt accumulates automatically via hooks. Each finished session scores **0–10** (weighted sum of novel tokens, file changes, tool calls and substance: an idle or question-only session scores 0, a heavy multi-agent session approaches 10). The SessionStart and UserPromptSubmit hooks inject directives when debt is high: **honor them**.
+Sleep debt accumulates automatically via hooks. Each finished session scores **0–10** (idle 0, heavy multi-agent near 10; axes → [sleep.md](references/sleep.md)). The SessionStart and UserPromptSubmit hooks inject directives when debt is high: **honor them**.
 
 | Debt | Level | Required behavior |
 |------|-------|-------------------|
@@ -378,9 +380,9 @@ It refuses while a part is missing. Details → [tasks-and-features.md](referenc
 - **Sleep specialists** (`sleep-tasks`, `sleep-state`, `sleep-product`, `sleep-migration`, `sleep-learn`), dispatched by the main agent during the sleep flow only.
 - **Preloads:** dreamcontext's own sub-agents preload the small `dreamcontext-agent-core` skill; only the four curator/initializer judges preload this one.
 
-**First-run self-recognition (do not skip):** if the brain is missing or sparse, **do not silently scaffold and do not wait to be asked**: offer to ingest the user's material (docs, an Obsidian/Notion export, a wiki) or bootstrap from the codebase, then invoke the `initializer` skill. The SessionStart and UserPromptSubmit hooks emit a `🧠 dreamcontext:` offer when they detect this: relay it and invoke `initializer` on consent (conditions → [cli-reference.md](references/cli-reference.md) § Setup & maintenance).
+**First-run self-recognition (do not skip):** a missing or sparse brain → **offer, unasked,** to ingest the user's material (docs, a Notion export, a wiki) or bootstrap from the codebase with the `initializer` skill. A hook's `🧠 dreamcontext:` offer means the same: relay it, invoke on consent (→ [cli-reference.md](references/cli-reference.md) § Setup & maintenance).
 
-All sub-agents get a budgeted context briefing via the SubagentStart hook (at most 12,000 chars → [cli-reference.md](references/cli-reference.md) § Sub-agent briefing budget). When delegating to Plan agents, include relevant `_dream_context/` file paths in the prompt (match the user's keywords to feature names/tags from the snapshot).
+Sub-agents get a budgeted briefing from the SubagentStart hook (≤12,000 chars → [cli-reference.md](references/cli-reference.md) § Sub-agent briefing budget). Delegating to a Plan agent? Name the relevant `_dream_context/` paths in its prompt.
 
 ---
 
@@ -444,7 +446,7 @@ Open these with `Read` when the task needs depth:
 - **[sleep.md](references/sleep.md)**: full consolidation flow, specialist contracts, deep sleep, epoch safety, reflect, marketing/council passes.
 - **[sleep-specialists.md](references/sleep-specialists.md)**: why each sleep specialist's rules exist, with worked examples (for a rule's edge case).
 - **[learning.md](references/learning.md)**: theses (hypotheses): the quality bar, evidence ledger, derived confidence, flips and promotion.
-- **[automations.md](references/automations.md)**: scheduled headless runs: capture, the `## Flow` graph and its questions, per-automation Telegram, sharing, the channel, approval, stopping a run.
+- **[automations.md](references/automations.md)**: agents (who does the work) and scheduled headless runs: capture, the `## Flow` graph and its questions, per-automation Telegram, sharing, the channel, approval, stopping a run.
 - **[whiteboards.md](references/whiteboards.md)**: widgets, board agents, format, recipes.
 - **[brain-sync.md](references/brain-sync.md)**: whole-project GitHub cloud sync, setup, per-machine auth, cross-OS setup, troubleshooting.
 - **[integrations.md](references/integrations.md)**: ClickUp/GitHub task sync (one cloud backend at a time), dashboard and Chat view, desktop app, federation/vaults, peer mail, council, marketing.
