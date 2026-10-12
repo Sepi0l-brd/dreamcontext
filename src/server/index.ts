@@ -20,6 +20,7 @@ import {
   handleAssistantInbox, handleAssistantInboxDismiss, handleAssistantInboxSeen, handleAssistantInboxMute, handleAssistantPresence,
 } from './routes/assistant.js';
 import { wireNotchInbox } from '../lib/assistant/notch-inbox.js';
+import { handleWindowCommand } from './routes/window-control.js';
 import { serveStatic } from './static.js';
 import { handleHealthGet } from './routes/health.js';
 import { handleTasksList, handleTasksCreate, handleTasksGet, handleTasksReadiness, handleTasksUpdate, handleTasksChangelog, handleTasksInsert, handleTasksSyncStatus, handleTasksSync, handleTasksSyncJobStart, handleTasksSyncJobStatus, handleTasksSyncTest, handleTasksDelete, handleTasksMembers, handleTasksContainers, handleTasksProvision, handleTasksTokenStatus, handleTasksSetToken, handleTaskOverrides, handleTaskOverrideDocGet, handleTaskOverrideDocSave, handleTaskOverrideAddField, handleTaskOverrideRemoveField, handleTaskOverrideAddStatus, handleTaskOverrideRemoveStatus } from './routes/tasks.js';
@@ -472,6 +473,8 @@ export function buildRouter(): Router {
   router.get('/api/assistant/watch', handleAssistantWatch);
   router.post('/api/assistant/broadcast', handleAssistantBroadcast);
   router.post('/api/assistant/ui/:verb', handleAssistantUi);
+  // A project chat's agent drives its own window (dreamcontext window …); token-gated per chat.
+  router.post('/api/window/:verb', handleWindowCommand);
   router.post('/api/assistant/look', handleAssistantLook);
   router.post('/api/launcher/scaffold', handleLauncherScaffold);
   router.get('/api/launcher/agent-settings', handleAgentSettingsGet);

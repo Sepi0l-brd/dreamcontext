@@ -3626,6 +3626,97 @@
         "--size",
         "--color"
       ]
+    },
+    {
+      "path": "window",
+      "desc": "Drive the chat window this agent is drawn in: tabs, splits, mode, model (only from a dreamcontext chat)",
+      "args": [],
+      "group": true
+    },
+    {
+      "path": "window close",
+      "desc": "Close a tab; a working or asking chat needs --force",
+      "args": [
+        "<tab>"
+      ]
+    },
+    {
+      "path": "window effort",
+      "desc": "Switch a chat's effort live: low | medium | high | xhigh | max",
+      "args": [
+        "<level>"
+      ],
+      "valueFlags": [
+        "--tab"
+      ]
+    },
+    {
+      "path": "window focus",
+      "desc": "Bring a tab to the front of its pane and focus it",
+      "args": [
+        "<tab>"
+      ]
+    },
+    {
+      "path": "window join",
+      "desc": "Move a tab into another tab's pane, undoing a split (default: this chat)",
+      "args": [],
+      "valueFlags": [
+        "--into",
+        "--tab"
+      ]
+    },
+    {
+      "path": "window mode",
+      "desc": "Switch a chat's mode: basic | plan | develop. Restarts that chat on the same conversation; for this chat it waits until the turn ends",
+      "args": [
+        "<mode>"
+      ],
+      "valueFlags": [
+        "--tab"
+      ]
+    },
+    {
+      "path": "window model",
+      "desc": "Switch a chat's model live; it applies from the next turn",
+      "args": [
+        "<id>"
+      ],
+      "valueFlags": [
+        "--tab"
+      ]
+    },
+    {
+      "path": "window new",
+      "desc": "Open a new chat as a tab of the focused pane, or beside it with --split",
+      "args": [],
+      "valueFlags": [
+        "--prompt",
+        "--mode",
+        "--model",
+        "--effort"
+      ]
+    },
+    {
+      "path": "window send",
+      "desc": "Send a message into another chat tab (queued if it is busy)",
+      "args": [
+        "<tab>",
+        "<text>"
+      ]
+    },
+    {
+      "path": "window split",
+      "desc": "Move a tab into its own pane beside its current one (default: this chat)",
+      "args": [],
+      "valueFlags": [
+        "--tab"
+      ]
+    },
+    {
+      "path": "window state",
+      "desc": "The window's panes and tabs: id, title, kind, mode, model, busy, which one is you",
+      "args": []
     }
   ]
 }

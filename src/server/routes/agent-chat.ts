@@ -76,6 +76,7 @@ import { listNotchEvents, lookingAt, recordAccountSwitch } from '../../lib/assis
 import { buildLiveContextParts } from '../../lib/assistant/live-context.js';
 import { seedForConversation } from '../../lib/assistant/chat-seed.js';
 import { ensureComputerMcpConfig } from '../../lib/assistant/computer-mcp.js';
+import { deliverWindowResult, mintWindowToken, setWindowControlBase } from '../../lib/window-control.js';
 import { runningAutomations, unreadAutomationPosts } from '../assistant-inbox.js';
 import {
   CUT_KILL_GRACE_MS, detachBusyCapMs, detachIdleMs, findLiveChat, markLiveChatDraining, markTurnEnded, markTurnStarted, registerLiveChat,
@@ -790,6 +791,7 @@ export function attachAgentChat(server: Server, opts: { networkToken?: string | 
         // spawn only, never into any other vault's chat.
         const address = server.address();
         const port = address && typeof address === 'object' ? address.port : 0;
+        if (port) setWindowControlBase(`http://127.0.0.1:${port}`);
         const assistantEnv = assistant
           ? { DREAMCONTEXT_ASSISTANT_URL: `http://127.0.0.1:${port}`, DREAMCONTEXT_ASSISTANT_TOKEN: assistantToken() }
           : undefined;
@@ -1425,7 +1427,18 @@ export function startChatSession(
     }
   } catch { /* an unseeded pane falls back to the vault default — never a failed spawn */ }
 
-  const childEnv = { PATH: claudeAwarePath(), ...CHAT_QUESTION_ENV, ...tabEnv, ...deferredEnv, DREAMCONTEXT_CHAT_TAB: isAssistant || card ? '' : '1', ...(isAssistant ? opts.assistantEnv ?? {} : {}), ...recallEnv, ...(envelope?.env ?? {}) } as Record<string, string | undefined>;
+  // Window control (`dreamcontext window …`): a project chat drives the surface it is drawn in,
+  // through a token that names THIS chat's socket only (lib/window-control.ts). Not the
+  // Assistant (it has its own relay) and not a whiteboard card (a scoped identity).
+  const windowControl = !isAssistant && !card
+    ? mintWindowToken({
+      send: (frame) => {
+        if (ws.readyState !== ws.OPEN) return false;
+        try { ws.send(JSON.stringify({ type: '_meta', ...frame })); return true; } catch { return false; }
+      },
+    })
+    : null;
+  const childEnv = { PATH: claudeAwarePath(), ...CHAT_QUESTION_ENV, ...tabEnv, ...deferredEnv, ...(windowControl?.env ?? {}), DREAMCONTEXT_CHAT_TAB: isAssistant || card ? '' : '1', ...(isAssistant ? opts.assistantEnv ?? {} : {}), ...recallEnv, ...(envelope?.env ?? {}) } as Record<string, string | undefined>;
   // The cloud spawns every agent as dcuser through the one worker chokepoint: an allow-listed
   // env (never the server's own, so no DC_HF_*, transfer secret or GitHub token), only THIS
   // account's CLAUDE_CONFIG_DIR, and bash (the image has no zsh). Its own process group either
@@ -1815,6 +1828,7 @@ export function startChatSession(
     registry?.exited();
     // A respawn in place hands the notch's surface to its successor on the same socket.
     if (!handedOff) disposeSurface();
+    windowControl?.release();
     detachInbox();
     unlistenAutonomy();
     // The session's checkout override dies with the session. Left behind it would be answered
@@ -2930,6 +2944,14 @@ export function startChatSession(
       if (typeof r.id === 'string') {
         deliverResult(r.id, r.ok === true ? { ok: true, result: r.result ?? null } : { ok: false, error: typeof r.error === 'string' ? r.error.slice(0, 300) : 'failed' });
       }
+      return;
+    }
+
+    if (windowControl && msg.type === 'window_command_result') {
+      const r = msg as unknown as { id?: unknown; ok?: unknown; result?: unknown; error?: unknown };
+      deliverWindowResult(windowControl.token, r.id, r.ok === true
+        ? { ok: true, result: r.result ?? null }
+        : { ok: false, error: typeof r.error === 'string' ? r.error.slice(0, 300) : 'failed' });
       return;
     }
 
