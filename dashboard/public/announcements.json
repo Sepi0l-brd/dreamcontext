@@ -157,9 +157,24 @@
       "0.30.2",
       "0.30.3",
       "0.30.4",
-      "0.30.5",
-      "0.30.6",
-      "0.31.0"
+      "0.30.5"
+    ]
+  },
+  {
+    "id": "v0-31-0",
+    "date": "2026-10-12",
+    "version": "0.31.0",
+    "title": "Your agents are a team now",
+    "summary": "Agents get their own page: each has a face, a job and a soul you write, and automations, tasks and chats all pick from the same team. The same release lets a chat arrange its own window, turns the mode menu into a model-style picker, and adds dreamcontext Memory, where you choose how your project's past is recalled with measured accuracy for each engine.",
+    "tags": [
+      "agents",
+      "automations",
+      "chat",
+      "memory"
+    ],
+    "story": "v0-31-0.json",
+    "covers": [
+      "0.30.6"
     ]
   }
 ]
