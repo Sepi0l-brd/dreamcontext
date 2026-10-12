@@ -1,6 +1,6 @@
 {
   "name": "dreamcontext",
-  "version": "0.30.6",
+  "version": "0.31.0",
   "description": "dreamcontext — the persistent brain for your AI agents. Remembers what you built, knows how your project works.",
   "type": "module",
   "bin": {
@@ -85,6 +85,10 @@
     "verify:agents-feed": "node scripts/verify/agents-feed.mjs",
     "verify:agent-threads": "node scripts/verify/agent-threads.mjs",
     "verify:agent-attachments": "node scripts/verify/agent-attachments.mjs",
+    "verify:agents-page": "node scripts/verify/agents-page.mjs",
+    "verify:agents-migration": "node scripts/verify/agents-migration.mjs",
+    "verify:task-agent-assign": "node scripts/verify/task-agent-assign.mjs",
+    "verify:chat-agent-picker": "node scripts/verify/chat-agent-picker.mjs",
     "verify:sidebar-rail": "node scripts/verify/sidebar-rail.mjs",
     "verify:task-delete": "node scripts/verify/task-delete-confirm.mjs",
     "verify:task-backlog": "node scripts/verify/task-backlog-and-tags.mjs",
