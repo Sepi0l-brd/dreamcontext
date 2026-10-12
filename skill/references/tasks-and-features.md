@@ -502,7 +502,7 @@ A binding is `data: "<insight>"` or `"<insight>/<datasetKey>"` (a `dataset/v1` k
 | `funnel`: Step by step conversion. | `compact` | Compact | `true`, `false` | `false` |
 |  | `showConversion` | Conversion rates | `true`, `false` | `true` |
 |  | `funnel` | Funnel | one name (pick: funnels) | unset |
-|  | `layout` | Layout | `bars`, `flow` | `bars` |
+|  | `layout` | Layout | `bars`, `flow`, `table` | `bars` |
 |  | `markWorst` | Mark the biggest drop | `true`, `false` | `false` |
 |  | `compare` | Lanes | `auto`, `lanes`, `off` | `auto` |
 |  | `table` | Table | `true`, `false` | `false` |
