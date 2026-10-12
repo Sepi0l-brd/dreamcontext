@@ -890,13 +890,42 @@ export function buildRouter(): Router {
   return router;
 }
 
-/** API path prefixes that do NOT need a vault — they work in launcher mode. */
-const VAULT_AGNOSTIC_PREFIXES = ['/api/health', '/api/handsfree', '/api/admin/shutdown', '/api/vaults', '/api/launcher', '/api/sleepy', '/api/embeddings', '/api/agent/capabilities', '/api/agent/install', '/api/onboarding', '/api/agent/prompt', '/api/agent/download', '/api/agent/model-config', '/api/agent/usage-limits', '/api/agent/accounts', '/api/agent/session-model', '/api/agent/session-stats', '/api/agent/voice/tts', '/api/agent/voice/status', '/api/agent/voice/config', '/api/agent/voice/warm', '/api/agent/voice/dictation', '/api/agent/voice/focus', '/api/brain/auth', '/api/brain/team', '/api/assistant', '/api/notifications', '/api/notify'];
+/**
+ * API path prefixes that do NOT need a vault — they work in launcher mode.
+ *
+ * `/api/window` is here because its token, not a vault, names the target: it routes down ONE
+ * chat's socket (lib/window-control.ts). The CLI sends no vault header and the desktop server
+ * pins none, so gating it on a vault refused every `dreamcontext window …` with `no_vault`.
+ */
+const VAULT_AGNOSTIC_PREFIXES = ['/api/health', '/api/window', '/api/handsfree', '/api/admin/shutdown', '/api/vaults', '/api/launcher', '/api/sleepy', '/api/embeddings', '/api/agent/capabilities', '/api/agent/install', '/api/onboarding', '/api/agent/prompt', '/api/agent/download', '/api/agent/model-config', '/api/agent/usage-limits', '/api/agent/accounts', '/api/agent/session-model', '/api/agent/session-stats', '/api/agent/voice/tts', '/api/agent/voice/status', '/api/agent/voice/config', '/api/agent/voice/warm', '/api/agent/voice/dictation', '/api/agent/voice/focus', '/api/brain/auth', '/api/brain/team', '/api/assistant', '/api/notifications', '/api/notify'];
 
-function isVaultAgnostic(pathname: string): boolean {
+export function isVaultAgnostic(pathname: string): boolean {
   return VAULT_AGNOSTIC_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + '/'),
   );
+}
+
+export type ApiVaultGate =
+  | { ok: true; root: string | null }
+  | { ok: false; status: number; error: string; message: string };
+
+/**
+ * Which context root an API request runs against, or why it is refused. The header (or a GET's
+ * `?vault=`) wins; otherwise the server's pinned root; a vault-bound route with neither is
+ * refused, and the refusal says what was missing and how to supply it.
+ */
+export function apiVaultGate(req: IncomingMessage, pathname: string, pinnedRoot: string | null): ApiVaultGate {
+  const hv = resolveRequestVault(req);
+  if (hv === 'INVALID') return { ok: false, status: 400, error: 'invalid_vault', message: 'Unknown or invalid vault.' };
+  if (hv === 'FORBIDDEN') return { ok: false, status: 403, error: 'assistant_local_only', message: 'The dreamcontext Assistant is only reachable from this machine\'s desktop app.' };
+  const root = hv ?? pinnedRoot;
+  if (!isVaultAgnostic(pathname) && root == null) {
+    return {
+      ok: false, status: 400, error: 'no_vault',
+      message: `No vault selected: ${pathname} works on a project, the request named none (x-dreamcontext-vault header) and this server has none pinned. Open the project in the app, or pass its registered name (\`dreamcontext vaults list\`) in that header.`,
+    };
+  }
+  return { ok: true, root };
 }
 
 /**
@@ -1044,20 +1073,12 @@ export function startDashboardServer(options: ServerOptions): Promise<void> {
           const match = router.match(method, url.pathname);
           if (match) {
             // Resolve the per-request vault from the strict header resolver.
-            const hv = resolveRequestVault(req);
-            if (hv === 'INVALID') {
-              sendError(res, 400, 'invalid_vault', 'Unknown or invalid vault.');
+            const gate = apiVaultGate(req, url.pathname, contextRoot);
+            if (!gate.ok) {
+              sendError(res, gate.status, gate.error, gate.message);
               return;
             }
-            if (hv === 'FORBIDDEN') {
-              sendError(res, 403, 'assistant_local_only', 'The dreamcontext Assistant is only reachable from this machine\'s desktop app.');
-              return;
-            }
-            const effRoot = hv ?? contextRoot;
-            if (!isVaultAgnostic(url.pathname) && effRoot == null) {
-              sendError(res, 400, 'no_vault', 'No vault selected.');
-              return;
-            }
+            const effRoot = gate.root;
             // Hands-free (D3/AC6): the ONE lock middleware. A mutating request scoped to a
             // project that is on the cloud machine is refused; /api/handsfree/* is exempt.
             const away = cloud ? null : handsfreeLockRefusal(method, url.pathname, effRoot);
