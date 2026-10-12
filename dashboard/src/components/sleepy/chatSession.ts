@@ -177,6 +177,10 @@ export type QueuedMessage = queue.QueuedMessage;
 export type AssistantCommandHandler = (cmd: { id: string; verb: string; args: Record<string, unknown> }) =>
   Promise<{ ok: true; result?: unknown } | { ok: false; error: string } | null>;
 
+/** Runs one window-control verb this chat's own agent issued (`dreamcontext window …`). */
+export type WindowCommandHandler = (cmd: { verb: string; args: Record<string, unknown> }) =>
+  Promise<{ ok: true; result?: unknown } | { ok: false; error: string }>;
+
 export interface ChatResultInfo {
   success: boolean;
   text?: string;
@@ -531,6 +535,9 @@ export interface ChatSession {
    *  will post the result to the server itself), so nothing is sent back from here. Only
    *  meaningful on the `__assistant__` session; the server ignores the frames elsewhere. */
   setCommandHandler: (fn: AssistantCommandHandler | null) => void;
+  /** The surface that draws this chat runs the window verbs its agent sends
+   *  (`dreamcontext window …`). Without one, every verb answers `no_window`. */
+  setWindowHandler: (fn: WindowCommandHandler | null) => void;
   /** Answer a pending permission request (or a plain non-question `can_use_tool` prompt). */
   answer: (requestId: string, opts: { behavior: 'allow' | 'deny'; updatedInput?: unknown; message?: string }) => void;
   /** Answer a pending AskUserQuestion card — builds the load-bearing `{questions, answers}`
@@ -1053,6 +1060,7 @@ export function createChatSession(
     answer,
     answerQuestion,
     setCommandHandler,
+    setWindowHandler,
     interrupt,
     bargeInSpeech,
     onSpeaking,
@@ -1914,6 +1922,8 @@ export function createChatSession(
     if (!ev || ev.kind === 'ignored') return;
     // A relayed Assistant verb is not conversation state: it never reaches the reducer.
     if (ev.kind === 'assistant-command') { void runCommand(ev); return; }
+    // Nor is a window verb: the surface runs it and the answer goes back up the socket.
+    if (ev.kind === 'window-command') { void runWindowCommand(ev); return; }
     // Nor is a browser frame: it feeds the small live window in the browser step and nothing else,
     // so six frames a second never re-render the transcript (chat/browserLiveStore.ts).
     if (ev.kind === 'browser-frame') { pushBrowserFrame(session.id, ev.frame); return; }
@@ -2219,6 +2229,21 @@ export function createChatSession(
     sendControl(out.ok
       ? { type: 'assistant_command_result', id: cmd.id, ok: true, result: out.result ?? null }
       : { type: 'assistant_command_result', id: cmd.id, ok: false, error: out.error });
+  }
+
+  // ── Window control (every project chat) ──────────────────────────────────────────
+  let windowHandler: WindowCommandHandler | null = null;
+  function setWindowHandler(fn: WindowCommandHandler | null): void { windowHandler = fn; }
+  async function runWindowCommand(cmd: { id: string; verb: string; args: Record<string, unknown> }): Promise<void> {
+    let out: Awaited<ReturnType<WindowCommandHandler>>;
+    try {
+      out = windowHandler ? await windowHandler({ verb: cmd.verb, args: cmd.args }) : { ok: false, error: 'no_window' };
+    } catch (err) {
+      out = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    sendControl(out.ok
+      ? { type: 'window_command_result', id: cmd.id, ok: true, result: out.result ?? null }
+      : { type: 'window_command_result', id: cmd.id, ok: false, error: out.error });
   }
 
   function sendControl(frame: ClientControl): boolean {

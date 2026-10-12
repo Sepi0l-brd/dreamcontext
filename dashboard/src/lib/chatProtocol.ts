@@ -348,6 +348,10 @@ export type ChatEvent =
    *  socket for the notch to execute (src/lib/assistant/relay.ts). Only the `__assistant__`
    *  session ever receives one; the notch answers with an `assistant_command_result` frame. */
   | { kind: 'assistant-command'; id: string; verb: string; args: Record<string, unknown> }
+  /** Window control: a verb this chat's OWN agent ran (`dreamcontext window …`), sent down
+   *  its socket for the pane holding it to run against the surface (src/lib/window-control.ts).
+   *  Answered with a `window_command_result` frame. */
+  | { kind: 'window-command'; id: string; verb: string; args: Record<string, unknown> }
   /** The server's fresh-session branch guard reporting what it did to the working tree.
    *  `warn` for a refusal, `info` for a move it made. See `fromMeta`. */
   | { kind: 'branch-start'; tone: 'info' | 'warn'; message: string }
@@ -434,7 +438,9 @@ export type ClientControl =
    *  verbs down. Ignored by the server on every session but `__assistant__`. */
   | { type: 'assistant_surface' }
   /** The notch's answer to one relayed `assistant-command`. */
-  | { type: 'assistant_command_result'; id: string; ok: boolean; result?: unknown; error?: string };
+  | { type: 'assistant_command_result'; id: string; ok: boolean; result?: unknown; error?: string }
+  /** The window's answer to one `window-command`. */
+  | { type: 'window_command_result'; id: string; ok: boolean; result?: unknown; error?: string };
 
 // ─── Small object-shape helpers (kept local — this module takes no dependencies) ───
 
@@ -1130,6 +1136,12 @@ function fromMeta(obj: Record<string, unknown>): ChatEvent {
       restart: obj.restart === true,
       loggedIn: typeof obj.loggedIn === 'boolean' ? obj.loggedIn : null,
     };
+  }
+  if (subtype === 'window_command') {
+    const id = str(obj.id);
+    const verb = str(obj.verb);
+    if (!id || !verb) return ignored('_meta:window_command');
+    return { kind: 'window-command', id, verb, args: isRecord(obj.args) ? obj.args : {} };
   }
   if (subtype === 'assistant_command') {
     const id = str(obj.id);

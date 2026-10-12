@@ -67,6 +67,7 @@ import { useServerHealth } from '../../hooks/useServerHealth';
 import { pickFiles, pickFolders, confirmAction } from '../../lib/desktop';
 import { listenForChecklistSubmits, type ChecklistSubmitPayload } from '../../lib/checklistBridge';
 import { useAssistantDoorbell } from '../assistant/useAssistantDoorbell';
+import { runWindowVerb, type WindowVerbDeps } from './windowVerbs';
 import { useChrome } from '../layout/WindowChrome';
 import { ChatHistoryPicker, type PastSession } from './ChatHistoryPicker';
 import { useHandsfree } from '../handsfree/handsfreeStore';
@@ -537,6 +538,10 @@ export function AgentSurface() {
   });
 
   const sessions = useRef<Map<string, Session | ChatSession>>(new Map());
+  // Window control (`dreamcontext window …`, windowVerbs.ts): the deps for one calling chat,
+  // rebuilt every render so a verb always acts on the CURRENT layout. Assigned further down,
+  // once every action it lends exists; `spawn` hands each chat a handler that reads it.
+  const windowDepsRef = useRef<(self: string) => WindowVerbDeps | null>(() => null);
 
   // Dispose every session when this surface unmounts.
   //
@@ -1253,6 +1258,10 @@ export function AgentSurface() {
       armAuthRestart(cs);
       armAccountSwitch(cs);
       armAgentTitle(cs);
+      cs.setWindowHandler(async ({ verb, args }) => {
+        const deps = windowDepsRef.current(cs.id);
+        return deps ? runWindowVerb(deps, verb, args) : { ok: false, error: 'no_window' };
+      });
       return cs;
     }
     // A shell has no permission model, so bypass is meaningless for it — force it off.
@@ -2616,6 +2625,103 @@ export function AgentSurface() {
     liveChat(sid)?.setEffort(level);
     setSessionEffort((prev) => ({ ...prev, [sid]: level }));
   }, [liveChat]);
+
+  // ── Window control: the layout and actions a chat's own agent drives ──────────────
+  // `dreamcontext window <verb>` from a chat in this surface lands here (windowVerbs.ts).
+  // Rebuilt every render on purpose: a verb resolves tabs against the layout as it is NOW.
+  const windowPlaceRef = useRef<(sid: string, split: boolean) => void>(() => {});
+  windowPlaceRef.current = (sid, split) => {
+    const pid = nextPaneId();
+    if (panes.length === 0) {
+      setPanes([{ id: pid, tabs: [sid], active: sid }]);
+      setActivePaneId(pid);
+    } else if (split) {
+      const idx = panes.findIndex((p) => p.id === activePaneId);
+      const at = idx < 0 ? panes.length : idx + 1;
+      setPanes((prev) => { const next = [...prev]; next.splice(at, 0, { id: pid, tabs: [sid], active: sid }); return next; });
+      setActivePaneId(pid);
+    } else {
+      const apid = panes.some((p) => p.id === activePaneId) ? activePaneId : panes[0].id;
+      setPanes((prev) => prev.map((p) => (p.id === apid ? { ...p, tabs: [...p.tabs, sid], active: sid } : p)));
+      setActivePaneId(apid);
+    }
+    setExpanded(true);
+  };
+  const changeChatModeRef = useRef(changeChatMode);
+  changeChatModeRef.current = changeChatMode;
+  windowDepsRef.current = (self: string): WindowVerbDeps => ({
+    self,
+    panes,
+    activePaneId,
+    tabs: sessionList.map((m) => {
+      const live = m.dormant ? undefined : sessions.current.get(m.id);
+      const chat = live?.kind === 'chat' ? live as ChatSession : undefined;
+      return {
+        sid: m.id,
+        tab: m.claudeId || m.id,
+        title: m.title,
+        kind: transportKind(m) === 'chat' ? 'chat' : m.kind,
+        mode: chat?.mode ?? m.mode,
+        model: sessionModel[m.id] || chat?.model || undefined,
+        busy: !!live?.busy,
+        asking: !!live?.asking,
+        dormant: !live || live.status === 'closed',
+      };
+    }),
+    openNew: async (o) => {
+      let inline = '';
+      let token = '';
+      if (!o.terminal && o.prompt.trim() && vault) {
+        const prepared = await preparePrompt(vault, o.prompt);
+        inline = prepared.inline;
+        token = prepared.token;
+      }
+      const s = o.terminal
+        ? spawn(false, undefined, false, 'shell')
+        : spawn(false, undefined, false, 'chat', inline, o.model, true, token, false, o.effort, false, o.mode);
+      setSessionList((prev) => [...prev, {
+        id: s.id, title: titleFor(s), kind: s.kind, bypass: s.bypass, claudeId: s.claudeId,
+        ...(s.kind === 'chat' ? { mode: o.mode } : {}),
+      }]);
+      // Placed against the layout as it is when the spawn lands (the prompt prep awaited).
+      windowPlaceRef.current(s.id, o.split);
+      return s.claudeId;
+    },
+    split: (sid, paneId) => dropToZone(paneId, 'right', sid),
+    join: (sid, paneId) => combineIntoPane(sid, paneId),
+    focus: (sid, paneId) => { setExpanded(true); selectTab(paneId, sid); },
+    setMode: (sid, mode) => {
+      const chat = sessions.current.get(sid) as ChatSession | undefined;
+      if (!chat || !(chat.busy || chat.asking)) { changeChatModeRef.current(sid, mode); return 'now'; }
+      // Never mid-turn: the agent that asked is usually the one running this turn. The
+      // respawn waits for the boundary, the way an account move does.
+      const off = chat.subscribe(() => {
+        if (sessions.current.get(chat.id) !== chat) { off(); return; }
+        if (chat.busy || chat.asking) return;
+        off();
+        changeChatModeRef.current(chat.id, mode);
+      });
+      return 'after-turn';
+    },
+    setModel: (sid, model) => {
+      if (!liveChat(sid)) return false;
+      changeChatModelFor(sid, model);
+      return true;
+    },
+    setEffort: (sid, level) => {
+      if (!liveChat(sid)) return false;
+      changeChatEffortFor(sid, level);
+      return true;
+    },
+    send: (sid, text) => {
+      const chat = liveChat(sid);
+      if (!chat) return false;
+      if (chat.busy || chat.asking) { chat.enqueue(text); return 'queued'; }
+      chat.send(text);
+      return 'sent';
+    },
+    close: (sid) => closeSessionById(sid),
+  });
 
   // Read each visible pane's agent CURRENT model from its transcript when the layout or
   // roster changes (a mid-session `/model` switch — ours or the user's own — is reflected
