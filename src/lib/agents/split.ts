@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import matter from 'gray-matter';
-import { PATTERN_HEADING, type AutomationManifest } from '../automations/types.js';
+import { PATTERN_HEADING, SOUL_HEADING, type AutomationManifest } from '../automations/types.js';
 import {
   automationPath,
   createManifestText,
@@ -117,6 +117,7 @@ function agentFileText(m: AutomationManifest, content: string): string {
     migrated_from: legacyMarker(m),
   };
   const body: string[] = ['## Prompt', '', m.prompt, ''];
+  if (m.soul) body.push(`## ${SOUL_HEADING}`, '', m.soul, '');
   if (isCall) {
     if (m.outputInstructions) body.push('## Output instructions', '', m.outputInstructions, '');
     // The raw section, fence and all, so it parses back to the same graph.
@@ -149,7 +150,7 @@ function jobFileText(slug: string, data: Record<string, unknown>, content: strin
     if (key === 'title') next.agent = slug;
   }
   if (!('agent' in next)) next.agent = slug;
-  return matter.stringify(removeSections(content, ['Prompt', PATTERN_HEADING]), next);
+  return matter.stringify(removeSections(content, ['Prompt', SOUL_HEADING, PATTERN_HEADING]), next);
 }
 
 function backupDir(projectRoot: string, home?: string): string {

@@ -18,7 +18,7 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createAutomation, getRunTarget } from '../../src/lib/automations/store.js';
 import { approveAutomation, checkApproval } from '../../src/lib/automations/registry.js';
-import { createAgent } from '../../src/lib/agents/store.js';
+import { createAgent, getAgent, recordAgentLesson } from '../../src/lib/agents/store.js';
 import { splitLegacyManifest } from '../../src/lib/agents/split.js';
 import {
   handleAgentsApprove,
@@ -188,5 +188,92 @@ describe('writes', () => {
       await handleAgentsApprove(post(), a.res, { slug }, contextRoot);
       expect(a.status()).toBe(404);
     }
+  });
+});
+
+describe('the soul and the pattern', () => {
+  const SOUL = 'Lead with the worst problem.\n- No praise, no softening.';
+
+  async function show(slug: string): Promise<Record<string, unknown>> {
+    const s = makeRes();
+    await handleAgentsShow(getReq, s.res, { slug }, contextRoot);
+    expect(s.status()).toBe(200);
+    return s.body();
+  }
+
+  async function update(slug: string, body: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
+    const u = makeRes();
+    await handleAgentsUpdate(post(body), u.res, { slug }, contextRoot);
+    return { status: u.status(), body: u.body() };
+  }
+
+  it('GET detail returns the full soul and the parsed pattern, newest lesson first', async () => {
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout the market.', soul: SOUL, learning: true }, { approve: { now: NOW } });
+    recordAgentLesson(contextRoot, 'scout', { lesson: 'Check the date first.', now: new Date('2026-10-01T09:00:00Z') });
+    recordAgentLesson(contextRoot, 'scout', { lesson: 'Name the source.', now: new Date('2026-10-02T09:00:00Z') });
+    const detail = await show('scout');
+    expect(detail.soul).toBe(SOUL);
+    expect(detail.pattern).toEqual({
+      playbook: '',
+      lessons: [
+        { date: '2026-10-02', text: 'Name the source.' },
+        { date: '2026-10-01', text: 'Check the date first.' },
+      ],
+    });
+    expect(String(detail.review)).toContain('soul:');
+  });
+
+  it("an agent without a soul or a pattern reads soul '' and an empty pattern", async () => {
+    createAgent(contextRoot, { slug: 'quiet', title: 'Quiet', prompt: 'Stay quiet.' }, { approve: { now: NOW } });
+    const detail = await show('quiet');
+    expect(detail.soul).toBe('');
+    expect(detail.pattern).toEqual({ playbook: '', lessons: [] });
+  });
+
+  it('the list carries a one-line soul excerpt (at most 160) and the role line', async () => {
+    const longSoul = `${'Be precise. '.repeat(30)}\nNever guess.`;
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: '# Scout the market\nThen report.', soul: longSoul }, { approve: { now: NOW } });
+    createAgent(contextRoot, { slug: 'quiet', title: 'Quiet', prompt: 'Stay quiet.' }, { approve: { now: NOW } });
+    const [quiet, scout] = await list();
+    expect(scout.soulExcerpt.length).toBeLessThanOrEqual(160);
+    expect(scout.soulExcerpt).not.toContain('\n');
+    expect(scout.soulExcerpt.startsWith('Be precise.')).toBe(true);
+    expect(scout.roleLine).toBe('Scout the market');
+    expect(quiet.soulExcerpt).toBe('');
+    expect(quiet.roleLine).toBe('Stay quiet.');
+  });
+
+  it('POST create with a soul writes it, and the agent is approved for run', async () => {
+    const c = makeRes();
+    await handleAgentsCreate(post({ title: 'Reviewer', prompt: 'Review pull requests.', soul: SOUL }), c.res, {}, contextRoot);
+    expect(c.status()).toBe(200);
+    expect(c.body().agent).toMatchObject({ slug: 'reviewer', approvedToRun: true });
+    expect(getAgent(contextRoot, 'reviewer')?.soul).toBe(SOUL);
+  });
+
+  it("update with a soul keeps a direct grant; soul '' clears it", async () => {
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' }, { approve: { now: NOW } });
+    const set = await update('scout', { soul: SOUL });
+    expect(set.status).toBe(200);
+    expect(set.body.agent).toMatchObject({ approvedToRun: true });
+    expect(getAgent(contextRoot, 'scout')?.soul).toBe(SOUL);
+    const cleared = await update('scout', { soul: '' });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.agent).toMatchObject({ approvedToRun: true, soulExcerpt: '' });
+    expect(getAgent(contextRoot, 'scout')?.soul).toBe('');
+  });
+
+  it('refuses a non-text soul, an over-cap one and one with a "## " line with 400, writing nothing', async () => {
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.', soul: 'Be calm.' }, { approve: { now: NOW } });
+    for (const soul of [5, 'x'.repeat(2001), 'Be terse.\n## Tone\nDry.']) {
+      const out = await update('scout', { soul });
+      expect(out.status).toBe(400);
+      expect(out.body.error).toBe('invalid');
+    }
+    expect(getAgent(contextRoot, 'scout')?.soul).toBe('Be calm.');
+    const c = makeRes();
+    await handleAgentsCreate(post({ title: 'Bad', prompt: 'P', soul: '## Flow' }), c.res, {}, contextRoot);
+    expect(c.status()).toBe(400);
+    expect(getAgent(contextRoot, 'bad')).toBeNull();
   });
 });

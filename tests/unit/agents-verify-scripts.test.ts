@@ -17,6 +17,7 @@ describe('package.json verify entries', () => {
   it.each([
     ['verify:agents-page', 'scripts/verify/agents-page.mjs'],
     ['verify:agents-migration', 'scripts/verify/agents-migration.mjs'],
+    ['verify:agents-soul', 'scripts/verify/agents-soul.mjs'],
     ['verify:task-agent-assign', 'scripts/verify/task-agent-assign.mjs'],
     ['verify:chat-agent-picker', 'scripts/verify/chat-agent-picker.mjs'],
   ])('%s runs %s, which exists', (name, file) => {
@@ -26,7 +27,7 @@ describe('package.json verify entries', () => {
 });
 
 describe('every new script', () => {
-  it.each(['agents-page', 'agents-migration', 'task-agent-assign'])('%s runs against dist, in both themes, and exits non-zero on a FAIL', (name) => {
+  it.each(['agents-page', 'agents-migration', 'task-agent-assign', 'agents-soul'])('%s runs against dist, in both themes, and exits non-zero on a FAIL', (name) => {
     const src = read(`scripts/verify/${name}.mjs`);
     expect(src).toMatch(/distIndex\(REPO\)/);
     expect(src).toMatch(/'light'/);
@@ -67,6 +68,37 @@ describe('agents-page.mjs', () => {
   it('opens the deep link and checks Talk to it opens a new chat as the agent', () => {
     expect(src).toContain('dreamcontext://project/proj/page/agents/');
     expect(src).toMatch(/chatAgent=\$\{SCOUT\}/);
+  });
+});
+
+describe('agents-page.mjs after the soul build', () => {
+  const src = read('scripts/verify/agents-page.mjs');
+  it('reads the roster card\'s quiet state, never an approval chip on the card', () => {
+    expect(src).toContain("getAttribute('data-approval-state')");
+    expect(src).not.toMatch(/chipOk\(/);
+    expect(src).toMatch(/\.agr-chip`\)\.count\(\)\) === 0/);
+  });
+});
+
+describe('agents-soul.mjs', () => {
+  const src = read('scripts/verify/agents-soul.mjs');
+  it('reads the template texts from their one owner, never retyped', () => {
+    expect(src).toContain("join(REPO, 'src', 'lib', 'agents', 'soul-templates.ts')");
+    expect(src).not.toContain('You are a demanding reviewer');
+  });
+  it.each([
+    '[data-add-to-team]', '[data-soul-template=', '[data-soul-input]', '[data-soul-undo]', '[data-soul-error]',
+    '[data-section]', '[data-lesson]', 'data-approval-state',
+  ])('drives the page hook %s', (hook) => expect(src).toContain(hook));
+  it('measures both themes: contrast, the dot, the rule, strong fills, the type scale without the initials', () => {
+    for (const fn of ['contrast(', 'dotVsCard(', 'effectiveBg(', 'strongFills(', 'textLadder(', 'dashLines(']) expect(src).toContain(fn);
+    expect(src).toContain("textLadder(page, '.arp-grid', ['.agent-av'], ['12px', '14px', '16px'], ['400', '600'])");
+    expect(src).toContain("rule.w === '2px'");
+  });
+  it('checks the synced soul lands EXACTLY on needs-approval, the B1 save, and the Talk briefing', () => {
+    expect(src).toContain("=== 'needs-approval'");
+    expect(src).toContain("'/automations/morning-scout/update'");
+    expect(src).toContain('--- HOW YOU WORK');
   });
 });
 

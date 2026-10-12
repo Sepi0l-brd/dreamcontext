@@ -14,7 +14,8 @@ import {
 } from '../../lib/agents/store.js';
 import { DEFAULT_CALL_SETTINGS, type AgentIdentityPatch, type AgentManifest } from '../../lib/agents/types.js';
 import { isSafeAutomationSlug } from '../../lib/agents/slot.js';
-import { getRunTarget, resolveAutomationPhoto } from '../../lib/automations/store.js';
+import { getRunTarget, parsePattern, resolveAutomationPhoto } from '../../lib/automations/store.js';
+import { roleLineOf, soulExcerpt } from '../../lib/agents/soul.js';
 import {
   approvalFields,
   approveAutomation,
@@ -62,6 +63,10 @@ export interface AgentSummary {
   title: string;
   hasPhoto: boolean;
   description: string;
+  /** The soul on one line, at most 160 chars; '' when it has none. */
+  soulExcerpt: string;
+  /** The prompt's first non-empty line, markdown markers stripped, at most 90 chars. */
+  roleLine: string;
   model: string | null;
   effort: EffortLevel | null;
   whiteboard: string | null;
@@ -118,6 +123,8 @@ export function summarizeAgent(
     title: target.agentTitle || target.title,
     hasPhoto: resolveAutomationPhoto(contextRoot, target.photo) !== null,
     description: target.prompt.trim().slice(0, DESCRIPTION_MAX_CHARS),
+    soulExcerpt: soulExcerpt(target.soul ?? ''),
+    roleLine: roleLineOf(target.prompt),
     model: target.model,
     effort: target.effort,
     whiteboard: target.whiteboard ?? null,
@@ -160,6 +167,14 @@ function readEffort(v: unknown): EffortLevel | null | undefined {
   if (v === null || v === '') return null;
   if (typeof v === 'string' && (EFFORT_LEVELS as readonly string[]).includes(v)) return v as EffortLevel;
   throw new AutomationError(`Invalid effort: expected one of ${EFFORT_LEVELS.join(', ')}.`);
+}
+
+/** A soul from a request body: absent passes through, '' clears, anything not
+ *  text is refused. The store validates the text itself (cap, `## ` lines). */
+function readSoul(v: unknown): string | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string') throw new AutomationError('Invalid soul: expected text.');
+  return v;
 }
 
 function readWhiteboard(v: unknown): string | null | undefined {
@@ -219,7 +234,8 @@ export async function handleAgentsList(
 }
 
 /**
- * GET /api/agents/:slug — the summary, the full prompt, and the call-target
+ * GET /api/agents/:slug — the summary, the full prompt and soul, the parsed
+ * pattern (read-only, newest lesson first), and the call-target
  * review: every hashed field, call settings included, exactly what an approve
  * grants (the same `renderApprovalReview` the CLI shows).
  */
@@ -238,12 +254,14 @@ export async function handleAgentsShow(
   sendJson(res, 200, {
     agent: summarizeAgent(contextRoot, target, agent),
     prompt: target.prompt,
+    soul: target.soul ?? '',
     learning: target.learning,
+    pattern: parsePattern(agent?.pattern ?? target.pattern),
     review: renderApprovalReview(approvalFields(target)),
   });
 }
 
-/** POST /api/agents {title, prompt, slug?, model?, effort?, whiteboard?, learning?} —
+/** POST /api/agents {title, prompt, slug?, soul?, model?, effort?, whiteboard?, learning?} —
  *  create an agent and grant it directly on this machine (the local author consents). */
 export async function handleAgentsCreate(
   req: IncomingMessage,
@@ -271,6 +289,7 @@ export async function handleAgentsCreate(
       slug,
       title,
       prompt,
+      soul: readSoul(body.soul) ?? '',
       model: str(body.model) ?? null,
       effort: readEffort(body.effort) ?? null,
       whiteboard: readWhiteboard(body.whiteboard) ?? null,
@@ -322,6 +341,10 @@ export async function handleAgentsUpdate(
     const whiteboard = readWhiteboard(body.whiteboard);
     if (whiteboard !== undefined) patch.whiteboard = whiteboard;
     if (typeof body.learning === 'boolean') patch.learning = body.learning;
+    // No preview-truncation guard: the dialog always loads the full soul from
+    // GET detail, and the summary's excerpt is never a form source. '' clears.
+    const soul = readSoul(body.soul);
+    if (soul !== undefined) patch.soul = soul;
     if (Object.keys(patch).length > 0) withRestamp(contextRoot, dirname(contextRoot), params.slug, patch);
     sendSummary(res, contextRoot, params.slug);
   } catch (err) {

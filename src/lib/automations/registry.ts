@@ -408,6 +408,13 @@ export function canonicalApprovalPayload(m: AutomationManifest): string {
     // the emptiness check, so a whitespace-only section reads as absent rather
     // than as a `"job":""` key that would change the hash for nothing.
     ...(jobText(m) ? { job: jobText(m) } : {}),
+    // OMITTED when empty, and after `job` for the same append-only reason: no
+    // manifest or agent that exists today has a `## Soul`, so its payload stays
+    // byte-for-byte what it was and an upgrade re-blocks nobody (golden hashes in
+    // tests/unit/agents-soul-hash.test.ts, P1). Present, it shapes how every run
+    // and conversation behaves, so a synced edit must block until someone here
+    // re-approves. Normalized before the emptiness check, like `job`.
+    ...(soulText(m) ? { soul: soulText(m) } : {}),
   };
   return `${APPROVAL_PAYLOAD_VERSION}\n${JSON.stringify(fields)}`;
 }
@@ -416,6 +423,11 @@ export function canonicalApprovalPayload(m: AutomationManifest): string {
  *  without the field (a test fixture, an older caller) reads as no job. */
 function jobText(m: AutomationManifest): string {
   return typeof m.job === 'string' ? normalizeText(m.job) : '';
+}
+
+/** The normalized `## Soul` text, `''` when absent. Total, like {@link jobText}. */
+function soulText(m: AutomationManifest): string {
+  return typeof m.soul === 'string' ? normalizeText(m.soul) : '';
 }
 
 /** sha256 hex of {@link canonicalApprovalPayload}. */
@@ -458,6 +470,9 @@ export function approvalFields(m: AutomationManifest): ApprovalPayloadFields {
     // Always present (as '' when absent): the reviewer reads what this job adds
     // to its agent's prompt.
     job: typeof m.job === 'string' ? m.job : '',
+    // Always present (as '' when absent): the reviewer reads how the agent is
+    // told to behave, beside what it is told to do.
+    soul: typeof m.soul === 'string' ? m.soul : '',
   };
 }
 
@@ -466,7 +481,9 @@ export function approvalFields(m: AutomationManifest): ApprovalPayloadFields {
 /** One hashed field, rendered for review. `null` prints as the word, never as an
  *  empty string — "nothing set" and "set to empty" are different approvals. */
 function renderApprovalValue(value: ApprovalPayloadFields[keyof ApprovalPayloadFields]): string {
-  if (value === null) return '(none)';
+  // `undefined` too: a stored-fields object written before a field existed
+  // (`soul`) must render, not fall through to `canonicalFlowJson` and throw.
+  if (value === undefined || value === null) return '(none)';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'number') return String(value);
   if (typeof value === 'string') return value;

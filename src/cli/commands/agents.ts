@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import chalk from 'chalk';
 import { confirm } from '@inquirer/prompts';
@@ -14,7 +15,8 @@ import {
   withRestamp,
 } from '../../lib/agents/store.js';
 import type { AgentIdentityPatch } from '../../lib/agents/types.js';
-import { getRunTarget, setAutomationShared } from '../../lib/automations/store.js';
+import { getRunTarget, parsePattern, setAutomationShared } from '../../lib/automations/store.js';
+import { SOUL_TEMPLATE_IDS, soulTemplate } from '../../lib/agents/soul-templates.js';
 import { shareAgent, shareAutomation, unshareAgent, unshareAutomation } from '../../lib/automations/sharing.js';
 import {
   approvalFields,
@@ -61,6 +63,38 @@ function readEffort(v: string | undefined): EffortLevel | null | undefined {
   if (v === '' || v === 'none') return null;
   if ((EFFORT_LEVELS as readonly string[]).includes(v)) return v as EffortLevel;
   throw new AutomationError(`Invalid --effort "${v}": expected one of ${EFFORT_LEVELS.join(', ')}.`);
+}
+
+interface SoulOptions {
+  soul?: string;
+  soulFile?: string;
+  soulTemplate?: string;
+}
+
+const SOUL_TEMPLATE_LIST = SOUL_TEMPLATE_IDS.join(', ');
+
+/**
+ * The soul from `--soul`, `--soul-file` or `--soul-template` (at most one), or
+ * undefined when none is given. A template only fills the text: nothing records
+ * which one it was. The store validates the text itself.
+ */
+export function resolveSoulOption(opts: SoulOptions): string | undefined {
+  const given = [opts.soul, opts.soulFile, opts.soulTemplate].filter((v) => v !== undefined);
+  if (given.length > 1) throw new AutomationError('Use only one of --soul, --soul-file and --soul-template.');
+  if (opts.soul !== undefined) return opts.soul;
+  if (opts.soulFile !== undefined) {
+    try {
+      return readFileSync(opts.soulFile, 'utf-8');
+    } catch (err) {
+      throw new AutomationError(`Could not read --soul-file "${opts.soulFile}": ${(err as Error).message}`);
+    }
+  }
+  if (opts.soulTemplate !== undefined) {
+    const t = soulTemplate(opts.soulTemplate);
+    if (!t) throw new AutomationError(`Unknown soul template "${opts.soulTemplate}". Use one of: ${SOUL_TEMPLATE_LIST}.`);
+    return t.text;
+  }
+  return undefined;
 }
 
 function verdicts(root: string, slug: string): { chat: boolean; run: boolean } | null {
@@ -114,7 +148,7 @@ export function registerAgentsCommand(program: Command): void {
   agents
     .command('show')
     .argument('<slug>', 'Agent slug')
-    .description('Show an agent: its prompt, its approval on this machine, and where it is used')
+    .description('Show an agent: its prompt, its soul, its pattern, its approval on this machine, and where it is used')
     .option('--json', 'Emit as JSON')
     .action((slug: string, opts: { json?: boolean }) => {
       const root = ensureContextRoot();
@@ -126,10 +160,11 @@ export function registerAgentsCommand(program: Command): void {
         return;
       }
       const usage = agentUsage(root, slug);
+      const pattern = parsePattern(agent.pattern);
       if (opts.json) {
         console.log(JSON.stringify({
           agent: {
-            slug: agent.slug, title: agent.title, prompt: agent.prompt, model: agent.model, effort: agent.effort,
+            slug: agent.slug, title: agent.title, prompt: agent.prompt, soul: agent.soul, pattern, model: agent.model, effort: agent.effort,
             learning: agent.learning, whiteboard: agent.whiteboard, shared: agent.shared, implicit: agent.implicit,
             approvedForChat: v.chat, approvedToRun: v.run, usedBy: usage,
           },
@@ -143,8 +178,12 @@ export function registerAgentsCommand(program: Command): void {
       if (usage.automations.length > 0) console.log(`  automations: ${usage.automations.join(', ')}`);
       if (usage.boards.length > 0) console.log(`  boards: ${usage.boards.join(', ')}`);
       if (usage.tasks.length > 0) console.log(`  tasks: ${usage.tasks.join(', ')}`);
+      console.log(`  pattern: ${pattern.lessons.length} lessons, playbook ${pattern.playbook.trim() ? 'set' : 'empty'}`);
       console.log('');
       console.log(agent.prompt);
+      console.log('');
+      console.log(chalk.dim('soul:'));
+      console.log(agent.soul ? `  ${agent.soul.replace(/\n/g, '\n  ')}` : chalk.dim('  (none)'));
     });
 
   agents
@@ -153,18 +192,23 @@ export function registerAgentsCommand(program: Command): void {
     .description('Create an agent, approved on this machine')
     .requiredOption('--title <title>', 'Agent name')
     .requiredOption('--prompt <text>', 'Who the agent is and what it knows how to do')
+    .option('--soul <text>', 'How it works: stance, tempo, tone, what it refuses (approval-hashed)')
+    .option('--soul-file <path>', 'Read the soul from a file')
+    .option('--soul-template <id>', `Start the soul from a template (${SOUL_TEMPLATE_LIST})`)
     .option('--model <model>', 'Model override')
     .option('--effort <level>', `Effort (${EFFORT_LEVELS.join(', ')})`)
     .option('--whiteboard <board>', 'Home board: the agent acts only on it')
     .option('--no-learning', 'Do not keep a pattern of lessons')
-    .action((slug: string, opts: { title: string; prompt: string; model?: string; effort?: string; whiteboard?: string; learning: boolean }) => {
+    .action((slug: string, opts: SoulOptions & { title: string; prompt: string; model?: string; effort?: string; whiteboard?: string; learning: boolean }) => {
       const root = ensureContextRoot();
       try {
+        const soul = resolveSoulOption(opts);
         registerProject(dirname(root));
         createAgent(root, {
           slug,
           title: opts.title,
           prompt: opts.prompt,
+          soul: soul ?? '',
           model: opts.model ?? null,
           effort: readEffort(opts.effort) ?? null,
           whiteboard: opts.whiteboard ?? null,
@@ -182,17 +226,22 @@ export function registerAgentsCommand(program: Command): void {
     .description('Edit an agent\'s identity; what was approved directly here stays approved')
     .option('--title <title>', 'Agent name')
     .option('--prompt <text>', 'Its prompt')
+    .option('--soul <text>', 'How it works ("" removes it)')
+    .option('--soul-file <path>', 'Read the soul from a file')
+    .option('--soul-template <id>', `Replace the soul with a template (${SOUL_TEMPLATE_LIST})`)
     .option('--model <model>', 'Model override ("" for the default)')
     .option('--effort <level>', `Effort (${EFFORT_LEVELS.join(', ')}, or none)`)
     .option('--whiteboard <board>', 'Home board ("" for none)')
     .option('--learning', 'Keep a pattern of lessons')
     .option('--no-learning', 'Stop keeping a pattern of lessons')
-    .action((slug: string, opts: { title?: string; prompt?: string; model?: string; effort?: string; whiteboard?: string; learning?: boolean }) => {
+    .action((slug: string, opts: SoulOptions & { title?: string; prompt?: string; model?: string; effort?: string; whiteboard?: string; learning?: boolean }) => {
       const root = ensureContextRoot();
       try {
         const patch: AgentIdentityPatch = {};
         if (opts.title !== undefined) patch.title = opts.title;
         if (opts.prompt !== undefined) patch.prompt = opts.prompt;
+        const soul = resolveSoulOption(opts);
+        if (soul !== undefined) patch.soul = soul;
         if (opts.model !== undefined) patch.model = opts.model || null;
         const effort = readEffort(opts.effort);
         if (effort !== undefined) patch.effort = effort;

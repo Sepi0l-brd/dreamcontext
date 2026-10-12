@@ -51,6 +51,7 @@ import {
   MAX_TIMEOUT_MINUTES,
   negationIsEffective,
   PATTERN_HEADING,
+  SOUL_HEADING,
   PATTERN_LESSON_LIMIT,
   PATTERN_LESSON_MAX_CHARS,
   PATTERN_LESSONS_HEADING,
@@ -738,6 +739,10 @@ function legacyManifestFrom(filePath: string, data: Record<string, unknown>, con
     prompt: extractSection(content, 'Prompt'),
     outputInstructions: extractSection(content, 'Output instructions'),
     pattern: extractSection(content, PATTERN_HEADING),
+    // A legacy manifest is its own agent, so its `## Soul` is the agent's soul
+    // (`legacyPair` carries it, the split moves it). '' when absent: hashed only
+    // when non-empty, so every soul-less file keeps its approval.
+    soul: extractSection(content, SOUL_HEADING),
     // `null` when the manifest has no `## Flow` — and `parseFlowSection` returns
     // exactly that, never `undefined`. The distinction is the byte-identity
     // guarantee: `canonicalApprovalPayload` omits the field via `flow !== null`,
@@ -1057,7 +1062,7 @@ export function listAutomationJobs(contextRoot: string): AutomationJob[] {
 }
 
 /** Section names a split automation file carries that the agent file owns
- *  (`## Prompt`, `## Pattern`) — written back by an older CLI. Ignored on
+ *  (`## Prompt`, `## Soul`, `## Pattern`) — written back by an older CLI. Ignored on
  *  read; `doctor` reports them. Empty for a legacy file. */
 export function strayIdentitySections(contextRoot: string, slug: string): string[] {
   try {
@@ -1065,7 +1070,7 @@ export function strayIdentitySections(contextRoot: string, slug: string): string
     const parts = readManifestParts(path);
     if (parts.kind !== 'bound') return [];
     const { content } = parseManifestFrontmatter(readFileSync(path, 'utf-8'));
-    return ['Prompt', PATTERN_HEADING].filter((h) => content.split('\n').some((l) => l.trim() === `## ${h}`));
+    return ['Prompt', SOUL_HEADING, PATTERN_HEADING].filter((h) => content.split('\n').some((l) => l.trim() === `## ${h}`));
   } catch {
     return [];
   }
@@ -1768,7 +1773,7 @@ const JOB_NEEDS_BOUND = 'A job belongs to an automation that picks an agent. Thi
 /** `raw` with its `## <heading>` section taken out (up to the next `## `), or
  *  `raw` unchanged when there is none. Byte-surgical like `upsertSection`:
  *  nothing outside the removed section is touched. */
-function removeSection(raw: string, heading: string): string {
+export function removeSection(raw: string, heading: string): string {
   const marker = `## ${heading}`;
   const lines = raw.split('\n');
   const startIdx = lines.findIndex((l) => l.trim() === marker);

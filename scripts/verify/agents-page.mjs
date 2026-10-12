@@ -15,7 +15,8 @@
  *
  * WHAT IT PROVES, each check naming the mutation it guards:
  *   1. the rail has one Agents row and it opens the page;
- *   2. the roster shows every agent with chat and run approval as two separate chips;
+ *   2. the roster shows every agent as a chip-less portrait whose quiet state keeps the two verdicts
+ *      apart (ready / cant-run / needs-approval, never one "approved");
  *   3. `page/agents/<slug>` opens that agent's profile (with its read-only call settings);
  *   4. the identity dialog creates an agent (file on disk, approved here) and edits its prompt;
  *   5. the in-place Approve shows the review, grants it, and flips the run chip;
@@ -199,8 +200,9 @@ async function openPage(browser, theme, url) {
   return { context, page, errors, until, agentsRow };
 }
 
+/** A roster card's quiet approval state (`ready` / `cant-run` / `needs-approval`). */
+const cardState = (page, slug) => page.locator(`[data-agent="${slug}"]`).first().getAttribute('data-approval-state').catch(() => null);
 const chip = (page, scope, kind) => page.locator(`${scope} [data-approval="${kind}"]`).first();
-const chipOk = async (page, scope, kind) => /--ok\b/.test((await chip(page, scope, kind).getAttribute('class').catch(() => '')) ?? '');
 /** The profile marks a verdict on its ROW (`data-approved`), with the chip inside it; both must agree. */
 const rowApproved = async (page, scope, kind) => {
   const row = chip(page, scope, kind);
@@ -226,15 +228,15 @@ async function functional(browser, base) {
     // agent files only (the legacy implicit agents would be missing).
     check('the roster shows the legacy scheduled, the legacy on-call and the explicit agent',
       [SCHED, CALL, SCOUT].every((s) => slugs.includes(s)), slugs.join(', '));
-    check('…each with a chat chip AND a run chip',
+    // The cards are portraits now: no chip, one quiet state word per card (soul task, D8).
+    check('…each card carries a state and no approval chip',
       (await Promise.all([SCHED, CALL, SCOUT].map(async (s) =>
-        (await page.locator(`[data-agent="${s}"] [data-approval="chat"]`).count()) === 1
-        && (await page.locator(`[data-agent="${s}"] [data-approval="run"]`).count()) === 1))).every(Boolean));
+        !!(await cardState(page, s)) && (await page.locator(`[data-agent="${s}"] .agr-chip`).count()) === 0))).every(Boolean));
     // Guards one merged "approved" verdict: the scheduled agent may chat but not run.
-    check('the two verdicts are separate: the scheduled agent is approved for chat and NOT to run',
-      await chipOk(page, `[data-agent="${SCHED}"]`, 'chat') && !(await chipOk(page, `[data-agent="${SCHED}"]`, 'run')));
-    check('…while the on-call and explicit agents are approved for both',
-      await chipOk(page, `[data-agent="${CALL}"]`, 'run') && await chipOk(page, `[data-agent="${SCOUT}"]`, 'run'));
+    check('the two verdicts stay apart: the scheduled agent reads cant-run ("Can\'t run yet")',
+      (await cardState(page, SCHED)) === 'cant-run', `state=${await cardState(page, SCHED)}`);
+    check('…while the on-call and explicit agents read ready',
+      (await cardState(page, CALL)) === 'ready' && (await cardState(page, SCOUT)) === 'ready');
     await page.screenshot({ path: join(SHOTS, 'light-1-roster.png') });
 
     // ── 2b: the Automations page lists automations only ───────────────────────────────────
@@ -262,7 +264,7 @@ async function functional(browser, base) {
     await page.locator('.arp-new').click();
     check('"New agent" opens the identity dialog', await until(async () => (await page.locator('.aid-modal').count()) === 1));
     await page.locator('.aid-modal .aid-input').first().fill(NEW_TITLE);
-    await page.locator('.aid-modal .aid-textarea').first().fill(NEW_PROMPT);
+    await page.locator('.aid-modal .aid-textarea').first().fill(NEW_PROMPT); // the Job; the soul is the second
     await page.screenshot({ path: join(SHOTS, 'light-4-create-dialog.png') });
     await page.locator('.aid-modal .aid-btn--primary').click();
     const created = await until(async () => read(agentFile(NEW_SLUG)).includes(NEW_PROMPT), 15000);
@@ -276,9 +278,9 @@ async function functional(browser, base) {
 
     const before = registryEntry()?.agentApprovals?.[NEW_SLUG]?.manifestSha256;
     await page.locator(`[data-agent-profile="${NEW_SLUG}"] .agp-actions .agp-btn`, { hasText: /^Edit$/ }).click();
-    const loaded = await until(async () => (await page.locator('.aid-modal .aid-textarea').inputValue()) === NEW_PROMPT, 10000);
+    const loaded = await until(async () => (await page.locator('.aid-modal .aid-textarea').first().inputValue()) === NEW_PROMPT, 10000);
     check('Edit opens the dialog on the agent\'s full current prompt', loaded);
-    await page.locator('.aid-modal .aid-textarea').fill(EDITED_PROMPT);
+    await page.locator('.aid-modal .aid-textarea').first().fill(EDITED_PROMPT);
     await page.locator('.aid-modal .aid-btn--primary').click();
     const edited = await until(async () => read(agentFile(NEW_SLUG)).includes(EDITED_PROMPT), 15000);
     check('the edited prompt is on disk', edited && !read(agentFile(NEW_SLUG)).includes(NEW_PROMPT), read(agentFile(NEW_SLUG)).slice(0, 300));
@@ -311,7 +313,7 @@ async function functional(browser, base) {
     check('…the run row flips to approved and the review closes',
       await until(async () => (await page.locator(`${prof} [data-approval="run"]`).getAttribute('data-approved')) === 'true'
         && (await page.locator(`${prof} [data-approval-review]`).count()) === 0, 10000));
-    check('…and the roster card\'s run chip flips too', await until(async () => chipOk(page, `[data-agent="${SCHED}"]`, 'run'), 10000));
+    check('…and the roster card reads ready too', await until(async () => (await cardState(page, SCHED)) === 'ready', 10000));
     // A pair's own automation record is not the agent's grant, and must survive it (R4).
     check('…while the automation\'s own record approvals[digest] is kept', !!registryEntry()?.approvals?.[SCHED]);
 
@@ -376,7 +378,7 @@ async function themed(browser, base, theme) {
 
     // Agent-authored words (names, prompts, the review's field values) are left out: the sweep
     // is about the page's own copy.
-    const text = await chromeText(page, '.arp', ['.agp-prompt', '.agp-review-text', '.agr-card-title', '.agp-name', '.agp-list-name']);
+    const text = await chromeText(page, '.arp', ['.agp-prompt', '.agp-review-text', '.agr-name', '.agr-role', '.agr-soul', '.agp-name', '.agp-role', '.agp-soul', '.agp-playbook', '.agp-lesson-text', '.agp-list-name']);
     check(`[${theme}] no em dash in the Agents page's own text, titles or labels`, dashLines(text).length === 0, dashLines(text).join(' | '));
 
     // Another profile in this theme, for the screenshot set.

@@ -63,6 +63,9 @@ export interface AgentManifest {
    *  store's photo gate before any use. Unhashed. */
   photo: string | null;
   prompt: string;
+  /** The `## Soul` section verbatim, '' when absent. Hashed: it shapes how
+   *  every run and conversation of this agent behaves. */
+  soul: string;
   model: string | null;
   effort: EffortLevel | null;
   learning: boolean;
@@ -89,6 +92,8 @@ export interface AgentInput {
   slug: string;
   title: string;
   prompt: string;
+  /** How it works, free text. Absent or '' means no `## Soul` section. */
+  soul?: string;
   model?: string | null;
   effort?: EffortLevel | null;
   learning?: boolean;
@@ -102,7 +107,7 @@ export interface AgentInput {
  * settings: no verb edits those in this build, and `withRestamp` re-approves
  * only what this patch can express.
  */
-export type AgentIdentityPatch = Partial<Pick<AgentInput, 'title' | 'prompt' | 'model' | 'effort' | 'learning' | 'whiteboard' | 'photo'>>;
+export type AgentIdentityPatch = Partial<Pick<AgentInput, 'title' | 'prompt' | 'soul' | 'model' | 'effort' | 'learning' | 'whiteboard' | 'photo'>>;
 
 /**
  * Private by default: an agent file holds a prompt, so it never reaches the team

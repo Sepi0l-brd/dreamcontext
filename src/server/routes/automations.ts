@@ -452,6 +452,9 @@ export async function handleAutomationsShow(
         // Hashed when non-empty, and LAST in APPROVAL_DIFF_FIELDS: the automation's
         // `## Job`, what it asks of its agent on top of the agent's prompt.
         job: manifest.job,
+        // Hashed when non-empty, and LAST in APPROVAL_DIFF_FIELDS: the agent's
+        // `## Soul`, how it works. A reviewer approving here must see it.
+        soul: manifest.soul,
         prompt: manifest.prompt,
         outputInstructions: manifest.outputInstructions,
         // NOT hashed and deliberately so (it changes every run), but shown:
@@ -1086,6 +1089,23 @@ function approveHere(contextRoot: string, manifest: AutomationManifest): void {
   approveAutomation(projectRoot, manifest, new Date());
 }
 
+/**
+ * `approveHere`, unless the save would approve a soul nobody on this Mac has
+ * seen. The Automations dialog never shows the agent's `## Soul`, so a target
+ * that was NOT approved before this write (a teammate's synced soul edit made it
+ * `manifest-changed`) and now carries a soul is left unapproved: the owner goes
+ * through the review, which renders the `soul:` line. Without a soul, or when
+ * the target was approved before the write, it stamps exactly as before.
+ * Returns whether it stamped.
+ */
+function approveUnlessUnseenSoul(contextRoot: string, before: AutomationManifest | null, after: AutomationManifest): boolean {
+  const wasApproved = before !== null && checkApproval(dirname(contextRoot), before, undefined, 'run').approved;
+  const hasSoul = typeof after.soul === 'string' && after.soul.trim() !== '';
+  if (!wasApproved && hasSoul) return false;
+  approveHere(contextRoot, after);
+  return true;
+}
+
 /** POST /api/automations — create an agent and approve it on this machine. */
 export async function handleAutomationsCreate(
   req: IncomingMessage,
@@ -1268,10 +1288,16 @@ export async function handleAutomationsUpdate(
       return;
     }
     const job = body.job === undefined ? undefined : str(body.job) ?? null;
+    // Read BEFORE any write: whether the target was approved decides whether this
+    // save may approve a soul the dialog never showed (see approveUnlessUnseenSoul).
+    const before = getRunTarget(contextRoot, params.slug, 'automation');
     const agentSlug = current.runKind === 'agent' ? current.slug : boundAgentOf(contextRoot, params.slug);
     if (agentSlug) {
-      const manifest = updateSplitTarget(contextRoot, current, agentSlug, body, { model, effort, prompt: str(body.prompt), job });
-      sendJson(res, 200, { automation: summarize(dirname(contextRoot), contextRoot, manifest) });
+      const { manifest, stamped } = updateSplitTarget(contextRoot, current, agentSlug, body, { model, effort, prompt: str(body.prompt), job }, before);
+      sendJson(res, 200, {
+        automation: summarize(dirname(contextRoot), contextRoot, manifest),
+        ...(stamped ? {} : { needsApproval: true }),
+      });
       return;
     }
     const manifest = updateAutomation(contextRoot, params.slug, {
@@ -1287,8 +1313,11 @@ export async function handleAutomationsUpdate(
       prompt: str(body.prompt),
       job,
     });
-    approveHere(contextRoot, manifest);
-    sendJson(res, 200, { automation: summarize(dirname(contextRoot), contextRoot, manifest) });
+    const stamped = approveUnlessUnseenSoul(contextRoot, before, manifest);
+    sendJson(res, 200, {
+      automation: summarize(dirname(contextRoot), contextRoot, manifest),
+      ...(stamped ? {} : { needsApproval: true }),
+    });
   } catch (err) {
     if (err instanceof AutomationError) {
       sendError(res, 400, 'invalid', err.message);
@@ -1319,7 +1348,9 @@ function updateSplitTarget(
     prompt: string | undefined;
     job: string | null | undefined;
   },
-): AutomationManifest {
+  /** The automation target as read before this save, or null. */
+  before: AutomationManifest | null,
+): { manifest: AutomationManifest; stamped: boolean } {
   const projectRoot = dirname(contextRoot);
   // Refused before the identity half writes anything: an agent you only call has no job.
   if (current.runKind === 'agent' && identityIn.job !== undefined) {
@@ -1335,7 +1366,7 @@ function updateSplitTarget(
   if (current.runKind === 'agent') {
     const target = getRunTarget(contextRoot, current.slug, 'agent');
     if (!target) throw new AutomationError(`Agent not found: ${current.slug}`);
-    return target;
+    return { manifest: target, stamped: true };
   }
   const manifest = updateAutomation(contextRoot, current.slug, {
     title: str(body.title),
@@ -1347,8 +1378,7 @@ function updateSplitTarget(
     enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
     job: identityIn.job,
   });
-  approveHere(contextRoot, manifest);
-  return manifest;
+  return { manifest, stamped: approveUnlessUnseenSoul(contextRoot, before, manifest) };
 }
 
 /**

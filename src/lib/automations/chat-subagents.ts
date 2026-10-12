@@ -2,7 +2,7 @@ import { dirname } from 'node:path';
 import { listAgentTargets } from '../agents/store.js';
 import { identityOnly } from '../agents/compose.js';
 import { checkApproval } from './registry.js';
-import { buildPatternBlock, buildTurnLearningDirective, sanitizeAutomationPrompt } from './runner.js';
+import { buildPatternBlock, buildSoulBlock, buildTurnLearningDirective, sanitizeAutomationPrompt } from './runner.js';
 import type { AutomationManifest } from './types.js';
 
 /**
@@ -57,6 +57,7 @@ function summaryOf(m: AutomationManifest): string {
 
 /** What the agent is told when the chat's Claude calls it. Same order as its other briefs. */
 export function subagentPrompt(m: AutomationManifest): string {
+  const soul = buildSoulBlock(m);
   const pattern = buildPatternBlock(m);
   const learning = buildTurnLearningDirective(m);
   return [
@@ -71,6 +72,7 @@ export function subagentPrompt(m: AutomationManifest): string {
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
     '--- END WHO YOU ARE ---',
+    ...(soul ? ['', soul] : []),
     ...(pattern ? ['', pattern] : []),
     ...(learning ? ['', learning] : []),
   ].join('\n');

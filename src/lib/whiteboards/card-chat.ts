@@ -4,7 +4,7 @@ import {
   boardScopeArgs, prepareScopePaths, resolveSpawnScope, scopeEnv, type BoardScope,
 } from '../automations/board-scope.js';
 import {
-  buildBoardTurn, buildPatternBlock, buildScopeLine, buildTurnLearningDirective, markerNonce, newTurnNonce,
+  buildBoardTurn, buildPatternBlock, buildScopeLine, buildSoulBlock, buildTurnLearningDirective, markerNonce, newTurnNonce,
   sanitizeAutomationPrompt,
 } from '../automations/runner.js';
 import { AGENT_BOARD_ENV, AGENT_SELF_ENV, type AutomationManifest } from '../automations/types.js';
@@ -51,6 +51,7 @@ export function parseCardRef(agent: unknown, board: unknown): CardRef | null {
  * notes) and the learning directive last.
  */
 export function cardChatBriefing(m: AutomationManifest, board: string, scope: BoardScope | null): string {
+  const soul = buildSoulBlock(m);
   const pattern = buildPatternBlock(m);
   const learning = buildTurnLearningDirective(m);
   return [
@@ -69,6 +70,7 @@ export function cardChatBriefing(m: AutomationManifest, board: string, scope: Bo
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
     '--- END WHO YOU ARE ---',
+    ...(soul ? ['', soul] : []),
     ...(pattern ? ['', pattern] : []),
     ...(learning ? ['', learning] : []),
   ].join('\n');
@@ -154,6 +156,7 @@ export function parseChatAgent(agent: unknown): string | null {
 
 /** An agent's system-prompt append in a Chat tab. Same order as the card's, for the same reason. */
 export function agentChatBriefing(m: AutomationManifest, scope: BoardScope | null): string {
+  const soul = buildSoulBlock(m);
   const pattern = buildPatternBlock(m);
   const learning = buildTurnLearningDirective(m);
   return [
@@ -176,6 +179,7 @@ export function agentChatBriefing(m: AutomationManifest, scope: BoardScope | nul
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
     '--- END WHO YOU ARE ---',
+    ...(soul ? ['', soul] : []),
     ...(pattern ? ['', pattern] : []),
     ...(learning ? ['', learning] : []),
   ].join('\n');

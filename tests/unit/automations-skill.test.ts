@@ -317,8 +317,8 @@ describe('agents/sleep-product.md — automation-output consumption contract', (
   });
 });
 
-describe('approval surface — eleven hashed fields, everywhere it is claimed', () => {
-  it('APPROVAL_DIFF_FIELDS is the eleven-tuple including effort, learning, review, flow, whiteboard and job', () => {
+describe('approval surface — twelve hashed fields, everywhere it is claimed', () => {
+  it('APPROVAL_DIFF_FIELDS is the twelve-tuple including effort, learning, review, flow, whiteboard, job and soul', () => {
     expect(APPROVAL_DIFF_FIELDS).toEqual([
       'prompt',
       'outputInstructions',
@@ -341,6 +341,9 @@ describe('approval surface — eleven hashed fields, everywhere it is claimed', 
       // agent's own prompt. Appended after `whiteboard` and omitted when empty,
       // so every manifest written before the agent split hashes byte-identically.
       'job',
+      // The agent's `## Soul`: how it works. Appended after `job` and omitted
+      // when empty, so every agent written before souls existed keeps its hash.
+      'soul',
     ]);
   });
 
@@ -425,7 +428,7 @@ describe('dashboard approval-review surface — every hashed field reaches the h
  * T22 — the flow graph, HITL questions, per-automation Telegram, the run queue,
  * session bindings, and the three approval paths. This surface replaced the
  * review-card board entirely; these assertions are the lockstep guard for it,
- * the same role the eleven-hashed-fields block above plays for the approval
+ * the same role the twelve-hashed-fields block above plays for the approval
  * payload. Several assertions derive their expectation from `types.ts`
  * (`FLOW_GRAPH_VERSION`, `QUESTION_KINDS`, `HITL_CHANNELS`, `HITL_DIR`) rather
  * than hardcoding a string, so a future rename of any of them fails the doc

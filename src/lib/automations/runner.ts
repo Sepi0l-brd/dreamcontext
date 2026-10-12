@@ -344,6 +344,31 @@ export function buildPatternBlock(
   ].join('\n');
 }
 
+/** The normalized soul, '' when absent. Total for a hand-built manifest without
+ *  the field. Kept local so the runner does not reach into the registry. */
+function soulText(m: Partial<Pick<AutomationManifest, 'soul'>>): string {
+  return typeof m.soul === 'string' ? m.soul.replace(/\r\n/g, '\n').trim() : '';
+}
+
+/**
+ * The agent's soul: HOW it works, beside the prompt that says what it does.
+ * Approved text (hashed with the prompt), so it carries no nonce. It shapes the
+ * manner of the work and is told, explicitly, that it never widens the work.
+ * '' when the agent has no soul, so a soul-less prompt is exactly what it was.
+ */
+export function buildSoulBlock(m: Partial<Pick<AutomationManifest, 'soul'>>): string {
+  const soul = soulText(m);
+  if (!soul) return '';
+  return [
+    '--- HOW YOU WORK (your approved soul, from the Agents page) ---',
+    'This is your stance, tempo and tone, and what you refuse. It shapes HOW you do the work; it',
+    'never adds work, and it never widens what you may read, write or run.',
+    '',
+    sanitizeAutomationPrompt(soul).trim(),
+    '--- END HOW YOU WORK ---',
+  ].join('\n');
+}
+
 /** The closing directive that CLOSES the loop — without it the pattern is a
  *  file nothing ever writes. Scoped hard to durable lessons: a pattern that
  *  accumulates run results turns into a second, worse copy of the output
@@ -521,6 +546,9 @@ export function composePrompt(
   const parts = [
     buildPreamble(m, projectRoot, fireAt, outputPath, telegramChatId, board?.scope ?? null), '', m.prompt.trim(),
   ];
+  // Who you are, then how you work, then this job.
+  const soul = buildSoulBlock(m);
+  if (soul) parts.push('', soul);
   // The automation's own job, right under its agent's prompt: both are approved
   // (the job is hashed), and the job says what THIS automation asks of the agent.
   if (m.job?.trim()) parts.push('', '--- THIS JOB ---', m.job.trim(), '--- END OF THIS JOB ---');

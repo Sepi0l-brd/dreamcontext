@@ -440,6 +440,17 @@ export interface AutomationManifest {
    * reason as `flow` and `whiteboard`.
    */
   job: string;
+  /**
+   * The agent's `## Soul` section: HOW it works (stance, tempo, tone, what it
+   * refuses), beside the prompt that says what it does. Identity, so it comes
+   * from the agent through `composeRun`, and from the file itself for a legacy
+   * manifest. `''` when absent.
+   *
+   * IS approval-hashed, OMITTED when empty and LAST (after `job`), for the same
+   * byte-identity reason as `job`: every manifest that exists today has no soul,
+   * so its approved hash stays exactly what it was.
+   */
+  soul: string;
   /** For an agent's call target only: every automation bound to the agent, as
    *  its current composed hash. `[]` for an automation. Rule (c) of
    *  `checkApproval` reads it, for an `'identity'` use only. */
@@ -970,6 +981,10 @@ export interface ApprovalPayloadFields {
    *  `## Job` sits beside its agent's prompt. Present as `''` when absent, for
    *  the same display reason as `flow`. */
   job: string;
+  /** Hashed because it shapes how the run behaves: the agent's `## Soul` sits
+   *  beside its prompt in every run and conversation. Present as `''` when
+   *  absent, for the same display reason as `flow`. */
+  soul: string;
 }
 
 /** Env var naming a home-board agent's board for its spawned child; the CLI's
@@ -1032,7 +1047,7 @@ export const APPROVAL_PAYLOAD_VERSION = 'automation-approval/v1';
  *  ApprovalPayloadFields so the CLI's review surface can never diverge from
  *  what is actually hashed. `effort` sits between `model` and
  *  `timeoutMinutes`: all three are execution-envelope levers on an
- *  already-approved prompt. `flow`, `whiteboard` then `job` are LAST, mirroring
+ *  already-approved prompt. `flow`, `whiteboard`, `job` then `soul` are LAST, mirroring
  *  their position in `canonicalApprovalPayload`'s literal — the two orders must
  *  not drift, or the surface a human reviews stops matching the bytes that were
  *  hashed. */
@@ -1048,6 +1063,7 @@ export const APPROVAL_DIFF_FIELDS = [
   'flow',
   'whiteboard',
   'job',
+  'soul',
 ] as const;
 
 // ─── Pattern caps ────────────────────────────────────────────────────────────
@@ -1068,6 +1084,9 @@ export const PATTERN_PLAYBOOK_MAX_CHARS = 4_000;
 export const PATTERN_SECTION_MAX_CHARS = 12_000;
 /** The manifest heading the pattern lives under. */
 export const PATTERN_HEADING = 'Pattern';
+/** The heading an agent's soul lives under (agent file, or a legacy manifest). */
+export const SOUL_HEADING = 'Soul';
+export { SOUL_MAX_CHARS } from '../agents/soul-templates.js';
 /** The sub-heading its LIFO ledger lives under, inside `## Pattern`. */
 export const PATTERN_LESSONS_HEADING = '### Lessons';
 

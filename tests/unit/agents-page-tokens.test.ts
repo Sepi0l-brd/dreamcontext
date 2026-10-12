@@ -27,6 +27,11 @@ const FILES = [
   'pages/AutomationsPage.css',
   'components/automations/AutomationsDispatcherBar.css',
   'components/automations/AutomationsEmptyState.css',
+  // The team roster, the profile, the identity dialog and the face (agent soul task, T9).
+  'pages/AgentsPage.css',
+  'components/agents/AgentProfilePanel.css',
+  'components/agents/AgentIdentityDialog.css',
+  'components/agents/AgentAvatar.css',
 ];
 
 interface Decl { file: string; line: number; prop: string; value: string }

@@ -23,6 +23,9 @@
       "valueFlags": [
         "--title",
         "--prompt",
+        "--soul",
+        "--soul-file",
+        "--soul-template",
         "--model",
         "--effort",
         "--whiteboard"
@@ -37,6 +40,9 @@
       "valueFlags": [
         "--title",
         "--prompt",
+        "--soul",
+        "--soul-file",
+        "--soul-template",
         "--model",
         "--effort",
         "--whiteboard"
@@ -63,7 +69,7 @@
     },
     {
       "path": "agents show",
-      "desc": "Show an agent: its prompt, its approval on this machine, and where it is used",
+      "desc": "Show an agent: its prompt, its soul, its pattern, its approval on this machine, and where it is used",
       "args": [
         "<slug>"
       ]

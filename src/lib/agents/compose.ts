@@ -60,6 +60,8 @@ export function legacyPair(m: AutomationManifest): { agent: AgentManifest; job: 
     title: m.title,
     photo: m.photo,
     prompt: m.prompt,
+    // Total for a hand-built manifest without the field: it reads as no soul.
+    soul: m.soul ?? '',
     model: m.model,
     effort: m.effort,
     learning: m.learning,
@@ -127,6 +129,7 @@ export function composeRun(
   const identity = {
     photo: agent.photo,
     prompt: agent.prompt,
+    soul: agent.soul,
     model: agent.model,
     effort: agent.effort,
     learning: agent.learning,

@@ -382,7 +382,10 @@ describe('automations CLI (integration)', () => {
     // permission envelope, so confining, moving or unconfining it must re-approve.
     // 10 → 11 with `job`: an automation's `## Job` is what it asks of its agent
     // on top of the agent's prompt, appended LAST and omitted when empty.
-    expect(APPROVAL_DIFF_FIELDS.length).toBe(11);
+    // 11 → 12 with `soul`: the agent's `## Soul` decides how it behaves (stance,
+    // tone, what it refuses), so a synced soul must be shown and re-approved.
+    // Appended LAST and omitted when empty, so every older hash is unchanged.
+    expect(APPROVAL_DIFF_FIELDS.length).toBe(12);
     for (const field of APPROVAL_DIFF_FIELDS) {
       expect(yesOut.stdout).toContain(field);
     }

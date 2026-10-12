@@ -10,6 +10,7 @@ import {
   MAX_TIMEOUT_MINUTES,
   PATTERN_HEADING,
   REVIEW_MODES,
+  SOUL_HEADING,
   type ApprovalBinding,
   type AutomationJob,
   type AutomationManifest,
@@ -31,6 +32,7 @@ import {
   pathOccupied,
   readManifestParts,
   removeAutomation,
+  removeSection,
   resolveAutomationPhoto,
   rewriteManifestText,
   strOrNull,
@@ -46,6 +48,8 @@ import { liveElements } from '../whiteboards/ops.js';
 import { widgetPayloadOf } from '../whiteboards/widgets.js';
 import { classifyAutomationSlot, isSafeAutomationSlug, parseManifestFrontmatter, readManifestFrontmatter } from './slot.js';
 import { composeRun, legacyPair } from './compose.js';
+import { normalizeSoul } from './soul-templates.js';
+import { validateSoul } from './soul.js';
 import {
   AGENTS_DIR,
   AGENTS_GITIGNORE_ENTRIES,
@@ -132,6 +136,7 @@ export function readAgentFile(filePath: string): AgentManifest {
     title: typeof data.title === 'string' && data.title.trim() ? data.title : slug,
     photo: strOrNull(data.photo),
     prompt: extractSection(content, 'Prompt'),
+    soul: extractSection(content, SOUL_HEADING),
     model: strOrNull(data.model),
     effort: parseEffort(data.effort),
     learning: data.learning === true,
@@ -156,6 +161,7 @@ export function placeholderAgent(slug: string): AgentManifest {
     title: slug,
     photo: null,
     prompt: '',
+    soul: '',
     model: null,
     effort: null,
     learning: false,
@@ -296,14 +302,14 @@ export function ensureAgentsGitignore(contextRoot: string): void {
   }
 }
 
-const IDENTITY_PATCH_KEYS: ReadonlySet<string> = new Set(['title', 'prompt', 'model', 'effort', 'learning', 'whiteboard', 'photo']);
+const IDENTITY_PATCH_KEYS: ReadonlySet<string> = new Set(['title', 'prompt', 'soul', 'model', 'effort', 'learning', 'whiteboard', 'photo']);
 
 /** An identity patch at runtime too: a caller passing call settings (or anything
  *  else) through an untyped surface is refused, never silently dropped. */
 function assertIdentityPatch(patch: AgentIdentityPatch): void {
   for (const key of Object.keys(patch)) {
     if (!IDENTITY_PATCH_KEYS.has(key)) {
-      throw new AutomationError(`An agent edit cannot change "${key}": only its name, prompt, model, effort, learning, home board and photo.`);
+      throw new AutomationError(`An agent edit cannot change "${key}": only its name, prompt, soul, model, effort, learning, home board and photo.`);
     }
   }
 }
@@ -314,6 +320,9 @@ function applyIdentityPatch(agent: AgentManifest, patch: AgentIdentityPatch): Ag
     ...agent,
     title: patch.title === undefined ? agent.title : patch.title.trim(),
     prompt: patch.prompt === undefined ? agent.prompt : patch.prompt.trim(),
+    // The same normalisation the write applies, so `withRestamp`'s expected hash
+    // equals the hash of the bytes written (a NUL or a CRLF would differ otherwise).
+    soul: patch.soul === undefined ? agent.soul : normalizeSoul(patch.soul),
     model: patch.model === undefined ? agent.model : patch.model,
     effort: patch.effort === undefined ? agent.effort : patch.effort,
     learning: patch.learning === undefined ? agent.learning : patch.learning,
@@ -334,6 +343,7 @@ function validateIdentity(contextRoot: string, a: AgentManifest): void {
     whiteboard: a.whiteboard,
   });
   if (!a.prompt.trim()) throw new AutomationError('An agent needs a prompt: it is who the agent is.');
+  validateSoul(a.soul);
   if (!a.whiteboard) return;
   // A home-board agent's only writable output folder is its default one, so no
   // automation it runs (nor its own call settings) may name another.
@@ -375,6 +385,7 @@ export function createAgent(contextRoot: string, input: AgentInput, opts: Create
     ...placeholderAgent(slug),
     title: input.title?.trim() ?? '',
     prompt: input.prompt?.trim() ?? '',
+    soul: normalizeSoul(input.soul ?? ''),
     model: input.model ?? null,
     effort: input.effort ?? null,
     // ON for anything created from now on, exactly as a new automation.
@@ -396,7 +407,8 @@ export function createAgent(contextRoot: string, input: AgentInput, opts: Create
     ...identityFrontmatter(draft),
     shared: draft.shared,
   };
-  createManifestText(path, matter.stringify(`## Prompt\n\n${draft.prompt}\n`, frontmatter));
+  const soul = draft.soul ? `\n## Soul\n\n${draft.soul}\n` : '';
+  createManifestText(path, matter.stringify(`## Prompt\n\n${draft.prompt}\n${soul}`, frontmatter));
   const agent = readAgentFile(path);
   if (opts.approve) {
     const target = getRunTarget(contextRoot, slug, 'agent');
@@ -437,9 +449,33 @@ export function updateAgent(contextRoot: string, slug: string, patch: AgentIdent
   if (patch.prompt !== undefined) {
     rewriteManifestText(agent.path, upsertSection(readFileSync(agent.path, 'utf-8'), 'Prompt', next.prompt));
   }
+  // Implicit and split agents alike, as the prompt: an empty soul is no section.
+  if (patch.soul !== undefined) {
+    const raw = readFileSync(agent.path, 'utf-8');
+    rewriteManifestText(
+      agent.path,
+      next.soul ? upsertSectionAfter(raw, SOUL_HEADING, next.soul, 'Prompt') : removeSection(raw, SOUL_HEADING),
+    );
+  }
   const updated = getAgent(contextRoot, slug);
   if (!updated) throw new AutomationError(`Agent "${slug}" could not be read back after the edit.`);
   return updated;
+}
+
+/**
+ * `upsertSection`, except a NEW section lands right after `## <after>` (before
+ * the next `## ` heading that follows it) instead of at the end of the file, so
+ * a soul sits beside the prompt and never after `## Pattern`. Appends when there
+ * is no `## <after>`. Byte-surgical: nothing outside the inserted block moves.
+ */
+export function upsertSectionAfter(raw: string, heading: string, body: string, after: string): string {
+  const lines = raw.split('\n');
+  if (lines.some((l) => l.trim() === `## ${heading}`)) return upsertSection(raw, heading, body);
+  const afterIdx = lines.findIndex((l) => l.trim() === `## ${after}`);
+  const relNext = afterIdx === -1 ? -1 : lines.slice(afterIdx + 1).findIndex((l) => /^##\s/.test(l));
+  if (relNext === -1) return upsertSection(raw, heading, body);
+  const at = afterIdx + 1 + relNext;
+  return [...lines.slice(0, at), `## ${heading}`, '', body.trim(), '', ...lines.slice(at)].join('\n');
 }
 
 export type RemoveAgentResult = { removed: true } | { removed: false; usedBy: string[] };
@@ -605,6 +641,7 @@ function withIdentity(target: AutomationManifest, agent: AgentManifest): Automat
   return {
     ...target,
     prompt: agent.prompt,
+    soul: agent.soul,
     model: agent.model,
     effort: agent.effort,
     learning: agent.learning,
