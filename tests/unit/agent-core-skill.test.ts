@@ -67,6 +67,16 @@ describe('agent-core skill: the shipped file', () => {
     expect(b).toContain('dreamcontext memory recall');
     expect(b.toLowerCase()).toContain('symlink');
   });
+
+  // An agent is a routable entity since 0.31.0: a sub-agent that cannot name it
+  // shadow-builds one as an automation manifest or a person.
+  it('routes an agent to `agents create` and keeps the automation bound to one', () => {
+    const b = raw();
+    expect(b).toContain('- Agent (who does the work');
+    expect(b).toContain('dreamcontext agents create <slug>');
+    expect(b).toContain('dreamcontext automations create <slug> --agent <agent>');
+    expect(b).toContain('agents/      <slug>.md');
+  });
 });
 
 describe('agent-core skill: install wiring and recall exclusion', () => {

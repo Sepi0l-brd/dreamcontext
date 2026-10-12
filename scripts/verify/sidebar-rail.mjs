@@ -12,9 +12,11 @@
  * selector overrides all typecheck and all read correctly in source.
  *
  * WHAT IT PROVES, one checkpoint per acceptance criterion:
- *   C5  Agents reads "Agents", wears a sentence-case Beta tag, sits FIRST in
- *       Workspace, and is emphasised by weight + ring — never by a colour the
- *       other rows do not have.
+ *   C5  The hero reads "Automations", wears a sentence-case Beta tag, sits right
+ *       after Tasks in Workspace, and is emphasised by weight + ring — never by a
+ *       colour the other rows do not have.
+ *   S6  "Agents" is a rail row again (reversing ad04364c, 2026-10-12): its own
+ *       page, right after Automations, Beta, with a glyph, and NOT a second hero.
  *   C6  Every group's icon badge carries its own hue as a TINTED SURFACE; the
  *       active badge is still full accent; no `--nav-hue-*` resolves to the
  *       accent; nothing in the rail spends `--color-warning`.
@@ -198,6 +200,19 @@ async function readRail(page) {
     const out = {
       sample,
       // Every group's label and its rows' labels, for the rename checks (whiteboard A15).
+      // The Agents row (S6): an agent is its own entity with its own page again.
+      agentsRow: (() => {
+        const row = [...document.querySelectorAll('.sidebar-group .sidebar-item')]
+          .find((el) => (el.querySelector('.sidebar-label')?.textContent || '').trim() === 'Agents');
+        if (!row) return null;
+        return {
+          group: (row.closest('.sidebar-group')?.querySelector('.sidebar-group-label')?.textContent || '').trim(),
+          afterAutomations: (row.closest('li')?.previousElementSibling?.querySelector('.sidebar-label')?.textContent || '').trim() === 'Automations',
+          maturity: (row.querySelector('.sidebar-maturity')?.textContent || '').trim(),
+          hero: row.hasAttribute('data-hero'),
+          glyph: !!row.querySelector('.sidebar-icon svg'),
+        };
+      })(),
       groupRows: groupEls.map((g) => ({
         label: (g.querySelector('.sidebar-group-label')?.textContent || '').trim(),
         items: [...g.querySelectorAll('.sidebar-item .sidebar-label')].map((el) => (el.textContent || '').trim()),
@@ -368,6 +383,18 @@ async function main() {
       le.hero?.title === 'Automations (Beta)', `title="${le.hero?.title}"`);
     check('…in sentence case, not shouted (K15)', le.hero?.maturityTransform === 'none',
       `text-transform: ${le.hero?.maturityTransform}`);
+
+    // ── 1a: Agents is back as its own row (S6, reverses ad04364c) ─────────
+    console.log('\n═══ 1a. The Agents row ═══');
+    const ag = le.agentsRow;
+    check('[S6] the rail has an "Agents" row', !!ag, JSON.stringify(ag));
+    check('[S6] …in Workspace, right after Automations', ag?.group === 'Workspace' && ag?.afterAutomations === true, JSON.stringify(ag));
+    check('[S6] …wearing a Beta tag', ag?.maturity === 'Beta', `tag="${ag?.maturity}"`);
+    check('[S6] …with a glyph of its own, not an empty badge', ag?.glyph === true, JSON.stringify(ag));
+    check('[S6] …and it is not a second hero', ag?.hero === false, JSON.stringify(ag));
+    const darkAgents = snaps['dark-expanded']?.agentsRow;
+    check('[S6] dark: the Agents row is there too, after Automations, Beta',
+      darkAgents?.afterAutomations === true && darkAgents?.maturity === 'Beta', JSON.stringify(darkAgents));
 
     // ── 1b: the group names after the Control Panel rename (whiteboard A15) ──
     console.log('\n═══ 1b. System group, Whiteboard entry ═══');

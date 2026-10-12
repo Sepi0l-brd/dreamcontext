@@ -20,7 +20,12 @@ import {
   resolveAutomationPhoto,
   cadenceLabel,
   isSafeAutomationSlug,
+  automationPath,
+  getRunTarget,
 } from '../../lib/automations/store.js';
+import { getAgent, removeAgent, withRestamp } from '../../lib/agents/store.js';
+import { agentKeyOf, readManifestFrontmatter } from '../../lib/agents/slot.js';
+import type { AgentIdentityPatch } from '../../lib/agents/types.js';
 import { resolveRunSession, readSessionDigest } from '../../lib/automations/session.js';
 import { foreignRunEvidence } from '../../lib/automations/session-registry.js';
 import {
@@ -47,7 +52,7 @@ import {
 import { formatSchedule, nextFire } from '../../lib/automations/schedule.js';
 import { sniffImageType, EXT_BY_IMAGE_TYPE } from '../../lib/image-sniff.js';
 import { allPendingQuestions, claimQuestion, pendingQuestion } from '../../lib/automations/hitl.js';
-import { resumeWithAnswer } from '../../lib/automations/verdict.js';
+import { approvalQuestionTarget, resumeWithAnswer } from '../../lib/automations/verdict.js';
 import { queuedFire, type QueuedFire } from '../../lib/automations/queue.js';
 import { ackAttention, attentionRuns, attentionWatermark } from '../../lib/automations/attention.js';
 import { buildFeed, readRunAnswer, threadReplies, threadRootId } from '../../lib/automations/feed.js';
@@ -87,6 +92,7 @@ import {
   type AutomationQuestion,
   type EffortLevel,
   type FlowGraph,
+  type RunKind,
   type ScheduleSlot,
   type Weekday,
   THREAD_TEXT_MAX_CHARS,
@@ -144,6 +150,15 @@ function displayText(contextRoot: string, text: string): string {
 interface AutomationSummary {
   slug: string;
   title: string;
+  /** The agent this target runs as (its own slug for an unsplit file or an agent's call target). */
+  agent: string;
+  /** That agent's display name. */
+  agentTitle: string;
+  /** The automation's `## Job` — what it asks of its agent on top of the agent's prompt. */
+  job: string;
+  /** `'agent'` for an agent's own call target, which this list still carries (threads, run
+   *  history); the Automations page shows only `'automation'` rows. */
+  runKind: RunKind;
   /** See `AutomationMode` — `'call'` agents show no pause switch and are never
    *  fired by the dispatcher. */
   mode: AutomationMode;
@@ -253,10 +268,14 @@ function cacheSummary(cache: AutomationCache | null): AutomationCacheSummary | n
 }
 
 function summarize(projectRoot: string, contextRoot: string, m: AutomationManifest): AutomationSummary {
-  const approval = checkApproval(projectRoot, m);
+  const approval = checkApproval(projectRoot, m, undefined, 'run');
   return {
     slug: m.slug,
     title: m.title,
+    agent: m.agent || m.slug,
+    agentTitle: m.agentTitle || m.title,
+    job: m.job ?? '',
+    runKind: m.runKind,
     enabled: m.enabled,
     schedule: m.schedule,
     scheduleLabel: formatSchedule(m.schedule),
@@ -393,7 +412,7 @@ export async function handleAutomationsShow(
       return;
     }
     const projectRoot = dirname(contextRoot);
-    const approval = checkApproval(projectRoot, manifest);
+    const approval = checkApproval(projectRoot, manifest, undefined, 'run');
     sendJson(res, 200, {
       automation: {
         slug: manifest.slug,
@@ -430,6 +449,9 @@ export async function handleAutomationsShow(
         // Hashed, and LAST in APPROVAL_DIFF_FIELDS: whether this agent is confined to
         // one board. A reviewer must see a confinement appear, move or disappear.
         whiteboard: manifest.whiteboard ?? null,
+        // Hashed when non-empty, and LAST in APPROVAL_DIFF_FIELDS: the automation's
+        // `## Job`, what it asks of its agent on top of the agent's prompt.
+        job: manifest.job,
         prompt: manifest.prompt,
         outputInstructions: manifest.outputInstructions,
         // NOT hashed and deliberately so (it changes every run), but shown:
@@ -721,11 +743,9 @@ export async function handleAutomationsQuestionAnswer(
     }
 
     if (question.kind === 'approval') {
-      const manifest = getAutomation(contextRoot, question.slug);
-      if (!manifest) {
-        sendError(res, 404, 'not_found', `Automation not found: ${question.slug}`);
-        return;
-      }
+      // The manifest the question was about — for an agent call target, the
+      // AGENT, never a same-slug automation that `getAutomation` would return.
+      const manifest = approvalQuestionTarget(contextRoot, question);
       const decision = answer.trim().toLowerCase() as keyof typeof APPROVAL_DECISIONS;
       if (!(decision in APPROVAL_DECISIONS)) {
         sendError(
@@ -736,12 +756,20 @@ export async function handleAutomationsQuestionAnswer(
         );
         return;
       }
+      // Only APPROVING needs the manifest. A reject must close the question even
+      // when its agent or automation is gone, or nothing could ever clear it.
+      if (APPROVAL_DECISIONS[decision] && !manifest) {
+        sendError(res, 404, 'not_found', question.target === 'agent'
+          ? `The agent "${question.slug}" no longer exists, so there is nothing to approve. Reject the question to close it.`
+          : `Automation not found: ${question.slug}`);
+        return;
+      }
       const claim = claimQuestion(contextRoot, question, answer, 'dashboard');
       if (!claim.claimed) {
         sendError(res, 409, 'refused', claim.reason);
         return;
       }
-      if (!APPROVAL_DECISIONS[decision]) {
+      if (!APPROVAL_DECISIONS[decision] || !manifest) {
         // REJECTED. Recorded and done — no approval, no run. The manifest is
         // left exactly as unapproved as it was; the next fire refuses through
         // the SAME sha256 tripwire, never through a side door opened here.
@@ -750,8 +778,33 @@ export async function handleAutomationsQuestionAnswer(
       }
       // APPROVED. The exact primitive `handleAutomationsApprove` uses, then
       // the exact primitive `handleAutomationsRunNow` uses — never a second
-      // spawn path.
+      // spawn path. An agent target writes the agent's own grant, exactly what
+      // the Agents page's Approve writes.
       approveAutomation(dirname(contextRoot), manifest, new Date());
+      if (question.target === 'agent') {
+        // The agent re-runs only with the task its run carried: a bare re-run of
+        // a call target has no ask to answer.
+        if (!question.task) {
+          sendJson(res, 200, {
+            question: claim.question,
+            status: 'ok',
+            error: null,
+            result: 'Approved. It did not run again: the run that asked carried no task to repeat. Ask it again.',
+            approved: true,
+            job: null,
+            started: false,
+          });
+          return;
+        }
+        const { job, started } = startAutomationJob(contextRoot, question.slug, {
+          text: '',
+          fireAt: new Date(),
+          task: question.task,
+          target: 'agent',
+        });
+        sendJson(res, 200, { question: claim.question, status: 'ok', error: null, result: null, approved: true, job, started });
+        return;
+      }
       const { job, started } = startAutomationJob(contextRoot, question.slug);
       sendJson(res, 200, {
         question: claim.question,
@@ -1048,6 +1101,10 @@ export async function handleAutomationsCreate(
   try {
     const title = (str(body.title) ?? '').trim();
     if (!title) throw new AutomationError('Give the agent a name.');
+    if (body.agent !== undefined) {
+      await createBoundFromBody(res, contextRoot, body, title);
+      return;
+    }
     const prompt = (str(body.prompt) ?? '').trim();
     if (!prompt) throw new AutomationError('Describe what the agent should do — that description is its prompt.');
 
@@ -1107,6 +1164,65 @@ export async function handleAutomationsCreate(
 }
 
 /**
+ * The new-format create: a JOB bound to an existing agent (`body.agent`), with an
+ * optional `## Job`. The agent must already be approved on this machine for
+ * conversation (`'identity'`): an automation is a way to RUN an agent's prompt,
+ * and nobody approves a prompt by scheduling it. The store's `createAutomation`
+ * approves it here (the pair's own `approvePair` for a same-slug pair — its ONE
+ * caller), so the route never writes the registry itself. Identity fields in the
+ * body are ignored: they are the agent's, edited on the Agents page.
+ */
+async function createBoundFromBody(
+  res: ServerResponse,
+  contextRoot: string,
+  body: Record<string, unknown>,
+  title: string,
+): Promise<void> {
+  const agentSlug = typeof body.agent === 'string' ? body.agent.trim() : '';
+  if (!isSafeAutomationSlug(agentSlug)) throw new AutomationError('Pick the agent this automation runs as.');
+  const agentTarget = getRunTarget(contextRoot, agentSlug, 'agent');
+  if (!agentTarget) {
+    sendError(res, 404, 'unknown_agent', `There is no agent "${agentSlug}" in this project.`);
+    return;
+  }
+  const projectRoot = dirname(contextRoot);
+  if (!checkApproval(projectRoot, agentTarget, undefined, 'identity').approved) {
+    sendError(res, 409, 'agent_unapproved',
+      `${agentTarget.agentTitle || agentTarget.title} is not approved on this machine. Approve it on the Agents page first.`);
+    return;
+  }
+  const slug = (str(body.slug) ?? '').trim() || slugifyTitle(title);
+  if (!isSafeAutomationSlug(slug)) {
+    throw new AutomationError(`"${title}" does not make a usable name — try plain letters and numbers.`);
+  }
+  if (getRunTarget(contextRoot, slug, 'automation')) {
+    throw new AutomationError(`An automation called "${slug}" already exists.`);
+  }
+  registerProject(projectRoot);
+  const manifest = createAutomation(contextRoot, {
+    slug,
+    title,
+    agent: agentSlug,
+    job: (str(body.job) ?? '').trim(),
+    mode: 'sched',
+    days: readDays(body.days) ?? 'daily',
+    at: str(body.at) ?? '09:00',
+    slots: readSlots(body.slots),
+    timeoutMinutes: readTimeout(body.timeoutMinutes),
+  }, { approve: { now: new Date() } });
+  sendJson(res, 200, { automation: summarize(projectRoot, contextRoot, manifest) });
+}
+
+/** The agent a new-format automation file is bound to, or null for an unsplit
+ *  (legacy) file, an unreadable one, or no file at all. */
+function boundAgentOf(contextRoot: string, slug: string): string | null {
+  const fm = readManifestFrontmatter(automationPath(contextRoot, slug));
+  if (!fm) return null;
+  const key = agentKeyOf(fm.data);
+  return key.kind === 'agent' ? key.slug : null;
+}
+
+/**
  * POST /api/automations/:slug/update — edit an agent and RE-approve it here.
  *
  * Re-approval is the point of the button's wording ("Save and re-approve on
@@ -1143,17 +1259,33 @@ export async function handleAutomationsUpdate(
         'This save would replace the prompt with its first 600 characters. Reopen the agent so the full prompt loads, then save again.');
       return;
     }
+    const model = body.model === undefined ? undefined : (str(body.model) ?? null);
+    const effort = readEffort(body.effort);
+    // `job` is the automation's own `## Job`: absent leaves it, null or blank removes it. The
+    // store refuses it for anything but an automation that picks an agent.
+    if (body.job !== undefined && body.job !== null && typeof body.job !== 'string') {
+      sendError(res, 400, 'invalid', 'Invalid job: expected text.');
+      return;
+    }
+    const job = body.job === undefined ? undefined : str(body.job) ?? null;
+    const agentSlug = current.runKind === 'agent' ? current.slug : boundAgentOf(contextRoot, params.slug);
+    if (agentSlug) {
+      const manifest = updateSplitTarget(contextRoot, current, agentSlug, body, { model, effort, prompt: str(body.prompt), job });
+      sendJson(res, 200, { automation: summarize(dirname(contextRoot), contextRoot, manifest) });
+      return;
+    }
     const manifest = updateAutomation(contextRoot, params.slug, {
       title: str(body.title),
       mode: readMode(body.mode),
       slots: readSlots(body.slots),
       days: readDays(body.days),
       at: str(body.at),
-      model: body.model === undefined ? undefined : (str(body.model) ?? null),
-      effort: readEffort(body.effort),
+      model,
+      effort,
       timeoutMinutes: readTimeout(body.timeoutMinutes),
       enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
       prompt: str(body.prompt),
+      job,
     });
     approveHere(contextRoot, manifest);
     sendJson(res, 200, { automation: summarize(dirname(contextRoot), contextRoot, manifest) });
@@ -1165,6 +1297,58 @@ export async function handleAutomationsUpdate(
     console.error('[automations] update failed', err);
     sendError(res, 500, 'update_failed', 'Failed to save the agent.');
   }
+}
+
+/**
+ * An edit of a split target. The identity half (prompt, model, effort; the title
+ * too for an agent's own call target) goes through `withRestamp`, which
+ * re-approves exactly what was directly approved before and is still what the
+ * edit produced — the agent's call target and every automation that runs as it.
+ * The job half (title, schedule, timeout, enabled, its `## Job`) is the automation file's own,
+ * and the automation the owner just saved is re-approved here. An agent's call
+ * settings are never edited: an agent you only call takes identity edits only.
+ */
+function updateSplitTarget(
+  contextRoot: string,
+  current: AutomationManifest,
+  agentSlug: string,
+  body: Record<string, unknown>,
+  identityIn: {
+    model: string | null | undefined;
+    effort: EffortLevel | null | undefined;
+    prompt: string | undefined;
+    job: string | null | undefined;
+  },
+): AutomationManifest {
+  const projectRoot = dirname(contextRoot);
+  // Refused before the identity half writes anything: an agent you only call has no job.
+  if (current.runKind === 'agent' && identityIn.job !== undefined) {
+    throw new AutomationError('A job belongs to an automation that picks an agent. This one has no job of its own.');
+  }
+  const identity: AgentIdentityPatch = {};
+  if (identityIn.prompt !== undefined) identity.prompt = identityIn.prompt;
+  if (identityIn.model !== undefined) identity.model = identityIn.model;
+  if (identityIn.effort !== undefined) identity.effort = identityIn.effort;
+  if (current.runKind === 'agent' && str(body.title) !== undefined) identity.title = str(body.title);
+  if (Object.keys(identity).length > 0) withRestamp(contextRoot, projectRoot, agentSlug, identity);
+
+  if (current.runKind === 'agent') {
+    const target = getRunTarget(contextRoot, current.slug, 'agent');
+    if (!target) throw new AutomationError(`Agent not found: ${current.slug}`);
+    return target;
+  }
+  const manifest = updateAutomation(contextRoot, current.slug, {
+    title: str(body.title),
+    mode: readMode(body.mode),
+    slots: readSlots(body.slots),
+    days: readDays(body.days),
+    at: str(body.at),
+    timeoutMinutes: readTimeout(body.timeoutMinutes),
+    enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
+    job: identityIn.job,
+  });
+  approveHere(contextRoot, manifest);
+  return manifest;
 }
 
 /**
@@ -1186,11 +1370,35 @@ export async function handleAutomationsDelete(
   contextRoot: string,
 ): Promise<void> {
   try {
-    if (!isSafeAutomationSlug(params.slug) || !getAutomation(contextRoot, params.slug)) {
+    const target = isSafeAutomationSlug(params.slug) ? getAutomation(contextRoot, params.slug) : null;
+    if (!target) {
       sendError(res, 404, 'not_found', `Agent not found: ${params.slug}`);
       return;
     }
+    if (target.runKind === 'agent') {
+      // No automation file: the slug is an agent you only call. Deleting it is
+      // deleting the AGENT, under the agents store's own revoke rule.
+      const removed = removeAgent(contextRoot, params.slug);
+      if (!removed.removed) {
+        sendError(res, 409, 'agent_in_use', `This agent still runs ${removed.usedBy.join(', ')}. Delete those automations first.`);
+        return;
+      }
+      sendJson(res, 200, { ok: true, slug: params.slug });
+      return;
+    }
+    const boundTo = boundAgentOf(contextRoot, params.slug);
     removeAutomation(contextRoot, params.slug);
+    if (boundTo) {
+      // A split automation: only ITS record goes. Its agent stays, with its own
+      // approval untouched, and nothing is re-stamped.
+      try {
+        revokeApproval(dirname(contextRoot), params.slug);
+      } catch (err) {
+        console.error('[automations] delete: could not revoke approval', err);
+      }
+      sendJson(res, 200, { ok: true, slug: params.slug, agentKept: getAgent(contextRoot, boundTo) ? boundTo : null });
+      return;
+    }
     try {
       revokeApproval(dirname(contextRoot), params.slug);
     } catch (err) {
@@ -1237,37 +1445,17 @@ export async function handleAutomationsPhotoUpload(
   contextRoot: string,
 ): Promise<void> {
   const slug = params.slug;
-  if (!isSafeAutomationSlug(slug) || !getAutomation(contextRoot, slug)) {
+  const target = isSafeAutomationSlug(slug) ? getAutomation(contextRoot, slug) : null;
+  if (!target) {
     sendError(res, 404, 'not_found', `Agent not found: ${slug}`);
     return;
   }
-
-  const buf = await readCappedBody(req, res, MAX_PHOTO_BYTES);
-  if (!buf) return; // 413 already sent, or the stream errored
-  if (buf.length === 0) {
-    sendError(res, 400, 'empty', 'No image data was received.');
-    return;
-  }
-
-  const type = sniffImageType(buf);
-  if (!type) {
-    sendError(res, 415, 'unsupported_type', 'That file is not a PNG, JPEG, GIF or WebP image.');
-    return;
-  }
-
+  const image = await receivePhoto(req, res);
+  if (!image) return;
   try {
-    const ext = EXT_BY_IMAGE_TYPE[type];
-    const rel = photoRelPathFor(slug, ext);
-    const dir = automationPhotosDir(contextRoot);
-    mkdirSync(dir, { recursive: true });
-    // An agent has exactly ONE photo file, so a new upload in a different
-    // format must take the old one with it — otherwise `daily.png` lingers
-    // after `daily.webp` replaces it, unreferenced and undeletable from the UI.
-    for (const otherExt of Object.values(EXT_BY_IMAGE_TYPE)) {
-      if (otherExt === ext) continue;
-      try { unlinkSync(join(dir, `${slug}${otherExt}`)); } catch { /* never existed */ }
-    }
-    writeFileSync(join(dir, `${slug}${ext}`), buf);
+    // The photo is the AGENT's (`automations/photos/<agent-slug>.<ext>`): a bound
+    // automation's upload lands on the agent it runs as.
+    const rel = storeAgentPhoto(contextRoot, target.agent || slug, image);
     // `photo` is not approval-hashed, so this write cannot block the agent —
     // which is why it does not re-approve and does not need to.
     const manifest = updateAutomation(contextRoot, slug, { photo: rel });
@@ -1280,6 +1468,51 @@ export async function handleAutomationsPhotoUpload(
     console.error('[automations] photo upload failed', err);
     sendError(res, 500, 'photo_failed', 'Failed to save the photo.');
   }
+}
+
+/** A sniffed upload: the bytes and the extension their magic bytes earn. */
+export interface ReceivedPhoto {
+  buf: Buffer;
+  ext: string;
+}
+
+/**
+ * Read a photo upload, capped per chunk, typed by MAGIC BYTES only. Null when a
+ * refusal (413, 400 empty, 415 type) has already been sent.
+ */
+export async function receivePhoto(req: IncomingMessage, res: ServerResponse): Promise<ReceivedPhoto | null> {
+  const buf = await readCappedBody(req, res, MAX_PHOTO_BYTES);
+  if (!buf) return null; // 413 already sent, or the stream errored
+  if (buf.length === 0) {
+    sendError(res, 400, 'empty', 'No image data was received.');
+    return null;
+  }
+  const type = sniffImageType(buf);
+  if (!type) {
+    sendError(res, 415, 'unsupported_type', 'That file is not a PNG, JPEG, GIF or WebP image.');
+    return null;
+  }
+  return { buf, ext: EXT_BY_IMAGE_TYPE[type] };
+}
+
+/**
+ * Write `<photos dir>/<slug><ext>` — every component constructed here, none of
+ * it client-chosen — and return the contextRoot-relative path for the `photo`
+ * key. An agent has exactly ONE photo file, so a new upload in a different
+ * format takes the old one with it: otherwise `daily.png` lingers after
+ * `daily.webp` replaces it, unreferenced and undeletable from the UI.
+ */
+export function storeAgentPhoto(contextRoot: string, slug: string, photo: ReceivedPhoto): string {
+  if (!isSafeAutomationSlug(slug)) throw new AutomationError(`Invalid agent: ${slug}`);
+  const rel = photoRelPathFor(slug, photo.ext);
+  const dir = automationPhotosDir(contextRoot);
+  mkdirSync(dir, { recursive: true });
+  for (const otherExt of Object.values(EXT_BY_IMAGE_TYPE)) {
+    if (otherExt === photo.ext) continue;
+    try { unlinkSync(join(dir, `${slug}${otherExt}`)); } catch { /* never existed */ }
+  }
+  writeFileSync(join(dir, `${slug}${photo.ext}`), photo.buf);
+  return rel;
 }
 
 /**
@@ -1302,29 +1535,33 @@ export async function handleAutomationsPhotoGet(
 ): Promise<void> {
   try {
     const manifest = isSafeAutomationSlug(params.slug) ? getAutomation(contextRoot, params.slug) : null;
-    const abs = manifest ? resolveAutomationPhoto(contextRoot, manifest.photo) : null;
-    if (!abs) {
-      sendError(res, 404, 'no_photo', 'This agent has no photo.');
-      return;
-    }
-    const ext = extname(abs).toLowerCase();
-    const type = PHOTO_CONTENT_TYPE[ext];
-    if (!type) {
-      // A file with an extension outside the allow-list can only have arrived
-      // by a hand edit — serve nothing rather than guess a content type.
-      sendError(res, 404, 'no_photo', 'This agent has no photo.');
-      return;
-    }
-    const bytes = readFileSync(abs);
-    res.writeHead(200, {
-      'Content-Type': type,
-      'Content-Length': bytes.length,
-      'Cache-Control': 'no-store',
-    });
-    res.end(bytes);
+    sendPhotoFile(res, manifest ? resolveAutomationPhoto(contextRoot, manifest.photo) : null);
   } catch {
     sendError(res, 404, 'no_photo', 'This agent has no photo.');
   }
+}
+
+/** Serve a photo already resolved through `resolveAutomationPhoto` (the only
+ *  gate that keeps a synced `photo` string from naming an arbitrary file), or 404. */
+export function sendPhotoFile(res: ServerResponse, abs: string | null): void {
+  if (!abs) {
+    sendError(res, 404, 'no_photo', 'This agent has no photo.');
+    return;
+  }
+  const type = PHOTO_CONTENT_TYPE[extname(abs).toLowerCase()];
+  if (!type) {
+    // A file with an extension outside the allow-list can only have arrived
+    // by a hand edit — serve nothing rather than guess a content type.
+    sendError(res, 404, 'no_photo', 'This agent has no photo.');
+    return;
+  }
+  const bytes = readFileSync(abs);
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Content-Length': bytes.length,
+    'Cache-Control': 'no-store',
+  });
+  res.end(bytes);
 }
 
 /** The extensions this route will hand back, and as what. Derived from the
@@ -1816,7 +2053,7 @@ export function sayToAgent(
     // unapproved agent leaves the owner's words sitting in the channel under
     // an answer that is only ever going to be "it is not approved".
     const projectRoot = dirname(contextRoot);
-    if (!checkApproval(projectRoot, manifest).approved) {
+    if (!checkApproval(projectRoot, manifest, undefined, 'run').approved) {
       return sayRefusal(
         409, 'say_unapproved',
         `${manifest.title} is not approved on this machine yet. Approve it, then ask again.`,
@@ -1987,7 +2224,7 @@ export async function handleAutomationsThreadReply(
       sendError(res, 409, 'reply_disabled', `${manifest.title} is turned off. Turn it on to reply.`);
       return;
     }
-    if (!checkApproval(dirname(contextRoot), manifest).approved) {
+    if (!checkApproval(dirname(contextRoot), manifest, undefined, 'run').approved) {
       sendError(
         res, 409, 'reply_unapproved',
         `${manifest.title} is not approved on this machine yet. Approve it, then reply again.`,

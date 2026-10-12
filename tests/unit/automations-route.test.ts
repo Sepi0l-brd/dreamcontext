@@ -27,8 +27,9 @@ import { runAutomation } from '../../src/lib/automations/runner.js';
 import type { RunOptions, RunOutcome } from '../../src/lib/automations/runner.js';
 import { Router } from '../../src/server/router.js';
 import { killTrackedChildren } from '../../src/server/lifecycle.js';
-import { createAutomation, writeFlowSection, deriveFlowFromManifest } from '../../src/lib/automations/store.js';
-import { approveAutomation } from '../../src/lib/automations/registry.js';
+import { createAutomation, writeFlowSection, deriveFlowFromManifest, getRunTarget } from '../../src/lib/automations/store.js';
+import { createAgent } from '../../src/lib/agents/store.js';
+import { approveAutomation, checkApproval } from '../../src/lib/automations/registry.js';
 import { APPROVAL_DIFF_FIELDS, FLOW_GRAPH_VERSION, type FlowGraph } from '../../src/lib/automations/types.js';
 import { createQuestion, claimQuestion } from '../../src/lib/automations/hitl.js';
 import { createWhiteboard } from '../../src/lib/whiteboards/store.js';
@@ -740,6 +741,81 @@ describe('POST /api/automations/questions/:id', () => {
 
 // ─── per-automation telegram ─────────────────────────────────────────────────
 
+/**
+ * An approval question an AGENT call-target run asked, on a same-slug pair. Mutations checked:
+ *  - the route resolving the slug with `getAutomation` (not `approvalQuestionTarget`) ⇒ the
+ *    first test fails: the job gets approved, the agent does not, and the run is the bare job;
+ *  - the follow-up started without `target`/`task` ⇒ the first test fails on the run options;
+ *  - auto-running with no recorded task ⇒ the second test fails (`runAutomation` called).
+ */
+describe("POST /api/automations/questions/:id — an agent target's approval", () => {
+  function seedPair(): void {
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' });
+    createAutomation(contextRoot, { slug: 'scout', title: 'Scout daily', agent: 'scout', days: 'daily', at: '09:00' });
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'agent')!, undefined, 'run').approved).toBe(false);
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'automation')!, undefined, 'run').approved).toBe(false);
+  }
+
+  function ask(task?: { slug: string; name: string }) {
+    return createQuestion(contextRoot, {
+      slug: 'scout', runFiredAt: new Date().toISOString(), kind: 'approval', sessionId: null,
+      channel: 'chat', question: 'Scout was edited — approve it?', target: 'agent', ...(task ? { task } : {}),
+    });
+  }
+
+  it('approves the AGENT (never the job) and re-runs it with its task', async () => {
+    seedPair();
+    vi.mocked(runAutomation).mockResolvedValueOnce(fakeOutcome('scout', 'ok'));
+    const task = { slug: 'fix-login', name: 'Fix the login' };
+    const question = ask(task);
+
+    const { res, status, body } = makeRes();
+    await handleAutomationsQuestionAnswer(makePostReqWithBody({ answer: 'approve' }), res, { id: question.id }, contextRoot);
+    expect(status()).toBe(200);
+    expect(body()).toMatchObject({ approved: true, started: true });
+
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'agent')!, undefined, 'run').approved).toBe(true);
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'automation')!, undefined, 'run').approved).toBe(false);
+    await vi.waitFor(() => expect(vi.mocked(runAutomation)).toHaveBeenCalled());
+    expect(vi.mocked(runAutomation).mock.calls[0][2]).toMatchObject({ target: 'agent', task });
+  });
+
+  // Mutation checked: restoring the early 404 before the decision is read makes the reject 404.
+  it('when the agent is gone, approve 404s plainly and reject still claims and closes it', async () => {
+    const question = createQuestion(contextRoot, {
+      slug: 'ghost', runFiredAt: new Date().toISOString(), kind: 'approval', sessionId: null,
+      channel: 'chat', question: 'Ghost was edited — approve it?', target: 'agent',
+    });
+
+    const approve = makeRes();
+    await handleAutomationsQuestionAnswer(makePostReqWithBody({ answer: 'approve' }), approve.res, { id: question.id }, contextRoot);
+    expect(approve.status()).toBe(404);
+    expect(String(approve.body().message)).toContain('no longer exists');
+
+    const reject = makeRes();
+    await handleAutomationsQuestionAnswer(makePostReqWithBody({ answer: 'reject' }), reject.res, { id: question.id }, contextRoot);
+    expect(reject.status()).toBe(200);
+    expect(reject.body()).toMatchObject({ approved: false });
+    const listRes = makeRes();
+    await handleAutomationsQuestionsList(getReq, listRes.res, {}, contextRoot);
+    expect(listRes.body().questions).toEqual([]);
+    expect(vi.mocked(runAutomation)).not.toHaveBeenCalled();
+  });
+
+  it('with no recorded task, approves the agent and says it did not run again', async () => {
+    seedPair();
+    const question = ask();
+
+    const { res, status, body } = makeRes();
+    await handleAutomationsQuestionAnswer(makePostReqWithBody({ answer: 'yes' }), res, { id: question.id }, contextRoot);
+    expect(status()).toBe(200);
+    expect(body()).toMatchObject({ approved: true, started: false, job: null });
+    expect(String(body().result)).toContain('did not run again');
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'agent')!, undefined, 'run').approved).toBe(true);
+    expect(vi.mocked(runAutomation)).not.toHaveBeenCalled();
+  });
+});
+
 describe('GET/POST /api/automations/:slug/telegram', () => {
   it('404s for a missing slug on both verbs', async () => {
     const getRes = makeRes();
@@ -1168,5 +1244,113 @@ describe('whiteboard over the dashboard routes (a board agent)', () => {
     expect(status()).toBe(200);
     expect((body().automation as Record<string, unknown>).whiteboard).toBeNull();
     expect(getApproval(projectRoot, 'plain')).not.toHaveProperty('whiteboard');
+  });
+});
+
+describe('automations bound to an agent (create picks an agent)', () => {
+  const T = new Date('2026-10-12T09:00:00.000Z');
+
+  it('refuses an agent not approved on this machine with 409 agent_unapproved, writing nothing', async () => {
+    const { createAgent } = await import('../../src/lib/agents/store.js');
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' });
+    const { res, status, body } = makeRes();
+    await handleAutomationsCreate(makePostReqWithBody({ title: 'Daily scout', agent: 'scout' }), res, {}, contextRoot);
+    expect(status()).toBe(409);
+    expect(body().error).toBe('agent_unapproved');
+    expect(String(body().message)).toContain('Agents page');
+    expect(getAutomation(contextRoot, 'daily-scout')).toBeNull();
+  });
+
+  it('creates a job for an approved agent, approved here, carrying agent and job on the summary', async () => {
+    const { createAgent } = await import('../../src/lib/agents/store.js');
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' }, { approve: { now: T } });
+    const { res, status, body } = makeRes();
+    await handleAutomationsCreate(
+      makePostReqWithBody({ title: 'Daily scout', agent: 'scout', job: 'Check the top five.', days: 'daily', at: '07:00' }),
+      res, {}, contextRoot,
+    );
+    expect(status()).toBe(200);
+    expect(body().automation).toMatchObject({
+      slug: 'daily-scout', agent: 'scout', agentTitle: 'Scout', job: 'Check the top five.', approved: true, mode: 'sched',
+    });
+  });
+
+  it('a same-slug pair on a (b)-approved migrated call agent keeps the agent run-approved', async () => {
+    const { splitLegacyManifest } = await import('../../src/lib/agents/split.js');
+    const { getRunTarget } = await import('../../src/lib/automations/store.js');
+    const { checkApproval } = await import('../../src/lib/automations/registry.js');
+    const legacy = createAutomation(contextRoot, { slug: 'helper', title: 'Helper', mode: 'call', prompt: 'Help.', review: 'agent' });
+    approveAutomation(projectRoot, legacy, T);
+    expect(splitLegacyManifest(contextRoot, 'helper', { home: fakeHome }).outcome).toBe('split');
+
+    const { res, status, body } = makeRes();
+    await handleAutomationsCreate(makePostReqWithBody({ title: 'Helper daily', slug: 'helper', agent: 'helper' }), res, {}, contextRoot);
+    expect(status()).toBe(200);
+    expect(body().automation).toMatchObject({ slug: 'helper', agent: 'helper', approved: true });
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'helper', 'agent')!, undefined, 'run').approved).toBe(true);
+  });
+
+  it('an identity edit through a bound job re-stamps its agent; deleting the job keeps the agent', async () => {
+    const { createAgent, getAgent } = await import('../../src/lib/agents/store.js');
+    const { getRunTarget } = await import('../../src/lib/automations/store.js');
+    const { checkApproval } = await import('../../src/lib/automations/registry.js');
+    const { handleAutomationsDelete } = await import('../../src/server/routes/automations.js');
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' }, { approve: { now: T } });
+    createAutomation(contextRoot, { slug: 'daily-scout', title: 'Daily scout', agent: 'scout', days: 'daily', at: '07:00' }, { approve: { now: T } });
+
+    const u = makeRes();
+    await handleAutomationsUpdate(makePostReqWithBody({ prompt: 'Scout harder.', at: '08:00' }), u.res, { slug: 'daily-scout' }, contextRoot);
+    expect(u.status()).toBe(200);
+    expect(getAgent(contextRoot, 'scout')!.prompt).toBe('Scout harder.');
+    expect(u.body().automation).toMatchObject({ approved: true });
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'agent')!, undefined, 'run').approved).toBe(true);
+
+    const d = makeRes();
+    await handleAutomationsDelete(makePostReqWithBody(), d.res, { slug: 'daily-scout' }, contextRoot);
+    expect(d.status()).toBe(200);
+    expect(d.body()).toMatchObject({ ok: true, agentKept: 'scout' });
+    expect(getAgent(contextRoot, 'scout')).not.toBeNull();
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'scout', 'agent')!, undefined, 'run').approved).toBe(true);
+  });
+
+  it('passes a job edit to a bound automation and re-approves it here; null clears it', async () => {
+    const { createAgent, getAgent } = await import('../../src/lib/agents/store.js');
+    const { getRunTarget } = await import('../../src/lib/automations/store.js');
+    const { checkApproval } = await import('../../src/lib/automations/registry.js');
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' }, { approve: { now: T } });
+    createAutomation(contextRoot, {
+      slug: 'daily-scout', title: 'Daily scout', agent: 'scout', job: 'Check the top five.', days: 'daily', at: '07:00',
+    }, { approve: { now: T } });
+
+    const u = makeRes();
+    await handleAutomationsUpdate(makePostReqWithBody({ job: 'Check the top ten.' }), u.res, { slug: 'daily-scout' }, contextRoot);
+    expect(u.status()).toBe(200);
+    expect(u.body().automation).toMatchObject({ job: 'Check the top ten.', approved: true });
+    const edited = getRunTarget(contextRoot, 'daily-scout', 'automation')!;
+    expect(edited.job).toBe('Check the top ten.');
+    expect(checkApproval(projectRoot, edited, undefined, 'run').approved).toBe(true);
+    expect(getAgent(contextRoot, 'scout')!.prompt).toBe('Scout.');
+
+    const c = makeRes();
+    await handleAutomationsUpdate(makePostReqWithBody({ job: null }), c.res, { slug: 'daily-scout' }, contextRoot);
+    expect(c.status()).toBe(200);
+    expect(c.body().automation).toMatchObject({ job: '', approved: true });
+  });
+
+  it('refuses a job edit on an unsplit automation, on an agent you only call, and a job that is not text', async () => {
+    const { createAgent } = await import('../../src/lib/agents/store.js');
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout.' }, { approve: { now: T } });
+    createAutomation(contextRoot, { slug: 'daily-scout', title: 'Daily scout', agent: 'scout', days: 'daily', at: '07:00' });
+    createAutomation(contextRoot, { slug: 'legacy', title: 'Legacy', prompt: 'Do it.', days: 'daily', at: '09:00' });
+
+    for (const slug of ['legacy', 'scout']) {
+      const r = makeRes();
+      await handleAutomationsUpdate(makePostReqWithBody({ job: 'Post it.' }), r.res, { slug }, contextRoot);
+      expect(r.status(), slug).toBe(400);
+      expect(r.body().message, slug).toMatch(/picks an agent/);
+    }
+    const bad = makeRes();
+    await handleAutomationsUpdate(makePostReqWithBody({ job: 42 }), bad.res, { slug: 'daily-scout' }, contextRoot);
+    expect(bad.status()).toBe(400);
   });
 });

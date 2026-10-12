@@ -301,11 +301,12 @@ describe('sidebar rail — the Workspace entry is Whiteboard, the settings group
 });
 
 describe('sidebar rail — Workspace order (owner, 2026-10-02)', () => {
-  it('reads Chat, Tasks, Automations, Insights, Roadmap, then the alpha pages last', () => {
+  it('reads Chat, Tasks, Automations, Agents, Insights, Roadmap, then the alpha pages last', () => {
     const block = navGroupsBlock(read(SIDEBAR_TSX));
     const workspace = block.slice(0, block.indexOf("'nav.group.memory'"));
     const rows = [...workspace.matchAll(/\{\s*(?:page|launch):\s*'([^']+)'([^}]*)\}/g)].map((m) => ({ id: m[1], maturity: /maturity:\s*'([^']+)'/.exec(m[2])?.[1] }));
-    expect(rows.map((r) => r.id)).toEqual(['chat', 'tasks', 'automations', 'lab', 'roadmap', 'hypotheses', 'whiteboards', 'council']);
+    // Agents follows the Automations that pick one (reverses ad04364c, 2026-10-12).
+    expect(rows.map((r) => r.id)).toEqual(['chat', 'tasks', 'automations', 'agents', 'lab', 'roadmap', 'hypotheses', 'whiteboards', 'council']);
     // No beta or stable row may sit below an alpha one.
     const firstAlpha = rows.findIndex((r) => r.maturity === 'alpha');
     expect(rows.slice(firstAlpha).every((r) => r.maturity === 'alpha')).toBe(true);

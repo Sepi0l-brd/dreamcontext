@@ -7,6 +7,7 @@ import { readFrontmatter, updateFrontmatterFields, writeFrontmatter } from '../f
 import { insertToSection, listSections, readSection } from '../markdown.js';
 import { generateId, slugify, today } from '../id.js';
 import { normalizeRice } from '../rice.js';
+import { isSafeAutomationSlug } from '../agents/slot.js';
 import { healTaskRemoved, healTaskRename } from '../feature-links.js';
 import { appendTombstone } from '../task-tombstones.js';
 import { withTaskFileLock } from '../task-file-lock.js';
@@ -262,6 +263,10 @@ export function readTaskFile(filePath: string, statuses: readonly StatusDef[] = 
     due_date: (data.due_date as string) ?? null,
     objectives: Array.isArray(data.objectives) ? (data.objectives as unknown[]).map(String) : [],
     assignee: (data.assignee as string) ?? null,
+    // Only a path-safe agent slug reads as an assignment: the value is a synced,
+    // hand-editable string that later names a file. Absent rather than null, so
+    // a task with no agent is the exact object it always was.
+    ...(typeof data.agent === 'string' && isSafeAutomationSlug(data.agent.trim()) ? { agent: data.agent.trim() } : {}),
     custom_fields:
       data.custom_fields && typeof data.custom_fields === 'object' && !Array.isArray(data.custom_fields)
         ? (data.custom_fields as Record<string, string | number | null>)

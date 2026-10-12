@@ -17,7 +17,7 @@ import {
 } from '../../lib/whiteboards/store.js';
 import { WhiteboardError, WhiteboardValidationError } from '../../lib/whiteboards/errors.js';
 import { getBoard } from '../../lib/lab/boards.js';
-import { getAutomation } from '../../lib/automations/store.js';
+import { getAgent } from '../../lib/agents/store.js';
 import { AGENT_BOARD_ENV, AGENT_SCRATCH_ENV, AGENT_SELF_ENV } from '../../lib/automations/types.js';
 import { agentsOnElements } from '../../lib/whiteboards/agents.js';
 import { boardFileRelPath, fileIdFor, imageBox, imageSize, makeImageElement, sniffImageType, writeBoardFile } from '../../lib/whiteboards/files.js';
@@ -562,10 +562,10 @@ export function registerWhiteboardCommand(program: Command): void {
       if (kind === 'agent') {
         // Unlike an insight or a task, an agent cannot "come later" on its own: a card for an
         // unknown slug is a typo, so it is refused rather than warned about.
-        if (!opts.ref) throw new WhiteboardValidationError('agent widget needs --ref <agent-slug> (`dreamcontext automations list` lists them)');
+        if (!opts.ref) throw new WhiteboardValidationError('agent widget needs --ref <agent-slug> (`dreamcontext agents list` lists them)');
         if (!isValidWidgetRef(kind, opts.ref)) throw new WhiteboardValidationError(`invalid agent slug '${opts.ref}'`);
-        if (!getAutomation(root, opts.ref)) {
-          throw new WhiteboardValidationError(`no agent '${opts.ref}' in this project (\`dreamcontext automations list\` lists them)`);
+        if (!getAgent(root, opts.ref)) {
+          throw new WhiteboardValidationError(`no agent '${opts.ref}' in this project (\`dreamcontext agents list\` lists them)`);
         }
         payload.ref = opts.ref;
       }

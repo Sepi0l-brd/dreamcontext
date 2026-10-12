@@ -49,6 +49,17 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { contrast, distIndex, faceWidths, overlapArea, rect, scratchDir, setTheme, shotsDir } from './lib/measure.mjs';
 
+/** process.env minus what makes the CLI believe it runs inside a Claude session or an agent
+ *  run: `approve` refuses there by design (A12), and the gate may itself run inside one. */
+function hostEnv() {
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) {
+    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_')
+      || k === 'DREAMCONTEXT_AGENT_SELF' || k === 'DREAMCONTEXT_AUTOMATION_RUN') delete env[k];
+  }
+  return env;
+}
+
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DIST_INDEX = distIndex(REPO);
 
@@ -85,7 +96,7 @@ const BIN_PATH = () =>
 
 function cli(args, opts = {}) {
   const r = spawnSync(process.execPath, [DIST_INDEX, ...args], {
-    cwd: PROJ, env: { ...process.env, HOME }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME }, encoding: 'utf-8',
   });
   if (r.status !== 0 && !opts.allowFail) {
     throw new Error(`cli ${args.join(' ')} failed: ${r.stderr || r.stdout}`);
@@ -103,6 +114,7 @@ function cli(args, opts = {}) {
  */
 const STANDIN = `#!${process.execPath}
 import { spawnSync } from 'node:child_process';
+
 const slug = process.env.DREAMCONTEXT_AUTOMATION_SLUG || '';
 const DC = ${JSON.stringify(DIST_INDEX)};
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
@@ -313,7 +325,7 @@ async function startServer(port) {
     // The board's asset route is desktop-gated SERVER-side; the CLIENT decides
     // separately (Tauri internals), which is what lets one server drive both the
     // on-desktop and off-desktop board renderings below.
-    env: { ...process.env, HOME, PATH: BIN_PATH(), DREAMCONTEXT_DESKTOP: '1' },
+    env: { ...hostEnv(), HOME, PATH: BIN_PATH(), DREAMCONTEXT_DESKTOP: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const deadline = Date.now() + 30_000;
@@ -327,7 +339,7 @@ async function startServer(port) {
 
 function runAgent(slug) {
   return spawnSync(process.execPath, [DIST_INDEX, 'automations', 'run', slug, '--force'], {
-    cwd: PROJ, env: { ...process.env, HOME, PATH: BIN_PATH() }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME, PATH: BIN_PATH() }, encoding: 'utf-8',
   });
 }
 

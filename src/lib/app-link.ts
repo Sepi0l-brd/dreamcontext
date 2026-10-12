@@ -22,6 +22,9 @@ import { listVaults, RESERVED_ASSISTANT_NAME, type Vault } from './vaults.js';
  *   dreamcontext://project/<vault>/page/<page>[/<id>]
  *   dreamcontext://project/<vault>/view?path=<project-relative path>
  *   dreamcontext://inbox
+ *
+ * `page/agents/<slug>` opens that agent's profile on the Agents page; its id is an agent SLUG
+ * (the automation slug rule), stricter than the generic item id.
  */
 
 export const APP_LINK_SCHEME = 'dreamcontext';
@@ -31,17 +34,22 @@ const VAULT_MAX_CHARS = 128;
 const PATH_MAX_CHARS = 512;
 
 export const APP_LINK_PAGES = [
-  'sleep', 'automations', 'tasks', 'knowledge', 'core', 'lab', 'roadmap', 'hypotheses', 'settings',
+  'sleep', 'automations', 'tasks', 'knowledge', 'core', 'lab', 'roadmap', 'hypotheses', 'settings', 'agents',
 ] as const;
 export type AppLinkPage = (typeof APP_LINK_PAGES)[number];
 /** The pages whose link may name one item. Every other page is a bare destination. */
-const PAGES_WITH_ID: ReadonlySet<string> = new Set(['tasks', 'knowledge', 'core']);
+const PAGES_WITH_ID: ReadonlySet<string> = new Set(['tasks', 'knowledge', 'core', 'agents']);
 
 const CLAUDE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const PAGE_ID_RE = /^[A-Za-z0-9._-]{1,160}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
+
+/** The item id a page link may carry: an agent's slug on `agents`, the generic id elsewhere. */
+function isValidPageId(page: string, id: string): boolean {
+  return page === 'agents' ? SLUG_RE.test(id) : PAGE_ID_RE.test(id);
+}
 
 export type AppLinkTarget =
   | { kind: 'project'; vault: string }
@@ -129,7 +137,7 @@ function composeTail(base: string, target: Exclude<AppLinkTarget, { kind: 'inbox
       const id = target.id ?? null;
       if (id === null) return `${base}/page/${target.page}`;
       if (!PAGES_WITH_ID.has(target.page)) throw new AppLinkError(`The ${target.page} page takes no item id.`);
-      if (!PAGE_ID_RE.test(id)) throw new AppLinkError(`"${id}" is not a valid item id.`);
+      if (!isValidPageId(target.page, id)) throw new AppLinkError(`"${id}" is not a valid item id.`);
       return `${base}/page/${target.page}/${id}`;
     }
     case 'view':
@@ -187,7 +195,7 @@ function parseProjectTail(vault: string, tail: string[], query: string | null): 
   if (kind === 'page') {
     if (query !== null || tail.length < 2 || tail.length > 3 || !isPage(value)) return null;
     if (tail.length === 2) return { kind: 'page', vault, page: value };
-    return PAGES_WITH_ID.has(value) && PAGE_ID_RE.test(extra) ? { kind: 'page', vault, page: value, id: extra } : null;
+    return PAGES_WITH_ID.has(value) && isValidPageId(value, extra) ? { kind: 'page', vault, page: value, id: extra } : null;
   }
   if (kind === 'view') {
     if (tail.length !== 1 || query === null) return null;

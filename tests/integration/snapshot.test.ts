@@ -596,7 +596,9 @@ describe('snapshot (integration)', () => {
       expect(output).toContain('## Automations');
       expect(output).toContain('eod-digest');
       expect(output).toContain('blocked pending approval');
-      expect(output).toContain('dreamcontext automations approve eod-digest');
+      expect(output).toContain('eod-digest: blocked pending approval');
+      expect(output).toContain('needs approval on the Automations page');
+      expect(output).not.toContain('automations approve eod-digest');
     });
   });
 });

@@ -26,6 +26,17 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { distIndex, rect, scratchDir, setTheme, shotsDir } from './lib/measure.mjs';
 
+/** process.env minus what makes the CLI believe it runs inside a Claude session or an agent
+ *  run: `approve` refuses there by design (A12), and the gate may itself run inside one. */
+function hostEnv() {
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) {
+    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_')
+      || k === 'DREAMCONTEXT_AGENT_SELF' || k === 'DREAMCONTEXT_AUTOMATION_RUN') delete env[k];
+  }
+  return env;
+}
+
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DIST_INDEX = distIndex(REPO);
 const BOARD_BUILDER = join(REPO, 'skill-packs', 'excalidraw', 'scripts', 'build_excalidraw.js');
@@ -71,7 +82,7 @@ const freePort = () => new Promise((res, rej) => {
 
 function cli(args) {
   const r = spawnSync(process.execPath, [DIST_INDEX, ...args], {
-    cwd: PROJ, env: { ...process.env, HOME }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME }, encoding: 'utf-8',
   });
   if (r.status !== 0) throw new Error(`cli ${args.join(' ')} failed: ${r.stderr || r.stdout}`);
   return r.stdout;
@@ -90,6 +101,7 @@ function must(cmd, args, what) {
  */
 const STANDIN = `#!${process.execPath}
 import { spawnSync } from 'node:child_process';
+
 const slug = process.env.DREAMCONTEXT_AUTOMATION_SLUG || '';
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
 const dir = 'automations/output/maker/';
@@ -174,7 +186,7 @@ function seed() {
 /** A SCHEDULED run, for real, through the CLI runner — Finder PATH plus the stand-in. */
 function runAgent(slug) {
   const r = spawnSync(process.execPath, [DIST_INDEX, 'automations', 'run', slug, '--force'], {
-    cwd: PROJ, env: { ...process.env, HOME, PATH: [join(HOME, '.local', 'bin'), FINDER_PATH, dirname(process.execPath)].join(':') }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME, PATH: [join(HOME, '.local', 'bin'), FINDER_PATH, dirname(process.execPath)].join(':') }, encoding: 'utf-8',
   });
   if (r.status !== 0) throw new Error(`run ${slug} failed: ${r.stderr || r.stdout}`);
 }
@@ -183,7 +195,7 @@ function runAgent(slug) {
 async function startServer(port, { desktop = true } = {}) {
   const srv = spawn(process.execPath, [DIST_INDEX, 'dashboard', '--no-open', '-p', String(port)], {
     cwd: PROJ,
-    env: { ...process.env, HOME, PATH: FINDER_PATH, DREAMCONTEXT_DESKTOP: desktop ? '1' : '0' },
+    env: { ...hostEnv(), HOME, PATH: FINDER_PATH, DREAMCONTEXT_DESKTOP: desktop ? '1' : '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const deadline = Date.now() + 30_000;

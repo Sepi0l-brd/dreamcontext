@@ -81,7 +81,7 @@ function readHint(view: ElementView): string | null {
       if (!ref) return null;
       return /\.(md|pdf|html?)$/i.test(ref) ? `Read ${ref}` : `Read _dream_context/knowledge/${ref}.md`;
     case 'agent':
-      return ref ? `dreamcontext automations show ${ref}` : null;
+      return ref ? `dreamcontext agents show ${ref}` : null;
     case 'web':
       return view.url ? `WebFetch ${view.url}` : null;
     default:

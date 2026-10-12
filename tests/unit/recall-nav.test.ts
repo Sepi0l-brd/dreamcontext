@@ -14,7 +14,7 @@ import { recallNavTarget } from '../../dashboard/src/lib/recallNav.js';
 // anyway; we define the shape inline so this file stays self-contained and
 // importable without dashboard's React context).
 interface MinHit {
-  type: 'knowledge' | 'feature' | 'task' | 'memory' | 'changelog' | 'whiteboard' | 'core';
+  type: 'knowledge' | 'feature' | 'task' | 'memory' | 'changelog' | 'whiteboard' | 'core' | 'agent';
   slug: string;
   path: string;
   title: string;
@@ -108,6 +108,23 @@ describe('recallNavTarget', () => {
     it('board hit → page=whiteboards, slug=board slug (the page focus id)', () => {
       const h = hit('whiteboard', 'control-panel', '/vault/_dream_context/whiteboards/control-panel/control-panel.excalidraw.md');
       expect(recallNavTarget(h)).toEqual({ page: 'whiteboards', slug: 'control-panel' });
+    });
+  });
+
+  describe('agent', () => {
+    it('agent hit → page=agents, slug=the agent file name (the page/agents/<slug> shape)', () => {
+      const h = hit('agent', 'daily-researcher', '/vault/_dream_context/agents/daily-researcher.md');
+      expect(recallNavTarget(h)).toEqual({ page: 'agents', slug: 'daily-researcher' });
+    });
+
+    it('agent slug comes from the path, not hit.slug', () => {
+      const h = hit('agent', 'wrong-slug', '/vault/_dream_context/agents/real-agent.md');
+      expect(recallNavTarget(h)).toEqual({ page: 'agents', slug: 'real-agent' });
+    });
+
+    it('falls back to hit.slug when the path is not agents/<slug>.md', () => {
+      const h = hit('agent', 'researcher', '/vault/_dream_context/somewhere/else.txt');
+      expect(recallNavTarget(h)).toEqual({ page: 'agents', slug: 'researcher' });
     });
   });
 });

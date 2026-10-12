@@ -164,7 +164,7 @@ describe('plain text only', () => {
 // ─── blocked pending approval — the required gate scenario ──────────────────
 
 describe('blocked pending approval', () => {
-  it('a never-approved automation with NO cache record is still surfaced, naming the exact approve command', () => {
+  it('a never-approved automation with NO cache record is still surfaced, naming the Automations page and no command', () => {
     const m = makeAutomation('eod-digest');
     // Deliberately no recordRun call — this automation has never been ticked,
     // so automations/cache/eod-digest.json does not exist on disk.
@@ -173,7 +173,7 @@ describe('blocked pending approval', () => {
     expect(snap.hasFailure).toBe(false);
     expect(snap.hasOrphan).toBe(false);
     expect(snap.lines).toEqual([
-      `- ${m.slug}: blocked pending approval (never-approved) — run \`dreamcontext automations approve ${m.slug}\``,
+      `- ${m.slug}: blocked pending approval (never-approved) — needs approval on the Automations page in the dashboard`,
     ]);
   });
 
@@ -195,7 +195,7 @@ describe('blocked pending approval', () => {
     expect(snap.total).toBe(1);
   });
 
-  it('a manifest edited after approval (manifest-changed) is surfaced the same way, still naming approve', () => {
+  it('a manifest edited after approval (manifest-changed) is surfaced the same way, naming the page', () => {
     const m = makeAutomation('eod-digest');
     approveAutomation(projectRoot, m, NOW, home);
     // Simulate a synced teammate's edit to the hashed prompt field.
@@ -206,7 +206,9 @@ describe('blocked pending approval', () => {
     expect(snap.hasBlocked).toBe(true);
     expect(snap.lines).toHaveLength(1);
     expect(snap.lines[0]).toContain('manifest-changed');
-    expect(snap.lines[0]).toContain(`dreamcontext automations approve ${m.slug}`);
+    expect(snap.lines[0]).toContain('needs approval on the Automations page');
+    // Mutation checked: putting the `automations approve` command back in the line fails this.
+    expect(snap.lines[0]).not.toContain('dreamcontext');
   });
 });
 
@@ -359,7 +361,7 @@ describe('recent runs and failures', () => {
     // Exactly ONE line (the approval channel) — never a second, duplicate line
     // derived from the historical 'blocked'/'orphaned' cache-history entries.
     expect(snap.lines).toEqual([
-      `- ${m.slug}: blocked pending approval (never-approved) — run \`dreamcontext automations approve ${m.slug}\``,
+      `- ${m.slug}: blocked pending approval (never-approved) — needs approval on the Automations page in the dashboard`,
     ]);
   });
 });
@@ -380,7 +382,7 @@ describe('multiple automations', () => {
     // Actionable state first; routine success collapses to ONE aggregate line
     // at the end (slug-ordered inside it, since listAutomations sorts by slug).
     expect(lines).toEqual([
-      `- ${ccc.slug}: blocked pending approval (never-approved) — run \`dreamcontext automations approve ${ccc.slug}\``,
+      `- ${ccc.slug}: blocked pending approval (never-approved) — needs approval on the Automations page in the dashboard`,
       `- 2 ok run(s) in the last 24h: ${aaa.slug}, ${bbb.slug} — \`dreamcontext automations list\``,
     ]);
   });
@@ -447,7 +449,7 @@ describe('pending automation output', () => {
 
     const lines = renderAutomationsSection(contextRoot, { now: NOW, home });
     expect(lines).toEqual([
-      `- ${blocked.slug}: blocked pending approval (never-approved) — run \`dreamcontext automations approve ${blocked.slug}\``,
+      `- ${blocked.slug}: blocked pending approval (never-approved) — needs approval on the Automations page in the dashboard`,
       `- automation ${orphaned.slug} may have an orphaned run — run \`dreamcontext automations kill ${orphaned.slug}\``,
       '- 1 automation output(s) pending consolidation (eod-digest)',
     ]);

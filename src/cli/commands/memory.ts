@@ -41,6 +41,7 @@ export const TYPE_LABELS: Record<CorpusType, string> = {
   insight: 'insight',
   thesis: 'thesis',
   automation: 'automation',
+  agent: 'agent',
   whiteboard: 'whiteboard',
   core: 'core',
   skill: 'skill', // never produced by buildCorpus; present only to satisfy the Record type

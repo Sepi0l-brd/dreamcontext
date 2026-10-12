@@ -15,7 +15,7 @@
  *   P2  the Agent toggle opens the panel on the right, pushing the canvas narrower; opening it
  *       spawns ONE session, as Copy Desk on this board, with a composer.
  *   W4  the panel's strip lists EVERY agent on the board by title (home agents and the carded
- *       Pricing Analyst), Copy Desk shown; a tab switches to that agent's own session; an agent
+ *       Pricing Analyst), each as its face from the agent roster, Copy Desk shown; a tab switches to that agent's own session; an agent
  *       card added from the CLI while the panel is open joins the strip.
  *   W5  no card holds a chat; the cards of the agent the panel shows say so and are outlined;
  *       after a turn they show its last lines read-only; Find its card brings the card into
@@ -329,6 +329,14 @@ async function runTheme(theme) {
       JSON.stringify(names) === JSON.stringify([COPY.title, OPS.title, PRICE.title]), JSON.stringify(await tabNames()));
     check('W4 …showing the first, Copy Desk', (await shownAgent()) === COPY.slug, String(await shownAgent()));
     check('W4 …and never says the board has no agent', !/no agent yet/.test(await panel.innerText()));
+    // The strip reads the agent roster (`/api/agents`): each tab is the agent's face, and any
+    // photo it shows comes from the agents route, never the automations one.
+    const tabFaces = await panel.locator('.wb-agent-tab').evaluateAll((tabs) => tabs.map((t) => ({
+      face: !!t.querySelector('.agent-av'),
+      srcs: [...t.querySelectorAll('img')].map((i) => i.getAttribute('src') ?? ''),
+    })));
+    check('W4 …each tab is the agent\'s face, read from the agents route',
+      tabFaces.length === 3 && tabFaces.every((f) => f.face && f.srcs.every((src) => src.includes('/api/agents/'))), JSON.stringify(tabFaces));
     const first = await until(() => spawnsOf(p)[0], 15000, 250);
     check('P2 opening it spawns one session, as Copy Desk on this board',
       first?.env?.DREAMCONTEXT_CARD_AGENT === COPY.slug && first?.env?.DREAMCONTEXT_CARD_BOARD === BOARD, JSON.stringify(first?.env ?? {}));

@@ -17,10 +17,12 @@
  * long note ("Pricing note") and three cards of an existing agent, "Copy Desk", at S, M and XL.
  * Then, in the page, as a user does it:
  *
- *   W1  the palette's Agent… picker attaches the existing agent: a fourth Copy Desk card.
- *   W2  Agent… → New agent opens the create dialog; Name fills itself from the description;
- *       the manifest is `mode: call`, `learning: true`, `whiteboard: control-panel`, approved,
- *       and its card lands on the board.
+ *   W1  the palette's Agent… picker, over the agent roster (`/api/agents`), lists each agent
+ *       with its face and attaches the existing agent: a fourth Copy Desk card.
+ *   W2  Agent… → New agent opens the Agents page's create flow (an agent is an identity, made
+ *       on its own page; that page is proven by verify:agents-page). The agent is then made
+ *       with the real CLI (`agents create --whiteboard control-panel`), and the picker puts
+ *       its card on the board.
  *   W3  opening the board spawns no session and no card, at any size, holds a composer (the
  *       conversation lives in the side panel); clicking a card opens the panel on its agent,
  *       marks that card, and opens that agent's one session on this board.
@@ -41,8 +43,9 @@
  *   W7  the attached agent (its tab in the panel) runs under the pane's own mode (no board
  *       scope) and the hook gives it only the board's index.
  *   W11 New conversation (the panel's ⋯ menu) starts a fresh session.
- *   W9  Edit agent (the card's ⋯ menu) puts the agent on a schedule, keeping its board.
- *   W8  removing the card keeps the manifest, and the Agents page shows the board chip.
+ *   W9  the card's ⋯ menu offers Open in Agents (no dialog of its own), and it lands on the
+ *       Agents page.
+ *   W8  removing the card keeps the agent, still homed on the board.
  *   W10 no console or page errors.
  *
  * The whole flow runs once per theme (light, then dark), each on a FRESH scratch vault and
@@ -88,8 +91,8 @@ const NOTE_BODY = [
   `Last line, kept for the reference check: ${NOTE_TAIL}`,
 ].join('\n');
 const NEW_AGENT_DESCRIPTION = 'Watch the launch board. Flag pricing notes that contradict each other.';
-/** `nameFromDescription`: the description's first clause. */
-const NEW_AGENT_NAME = 'Watch the launch board';
+const NEW_AGENT_NAME = 'Launch watch';
+const NEW_AGENT_SLUG = 'launch-watch';
 const LESSON = 'Lead with the tier name before the price.';
 const MSG1 = 'Summarise what this board says about pricing.';
 const MSG2 = 'Thanks, now list the open questions.';
@@ -287,12 +290,14 @@ function rawElements(p) {
   } catch { return []; }
 }
 
-function showAgent(p, slug) {
-  try { return JSON.parse(cliFor(p)(['automations', 'show', slug, '--json'])); } catch { return null; }
+/** An agent identity as the CLI shows it (`agents show --json`), or null. */
+function showAgentIdentity(p, slug) {
+  try { return JSON.parse(cliFor(p)(['agents', 'show', slug, '--json'])).agent ?? null; } catch { return null; }
 }
-const manifestSlugs = (p) => {
-  const dir = join(p.dc, 'automations');
-  return existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.md')).map((n) => n.slice(0, -3)) : [];
+/** The page the sidebar marks current, by its label. */
+const currentPage = async (page) => {
+  const cur = page.locator('.sidebar-item[aria-current="page"]');
+  return (await cur.count()) ? (await cur.first().innerText()).trim() : '';
 };
 
 /** The value right after `flag` in argv, and every value after `--allowedTools` up to the next flag. */
@@ -527,7 +532,11 @@ async function runTheme(theme) {
     if (pt) {
       await page.mouse.click(pt.x, pt.y, { button: 'right' });
       await page.locator('.wb-palette-item', { hasText: /^Agent/ }).first().click();
-      await page.locator('.wb-picker-row', { hasText: ATTACHED.title }).first().click({ timeout: 10000 }).catch(() => {});
+      const row = page.locator('.wb-picker-row', { hasText: ATTACHED.title }).first();
+      await row.waitFor({ timeout: 10000 }).catch(() => {});
+      check('W1 the picker shows each agent with its face', (await row.locator('.agent-av').count()) === 1
+        && (await row.locator('img').evaluateAll((els) => els.every((e) => (e.getAttribute('src') ?? '').includes('/api/agents/')))));
+      await row.click({ timeout: 10000 }).catch(() => {});
     }
     const w1 = await until(async () => {
       const cards = agentCards(await scene()).filter((e) => e.ref === ATTACHED.slug);
@@ -539,35 +548,52 @@ async function runTheme(theme) {
     check('W1 …at the agent default size, L', attachedCard?.size === 'l', String(attachedCard?.size));
     check('W1 …and it is saved', !!await until(() => rawElements(p).some((e) => e.id === attachedCard?.id && !e.isDeleted), 8000));
 
-    // ── W2: New agent from the palette ─────────────────────────────────────────────────────
-    const slugsBefore = new Set(manifestSlugs(p));
+    // ── W2: New agent is made on the Agents page; its card comes from the picker ─────────
     pt = await spot(room);
     if (pt) {
       await page.mouse.click(pt.x, pt.y, { button: 'right' });
       await page.locator('.wb-palette-item', { hasText: /^Agent/ }).first().click();
       await page.locator('.wb-palette-btn', { hasText: 'New agent' }).first().click();
     }
-    const dialog = page.locator('.agent-modal');
-    check('W2 "New agent" opens the create dialog', !!await until(() => dialog.count(), 5000));
-    await dialog.locator('.agent-textarea').fill(NEW_AGENT_DESCRIPTION);
-    const autoName = await until(async () => (await dialog.locator('.agent-input').first().inputValue()).trim(), 3000);
-    check('W2 Name fills itself from the description', autoName === NEW_AGENT_NAME, JSON.stringify(autoName));
-    check('W2 …and the dialog starts on "Only when I call it"',
-      await dialog.locator('.agent-chip', { hasText: 'Only when I call it' }).getAttribute('aria-pressed') === 'true');
-    await shoot('new-agent-dialog');
-    await dialog.locator('.agent-btn--primary').click();
-    check('W2 the dialog closes after the create', !!await until(async () => (await dialog.count()) === 0, 10000));
-    const newSlug = await until(() => manifestSlugs(p).find((s) => !slugsBefore.has(s)), 8000);
-    const created = newSlug ? showAgent(p, newSlug) : null;
-    check('W2 a new manifest exists', !!created, String(newSlug));
-    check('W2 …mode: call', created?.manifest?.mode === 'call', String(created?.manifest?.mode));
-    check('W2 …learning: true', created?.manifest?.learning === true, String(created?.manifest?.learning));
-    check(`W2 …whiteboard: ${BOARD}`, created?.manifest?.whiteboard === BOARD, String(created?.manifest?.whiteboard));
-    check('W2 …approved on this machine', created?.approved === true, String(created?.approvalReason));
+    check('W2 "New agent" opens the Agents page', !!await until(async () => (await currentPage(page)).startsWith('Agents'), 8000),
+      await currentPage(page));
+    await shoot('new-agent-agents-page');
+    // It lands in create mode: the identity dialog is open over the page. Closed the way a user
+    // does it (Cancel), or its scrim would swallow the next rail click.
+    const identity = page.locator('.aid-modal');
+    check('W2 …in create mode: the New agent identity dialog is open',
+      !!await until(async () => (await identity.count()) === 1 && /New agent/.test(await identity.locator('.aid-title').innerText()), 8000));
+    await identity.locator('.aid-foot .aid-btn:not(.aid-btn--primary)').first().click().catch(() => {});
+    check('W2 …and Cancel closes it', !!await until(async () => (await page.locator('.aid-scrim').count()) === 0, 5000));
+    // The create flow itself belongs to the Agents page; the identity comes from the real CLI.
+    cliFor(p)(['agents', 'create', NEW_AGENT_SLUG, '--title', NEW_AGENT_NAME, '--prompt', NEW_AGENT_DESCRIPTION, '--whiteboard', BOARD]);
+    const newSlug = NEW_AGENT_SLUG;
+    const created = showAgentIdentity(p, newSlug);
+    check('W2 the agent exists', !!created, String(newSlug));
+    check('W2 …learning: true', created?.learning === true, String(created?.learning));
+    check(`W2 …whiteboard: ${BOARD}`, created?.whiteboard === BOARD, String(created?.whiteboard));
+    check('W2 …approved for chat on this machine', created?.approvedForChat === true, String(created?.approvedForChat));
+    await page.locator('.sidebar-item', { hasText: /Whiteboard(?!s)/ }).first().click();
+    await until(() => page.locator('[data-widget-kind]').count().then((n) => n >= 5), 20000);
+    await setTheme();
+    await fit();
+    pt = await spot(room);
+    if (pt) {
+      await page.mouse.click(pt.x, pt.y, { button: 'right' });
+      await page.locator('.wb-palette-item', { hasText: /^Agent/ }).first().click();
+      await page.locator('.wb-picker-row', { hasText: NEW_AGENT_NAME }).first().click({ timeout: 10000 }).catch(() => {});
+    }
     const homeCard = await until(async () => agentCards(await scene()).find((e) => e.ref === newSlug), 8000);
     check('W2 the new agent\'s card lands on the board', !!homeCard);
-    // A pattern is what earlier runs leave behind; the real CLI writes one so W4 can see it.
-    if (newSlug) cliFor(p)(['automations', 'learn', newSlug, '--lesson', LESSON]);
+    // A pattern is what earlier runs leave behind; the real CLI writes one so W4 can see it. An
+    // agent with no automation of its own keeps it in its own file's `## Pattern`.
+    try {
+      cliFor(p)(['automations', 'learn', newSlug, '--lesson', LESSON]);
+    } catch {
+      const file = join(p.dc, 'agents', `${newSlug}.md`);
+      const text = readFileSync(file, 'utf-8');
+      if (!text.includes(LESSON)) writeFileSync(file, `${text.trimEnd()}\n\n## Pattern\n\n${LESSON}\n`);
+    }
 
     // ── W3: no session until the panel opens; no card holds a chat ────────────────────────
     await fit();
@@ -840,27 +866,18 @@ async function runTheme(theme) {
       !!await until(async () => { const t = await freshDom.innerText(); return t.includes(MSG_FRESH) && !t.includes(MSG1); }, 10000),
       (await freshDom.innerText().catch(() => '')).slice(0, 300));
 
-    // ── W9: Edit agent puts it on a schedule ───────────────────────────────────────────────
+    // ── W9: the card's menu sends you to the agent's own page ─────────────────────────────
+    // The menu is read here, while the card exists; the page itself is opened from the panel's
+    // menu after W8, so leaving the board never cuts the flow short.
     await clearSelection();
     await activate(homeCard);
     const homeDom2 = await cardFor(homeCard);
     await homeDom2.locator('.wb-agent-menu-btn').click();
-    await page.locator('.wb-agent-menu-item', { hasText: 'Edit agent' }).click();
-    const edit = page.locator('.agent-modal');
-    check('W9 Edit agent opens the dialog', !!await until(() => edit.count(), 5000));
-    const promptLoaded = await until(async () => (await edit.locator('.agent-textarea').getAttribute('readonly')) === null
-      && (await edit.locator('.agent-textarea').inputValue()).length > 0, 10000);
-    check('W9 …with the full prompt read', !!promptLoaded);
-    await edit.locator('.agent-chip', { hasText: 'On a schedule' }).click();
-    await sleep(300);
-    await shoot('edit-schedule');
-    await edit.locator('.agent-btn--primary').click();
-    check('W9 the dialog closes after the save', !!await until(async () => (await edit.count()) === 0, 10000));
-    const edited = await until(() => { const a = showAgent(p, newSlug); return a?.manifest?.mode === 'sched' && a; }, 8000);
-    check('W9 the agent is on a schedule', !!edited && (edited.manifest.schedule?.slots?.length ?? 0) >= 1,
-      JSON.stringify(showAgent(p, newSlug)?.manifest?.schedule ?? null));
-    check('W9 …still homed on the board, and re-approved', edited?.manifest?.whiteboard === BOARD && edited?.approved === true,
-      JSON.stringify({ whiteboard: edited?.manifest?.whiteboard, approved: edited?.approved }));
+    const items = (await page.locator('.wb-agent-menu-item').allInnerTexts()).map((t) => t.trim());
+    check('W9 the card menu offers Open in Agents, and no Edit dialog of its own',
+      items.includes('Open in Agents') && !items.includes('Edit agent'), items.join(' | '));
+    await page.keyboard.press('Escape');
+    await sleep(200);
 
     // ── W8: removing the card keeps the agent ──────────────────────────────────────────────
     await clearSelection();
@@ -874,15 +891,14 @@ async function runTheme(theme) {
       const d = rawElements(p).find((e) => e.id === homeCard.id);
       return !d || d.isDeleted;
     }, 10000));
-    check('W8 …and the agent\'s manifest is still there', existsSync(join(p.dc, 'automations', `${newSlug}.md`)) && !!showAgent(p, newSlug));
-    await page.locator('.sidebar-item', { hasText: /Automations|Agents/ }).first().click();
-    await sleep(800);
-    if (!(await page.locator('.agent-card').count())) await page.locator('.agents-switch-opt', { hasText: 'Agents' }).click().catch(() => {});
-    const chipText = await until(async () => {
-      const cards = page.locator('.agent-card', { hasText: edited?.manifest?.title ?? autoName ?? newSlug });
-      return (await cards.count()) ? (await cards.first().locator('.agent-card-board').innerText().catch(() => '')) : '';
-    }, 10000);
-    check(`W8 the Agents page shows the board chip (${BOARD})`, String(chipText).includes(BOARD), String(chipText));
+    const kept = showAgentIdentity(p, newSlug);
+    check('W8 …and the agent is still there, homed on the board', existsSync(join(p.dc, 'agents', `${newSlug}.md`)) && kept?.whiteboard === BOARD,
+      JSON.stringify(kept));
+    await openPanelOn(newSlug);
+    await panel.locator('.wb-agent-menu-btn').click();
+    await page.locator('.wb-agent-menu-item', { hasText: 'Open in Agents' }).click();
+    check('W9 Open in Agents lands on the Agents page', !!await until(async () => (await currentPage(page)).startsWith('Agents'), 8000),
+      await currentPage(page));
     await shoot('agents-page');
 
     // ── W10 ───────────────────────────────────────────────────────────────────────────────

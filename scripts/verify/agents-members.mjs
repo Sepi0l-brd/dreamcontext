@@ -11,11 +11,15 @@
  * different claims.
  *
  * WHAT IT PROVES, one checkpoint per acceptance criterion:
- *   1. The sidebar reads "Agents" and the page opens on the Agents tab with
- *      one card per agent: photo-or-initials, name, cadence, model,
- *      description, last-run line, and a dashed "New agent" card.
- *   2. New agent writes a manifest with a photo, a prompt, a schedule, a model
- *      and an effort, approves it on this machine, and the card appears.
+ *   1. The sidebar reads "Automations" and the page's roster (the Automations
+ *      tab) has one card per automation: the face of the agent it runs as,
+ *      name, cadence, model, description, last-run line.
+ *   2. The create dialog picks an agent: the starters still open it prefilled
+ *      on the self-contained form, the on-call starter opens the Agents page in
+ *      create mode instead, and a create with an agent picked sends `agent` +
+ *      `job` (the manifest says `agent: <slug>`), the card then reading "Runs as
+ *      <agent>". A 409 `agent_unapproved` is shown in place, and its link opens
+ *      that agent on the Agents page.
  *   3. An on-call agent is created with NO schedule and shows NO pause switch,
  *      while a scheduled one does.
  *   4. Edit changes the prompt on disk; the button says "Save and re-approve
@@ -53,6 +57,8 @@ const SHOTS = shotsDir(REPO, 'agents-members');
 
 const SCHED_DESC = "Her sabah 09:00'da dünkü insight'ları oku ve üç maddelik özet çıkar";
 const CALL_DESC = 'Çağırdığımda verdiğim konuyu derinlemesine araştır';
+/** The scheduled automation section 2 creates through the API. */
+const SCHED_SLUG = 'daily-insight-digest';
 
 const report = { pass: 0, fail: 0 };
 function check(label, ok, ev = '') {
@@ -182,10 +188,15 @@ async function main() {
     // is no dashed "New agent" card, so without its own button the only path
     // would be the CLI and the dialog this page exists to show would be
     // unreachable on a fresh vault. Asserted before anything is seeded.
-    check('the zero-state offers a New agent button', await page.locator('.auto-intro-new-btn').count() === 1);
+    check('the zero-state offers a start-from-scratch button', await page.locator('.auto-intro-new-btn').count() === 1);
     await page.locator('.auto-intro-new-btn').click();
     const zeroDialog = await until(async () => (await page.locator('.agent-modal').count()) > 0, 8000);
-    check('…which opens the New agent dialog on an empty vault', zeroDialog);
+    check('…which opens the New automation dialog on an empty vault', zeroDialog);
+    // [S2] With no agent in the vault there is nothing to pick, so the dialog lands on the
+    // self-contained form by itself (a prompt field to describe the new one).
+    const zeroOwn = await until(async () =>
+      (await page.locator('.automation-agent-select').inputValue().catch(() => '')) === '__own__', 8000);
+    check('[S2] an empty vault\'s create picks "a new agent, described here" by itself', zeroOwn);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
 
@@ -213,6 +224,26 @@ async function main() {
     }
     check('[C9] three starter cards, and the first opens the dialog prefilled: a description and its own name (absent pre-fix)',
       starterCount === 3 && !!prefill && prefill.desc.length > 20 && prefill.name === prefill.title, JSON.stringify({ starterCount, prefill }));
+    // [S2] The on-call starter is an AGENT (nothing schedules it), so it opens the Agents page
+    // in create mode rather than this page's dialog. Then back to Automations for the rest.
+    if (starterCount === 3) {
+      await starters.nth(2).click();
+      const onAgents = await until(async () => {
+        const active = await page.locator('.sidebar-item[aria-current="page"]').first().innerText().catch(() => '');
+        return /Agents/.test(active) && !/Automations/.test(active);
+      }, 8000);
+      check('[S2] the on-call starter opens the Agents page (was the New agent dialog in call mode)',
+        onAgents && (await page.locator('.agent-modal').count()) === 0);
+      // …in create mode: the Agents page's own identity dialog, not this page's. Closed the way a
+      // user does it (Cancel); left open, its scrim swallows the next rail click.
+      const identity = page.locator('.aid-modal');
+      check('[S2] …in create mode: the New agent identity dialog is open',
+        await until(async () => (await identity.count()) === 1 && /New agent/.test(await identity.locator('.aid-title').innerText()), 8000));
+      await identity.locator('.aid-foot .aid-btn:not(.aid-btn--primary)').first().click().catch(() => {});
+      check('[S2] …and Cancel closes it', await until(async () => (await page.locator('.aid-scrim').count()) === 0, 5000));
+      await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+      await page.waitForTimeout(800);
+    }
     const jargon = await page.evaluate(() => {
       const first = document.querySelector('.auto-intro-starter');
       const line = first ? first.getBoundingClientRect().top : Infinity;
@@ -281,12 +312,12 @@ async function main() {
 
     await showRoster();
     const cardShown = await until(async () => (await page.locator('.agent-card:not(.agent-card--new)').count()) > 0);
-    check('the labelled Agents switch opens the roster and the card is there', cardShown);
+    check('the labelled Automations switch opens the roster and the card is there', cardShown);
     // The control has to SAY where it goes — the first version was a face-stack
     // plus a bare count, which rendered as "AI MI SM 3".
     const switchText = (await page.locator('.agents-switch').innerText()).replace(/\s+/g, ' ');
     check('…and both views are NAMED on the switch',
-      switchText.includes('Messages') && switchText.includes('Agents'), `switch="${switchText}"`);
+      switchText.includes('Messages') && switchText.includes('Automations'), `switch="${switchText}"`);
 
     const card = page.locator('.agent-card:not(.agent-card--new)').first();
     const cardText = cardShown ? await card.innerText() : '';
@@ -303,8 +334,8 @@ async function main() {
     // REWRITE (C13): was "a dashed New agent card is present". C13 removes that card on
     // purpose (the header button is the one way in, and an empty roster has its own state),
     // so the check now asserts the opposite fact: exactly one "New agent" on the screen.
-    const newAgents = await page.locator('.agents-page').getByText('New agent', { exact: true }).count();
-    check('[C13] exactly one "New agent" in the members view (was 2: the header button and the dashed card)', newAgents === 1, `found ${newAgents}`);
+    const newAgents = await page.locator('.agents-page').getByText('New automation', { exact: true }).count();
+    check('[C13] exactly one "New automation" in the members view (was 2: the header button and the dashed card)', newAgents === 1, `found ${newAgents}`);
     const foot = page.locator('.agent-card:not(.agent-card--new) .agent-card-foot').first();
     const footBg = await effectiveBg(foot).catch(() => null);
     const cardBg = await effectiveBg(page.locator('.agent-card:not(.agent-card--new)').first()).catch(() => null);
@@ -326,10 +357,14 @@ async function main() {
     check('a scheduled agent shows a pause switch', await card.locator('.agent-switch').count() === 1);
 
     // ── 3: create an ON-CALL agent through the real dialog ────────────────
-    console.log('\n═══ 3. New agent (on-call), through the dialog ═══');
+    console.log('\n═══ 3. A self-contained (legacy) on-call create, through the dialog ═══');
     await page.locator('.agents-new-btn').click();
     await until(async () => (await page.locator('.agent-modal').count()) > 0);
-    check('the New agent dialog opens', await page.locator('.agent-modal').count() === 1);
+    check('the New automation dialog opens', await page.locator('.agent-modal').count() === 1);
+    check('[S2] …and it opens on an agent picker', await page.locator('.agent-modal .automation-agent-select').count() === 1);
+    // The legacy self-contained shape stays reachable: the picker's last choice.
+    await page.locator('.automation-agent-select').selectOption('__own__');
+    await page.waitForTimeout(300);
     check('its primary button says it approves on this Mac',
       (await page.locator('.agent-btn--primary').innerText()).includes('Create and approve on this Mac'));
 
@@ -381,11 +416,19 @@ async function main() {
     check('…with a photo under automations/photos', /^photo: automations\/photos\/researcher\.png$/m.test(callManifest), callManifest.slice(0, 300));
     check('…and the file is on disk', existsSync(join(AUTOMATIONS_DIR, 'photos', 'researcher.png')));
 
+    // An on-call agent is not an automation: it lives on the Agents page now, so its card,
+    // face and on-call reading are checked there, and the popover, Edit and Delete checks below
+    // run on the scheduled automation, the card they still belong to.
     await showRoster();
-    const callCardEl = page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Researcher' }).first();
+    await until(async () => (await page.locator('.agent-card', { hasText: 'Daily insight digest' }).count()) > 0, 10000);
+    check('the on-call agent is NOT an automation card',
+      await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Researcher' }).count() === 0);
+    const agentsRow = page.locator('.sidebar-item').filter({ has: page.locator('.sidebar-label', { hasText: /^Agents$/ }) }).first();
+    await agentsRow.click();
+    const callCardEl = page.locator('[data-agent="researcher"]').first();
+    check('…it is a card on the Agents page instead', await until(async () => (await callCardEl.count()) > 0, 10000));
     check('an on-call agent shows NO pause switch', await callCardEl.locator('.agent-switch').count() === 0);
-    check('…and reads "When you call it"', (await callCardEl.innerText()).includes('When you call it'));
-    check('its photo renders from the photo route', await callCardEl.locator('.agent-av img').count() === 1);
+    check('its photo renders from the photo route', await until(async () => (await callCardEl.locator('.agent-av img').count()) === 1, 8000));
     const photoRes = await page.evaluate(async (b) => {
       const r = await fetch(`${b}/api/automations/researcher/photo?vault=proj`);
       return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength };
@@ -393,28 +436,45 @@ async function main() {
     check('GET …/photo returns real PNG bytes', photoRes.status === 200 && photoRes.type === 'image/png' && photoRes.bytes > 100, JSON.stringify(photoRes));
     await page.screenshot({ path: join(SHOTS, '3-members.png') });
 
-    // ── 4: the profile popover ────────────────────────────────────────────
+    // ── 4: the profile: the on-call agent's on the Agents page, the popover on an automation ──
     console.log('\n═══ 4. Profile popover ═══');
-    await callCardEl.locator('.agent-card-name').click();
+    await callCardEl.click();
+    const profileEl = page.locator('[data-agent-profile="researcher"]');
+    const profiled = await until(async () => (await profileEl.count()) > 0);
+    check('clicking its Agents card opens its profile', profiled);
+    const profileText = profiled ? await profileEl.innerText() : '';
+    // The Agents page's "When you call it": the profile shows how a CALL to it runs.
+    check('…and reads as on-call: its profile shows its call settings',
+      (await profileEl.locator('[data-call-settings]').count()) === 1 && profileText.includes('How a call to this agent runs'),
+      profileText.replace(/\s+/g, ' ').slice(0, 600));
+    check('…with its model and effort', /fable|opus|sonnet|haiku/.test(profileText) && /effort|low|medium|high/i.test(profileText), profileText.slice(0, 200));
+    check('…Edit, and NO Run now', profileText.includes('Edit') && !profileText.includes('Run now'), profileText.slice(0, 200));
+    check('…and NO Pause for an on-call agent', !/Pause|Resume/.test(profileText), profileText.slice(0, 200));
+    await page.screenshot({ path: join(SHOTS, '4-agents-profile.png') });
+
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+    await page.waitForTimeout(800);
+    await showRoster();
+    const schedCardEl = page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Daily insight digest' }).first();
+    await schedCardEl.locator('.agent-card-name').click();
     const popped = await until(async () => (await page.locator('.agent-pop').count()) > 0);
     check('clicking the name opens the profile popover', popped);
     const popText = popped ? await page.locator('.agent-pop').innerText() : '';
-    check('…with the cadence, model and effort', /Runs when you call it/.test(popText) && /fable|opus|sonnet|haiku/.test(popText), popText.slice(0, 200));
+    check('…with the cadence, model and effort', /Runs /.test(popText) && /fable|opus|sonnet|haiku/.test(popText) && /effort/.test(popText), popText.slice(0, 200));
     // The popover is the surface with room to BE a document, so the markdown
     // is rendered here rather than dumped as raw syntax.
     check('…and the description rendered as real markdown, not raw syntax',
       (await page.locator('.agent-pop-desc').count()) === 1
       && !(await page.locator('.agent-pop-desc').innerText()).includes('**'));
     check('…Edit, and NO Run now', popText.includes('Edit') && !popText.includes('Run now'), popText.slice(0, 200));
-    check('…and NO Pause for an on-call agent', !/Pause|Resume/.test(popText), popText.slice(0, 200));
     await page.screenshot({ path: join(SHOTS, '4-profile-popover.png') });
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
     // ── 5: edit re-approves, and the next run uses the new prompt ─────────
     console.log('\n═══ 5. Edit ═══');
-    const approvedBefore = approvalFor('researcher');
-    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Researcher' }).first()
+    const approvedBefore = approvalFor(SCHED_SLUG);
+    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Daily insight digest' }).first()
       .locator('.agent-card-btn', { hasText: 'Edit' }).click();
     await until(async () => (await page.locator('.agent-modal').count()) > 0);
     check('the Edit dialog says "Save and re-approve on this Mac"',
@@ -422,15 +482,15 @@ async function main() {
     check('…and offers Delete', await page.locator('.agent-btn--danger').count() === 1);
     await page.locator('.agent-textarea').fill('Yeni görev: rakipleri tara ve kaynaklı brief yaz.');
     await page.locator('.agent-btn--primary').click();
-    const edited = await until(async () => manifestText('researcher').includes('Yeni görev'), 15000);
-    check('the edited prompt is on disk — the next run uses it', edited, manifestText('researcher').slice(0, 300));
+    const edited = await until(async () => manifestText(SCHED_SLUG).includes('Yeni görev'), 15000);
+    check('the edited prompt is on disk — the next run uses it', edited, manifestText(SCHED_SLUG).slice(0, 300));
     // `updateAutomation` writes the manifest, THEN `approveHere` rewrites the
     // registry — so a read taken the instant the prompt lands is a coin flip.
     const reApproved = await until(async () => {
-      const a = approvalFor('researcher');
+      const a = approvalFor(SCHED_SLUG);
       return a !== null && a.manifestSha256 !== approvedBefore?.manifestSha256;
     }, 10000);
-    const approvedAfter = approvalFor('researcher');
+    const approvedAfter = approvalFor(SCHED_SLUG);
     check('…and the changed manifest was re-approved here', reApproved,
       `before=${approvedBefore?.manifestSha256?.slice(0, 12)} after=${approvedAfter?.manifestSha256?.slice(0, 12)}`);
 
@@ -439,13 +499,13 @@ async function main() {
     // "Save and re-approve" cut a 6,700-character prompt mid-word and approved the stump.
     console.log('\n═══ 5a. A long prompt survives an edit ═══');
     const LONG = `Uzun görev. ${'Her adım ayrı bir satırda anlatılır ve hiçbiri kaybolmaz. '.repeat(25)}SON SATIR BURADA.`;
-    const researcherPath = join(AUTOMATIONS_DIR, 'researcher.md');
-    writeFileSync(researcherPath, readFileSync(researcherPath, 'utf-8')
+    const schedPath = join(AUTOMATIONS_DIR, `${SCHED_SLUG}.md`);
+    writeFileSync(schedPath, readFileSync(schedPath, 'utf-8')
       .replace('Yeni görev: rakipleri tara ve kaynaklı brief yaz.', LONG));
     check('[setup] the manifest now holds a prompt longer than the 600-character preview',
-      manifestText('researcher').includes('SON SATIR BURADA.') && LONG.length > 600);
+      manifestText(SCHED_SLUG).includes('SON SATIR BURADA.') && LONG.length > 600);
     await showRoster();
-    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Researcher' }).first()
+    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Daily insight digest' }).first()
       .locator('.agent-card-btn', { hasText: 'Edit' }).click();
     const fullLoaded = await until(async () =>
       (await page.locator('.agent-modal .agent-textarea').inputValue()).includes('SON SATIR BURADA.'), 10000);
@@ -454,7 +514,7 @@ async function main() {
     await page.locator('.agent-btn--primary').click();
     await until(async () => (await page.locator('.agent-modal').count()) === 0, 10000);
     check('…and saving it unchanged keeps the whole prompt on disk',
-      manifestText('researcher').includes('SON SATIR BURADA.'), manifestText('researcher').slice(-300));
+      manifestText(SCHED_SLUG).includes('SON SATIR BURADA.'), manifestText(SCHED_SLUG).slice(-300));
 
     // ── 5b: the details screen ────────────────────────────────────────────
     console.log('\n═══ 5b. Details screen ═══');
@@ -497,23 +557,139 @@ async function main() {
 
     // ── 7: two-click delete ───────────────────────────────────────────────
     console.log('\n═══ 7. Two-click delete ═══');
-    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Researcher' }).first()
+    await showRoster();
+    await page.locator('.agent-card:not(.agent-card--new)', { hasText: 'Daily insight digest' }).first()
       .locator('.agent-card-btn', { hasText: 'Edit' }).click();
     await until(async () => (await page.locator('.agent-modal').count()) > 0);
     const del = page.locator('.agent-btn--danger');
-    check('Delete starts unarmed', (await del.innerText()).trim() === 'Delete agent');
+    check('Delete starts unarmed', (await del.innerText()).trim() === 'Delete automation');
     await del.click();
     await page.waitForTimeout(400);
     check('the FIRST click only arms it (label changes)', (await del.innerText()).includes('Click again to delete'));
-    check('…and deletes nothing', existsSync(join(AUTOMATIONS_DIR, 'researcher.md')));
+    check('…and deletes nothing', existsSync(join(AUTOMATIONS_DIR, `${SCHED_SLUG}.md`)));
     await page.screenshot({ path: join(SHOTS, '5-delete-armed.png') });
     await del.click();
-    const gone = await until(async () => !existsSync(join(AUTOMATIONS_DIR, 'researcher.md')), 15000);
+    const gone = await until(async () => !existsSync(join(AUTOMATIONS_DIR, `${SCHED_SLUG}.md`)), 15000);
     check('the SECOND click commits: the manifest is gone', gone);
+    check('…and its cache', !existsSync(join(AUTOMATIONS_DIR, 'cache', `${SCHED_SLUG}.json`)));
+    await until(async () => (await page.locator('.agent-modal').count()) === 0, 8000);
+
+    // The on-call agent, which owns the photo, is deleted where it lives: its Agents profile,
+    // with the same two-click arming.
+    await agentsRow.click();
+    await until(async () => (await callCardEl.count()) > 0, 10000);
+    await callCardEl.click();
+    const agentDel = page.locator('[data-agent-profile="researcher"] .agp-btn--danger');
+    await until(async () => (await agentDel.count()) > 0, 8000);
+    await agentDel.click();
+    await page.waitForTimeout(400);
+    check('deleting the on-call agent from its profile: the first click only arms it',
+      (await agentDel.getAttribute('data-delete-armed')) === 'true' && existsSync(join(AUTOMATIONS_DIR, 'researcher.md')));
+    await agentDel.click();
+    const callGone = await until(async () => !existsSync(join(AUTOMATIONS_DIR, 'researcher.md')), 15000);
+    check('…the second commits: its file is gone', callGone);
     const photoGone = await until(async () => !existsSync(join(AUTOMATIONS_DIR, 'photos', 'researcher.png')), 10000);
     check('…and so is its photo', photoGone,
       photoGone ? '' : `photos dir still holds: ${existsSync(join(AUTOMATIONS_DIR, 'photos')) ? readdirSync(join(AUTOMATIONS_DIR, 'photos')).join(', ') : '(no dir)'}`);
     check('…and its cache', !existsSync(join(AUTOMATIONS_DIR, 'cache', 'researcher.json')));
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+    await page.waitForTimeout(800);
+
+    // ── 7b: a create that PICKS AN AGENT (S2) ─────────────────────────────
+    console.log('\n═══ 7b. A create picks an agent ═══');
+    await until(async () => (await page.locator('.agent-modal').count()) === 0, 8000);
+    const scout = await page.evaluate(async (b) => {
+      const r = await fetch(`${b}/api/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Dreamcontext-Vault': 'proj' },
+        body: JSON.stringify({ title: 'Scout', prompt: 'You read the project and report what changed, briefly.' }),
+      });
+      return { status: r.status, body: await r.json() };
+    }, base);
+    check('[setup] POST /api/agents made the agent "scout"', scout.status === 200 && scout.body?.agent?.slug === 'scout', JSON.stringify(scout.body).slice(0, 200));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    await dismissOverlays();
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+    await page.waitForTimeout(800);
+    await page.locator('.agents-new-btn').click();
+    await until(async () => (await page.locator('.agent-modal .automation-agent-select option[value="scout"]').count()) > 0, 10000);
+    await page.locator('.automation-agent-select').selectOption('scout');
+    await page.waitForTimeout(300);
+    check('[S2] picking an agent shows its face beside the picker',
+      await page.locator('.agent-modal .automation-agent-row .agent-av').count() === 1);
+    check('[S2] …and hides the identity fields (no photo presets, no model, no on-call chip)',
+      await page.locator('.agent-modal .agent-preset').count() === 0
+      && await page.locator('.agent-modal .agent-row3').count() === 0
+      && await page.locator('.agent-modal .agent-chip', { hasText: 'Only when I call it' }).count() === 0);
+    const jobLabel = await page.locator('.agent-modal .agent-label', { hasText: 'Job' }).count();
+    check('[S2] …and asks for a Job', jobLabel === 1);
+    await page.locator('.agent-modal .agent-input').first().fill('Morning scout');
+    await page.locator('.agent-modal .agent-textarea').first().fill('Every morning, list what changed in the brain yesterday.');
+
+    // The 409 first, through a mocked refusal: the notice must appear IN the dialog, with a
+    // link that opens that agent on the Agents page.
+    await page.route(/\/api\/automations(\?|$)/, (route) => (route.request().method() === 'POST'
+      ? route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'agent_unapproved', message: 'Scout is not approved on this machine.' }) })
+      : route.continue()));
+    await page.locator('.agent-btn--primary').click();
+    const refused = await until(async () => (await page.locator('.agent-modal .automation-agent-refused').count()) > 0, 8000);
+    check('[S2] a 409 agent_unapproved is shown in place, in the dialog', refused
+      && (await page.locator('.agent-modal .automation-agent-refused').innerText()).includes('Scout'));
+    await page.screenshot({ path: join(SHOTS, '7b-agent-unapproved.png') });
+    await page.unroute(/\/api\/automations(\?|$)/);
+    // Re-picking clears the refusal; the real save follows.
+    await page.locator('.automation-agent-select').selectOption('__own__');
+    await page.locator('.automation-agent-select').selectOption('scout');
+    await page.waitForTimeout(300);
+    await page.locator('.agent-modal .agent-input').first().fill('Morning scout');
+    await page.locator('.agent-modal .agent-textarea').first().fill('Every morning, list what changed in the brain yesterday.');
+    await page.screenshot({ path: join(SHOTS, '7b-agent-picked.png') });
+    await page.locator('.agent-btn--primary').click();
+    const bound = await until(async () => /^agent: ['"]?scout['"]?$/m.test(manifestText('morning-scout')), 15000);
+    check('[S2] the create sends agent + job: the automation file says agent: scout', bound, manifestText('morning-scout').slice(0, 300));
+    check('[S2] …and carries the job', manifestText('morning-scout').includes('list what changed in the brain yesterday'));
+    await showRoster();
+    const scoutCard = page.locator('.agent-card', { hasText: 'Morning scout' }).first();
+    const scoutCardShown = await until(async () => (await scoutCard.count()) > 0, 10000);
+    check('[S2] the card names the agent it runs as', scoutCardShown && (await scoutCard.innerText()).includes('Runs as Scout'));
+    check('[S2] …and wears the agent\'s face (initials of Scout, not of Morning scout)',
+      scoutCardShown && (await scoutCard.locator('.agent-av').first().innerText()).trim() === 'S');
+
+    // The refusal's link: an agent the roster reports as not approved for chat (the roster
+    // answer rewritten in flight, before the dialog's own read) shows the notice before saving,
+    // and the link opens that agent on the Agents page.
+    await page.route(/\/api\/agents(\?|$)/, async (route) => {
+      const res = await route.fetch();
+      const json = await res.json();
+      for (const a of json.agents ?? []) if (a.slug === 'scout') a.approvedForChat = false;
+      await route.fulfill({ response: res, json });
+    });
+    // A fresh load, so the roster is really READ through the rewrite: the copy cached a moment
+    // ago (the bound create above) is inside the query client's 5 s staleTime and would be
+    // served without a request, leaving the mock unread.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    await dismissOverlays();
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+    await page.waitForTimeout(800);
+    await page.locator('.agents-new-btn').click();
+    await until(async () => (await page.locator('.agent-modal .automation-agent-select option[value="scout"]').count()) > 0, 10000);
+    await page.locator('.automation-agent-select').selectOption('scout');
+    const notice = await until(async () => (await page.locator('.agent-modal .automation-agent-refused').count()) > 0, 8000);
+    check('[S2] an agent not approved for chat shows the notice before saving, and Save waits',
+      notice && await page.locator('.agent-btn--primary').isDisabled());
+    if (notice) {
+      await page.locator('.automation-agent-link').first().click();
+      const toAgent = await until(async () => {
+        const active = await page.locator('.sidebar-item[aria-current="page"]').first().innerText().catch(() => '');
+        return /Agents/.test(active) && !/Automations/.test(active);
+      }, 8000);
+      check('[S2] …and its link opens that agent on the Agents page', toAgent && (await page.locator('.agent-modal').count()) === 0);
+    }
+    await page.unroute(/\/api\/agents(\?|$)/);
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
+    await page.waitForTimeout(800);
 
     // ── 8: the Messages tab ───────────────────────────────────────────────
     // Step 2 replaced this tab's placeholder with the real feed. What step 1

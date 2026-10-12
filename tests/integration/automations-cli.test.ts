@@ -77,6 +77,10 @@ function run(args: string[], cwd: string, home: string, extraEnv: Record<string,
   delete inherited[AGENT_SELF_ENV];
   delete inherited[AGENT_BOARD_ENV];
   delete inherited[AGENT_SCRATCH_ENV];
+  // And the self-approval guard's vars: run from a Claude session (or an agent
+  // run), `approve` would be refused for a reason no test asked for.
+  delete inherited.CLAUDECODE;
+  delete inherited.DREAMCONTEXT_AUTOMATION_RUN;
   try {
     const stdout = execFileSync(process.execPath, [CLI, ...args], {
       cwd,
@@ -376,7 +380,9 @@ describe('automations CLI (integration)', () => {
     // so a manifest written before the block existed still hashes identically.
     // 9 → 10 with `whiteboard`: a board agent's home board decides its whole
     // permission envelope, so confining, moving or unconfining it must re-approve.
-    expect(APPROVAL_DIFF_FIELDS.length).toBe(10);
+    // 10 → 11 with `job`: an automation's `## Job` is what it asks of its agent
+    // on top of the agent's prompt, appended LAST and omitted when empty.
+    expect(APPROVAL_DIFF_FIELDS.length).toBe(11);
     for (const field of APPROVAL_DIFF_FIELDS) {
       expect(yesOut.stdout).toContain(field);
     }

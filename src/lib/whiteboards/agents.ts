@@ -1,4 +1,4 @@
-import { getAutomation } from '../automations/store.js';
+import { getAgent } from '../agents/store.js';
 import { WhiteboardCorruptError, WhiteboardNotFoundError } from './errors.js';
 import { liveElements } from './ops.js';
 import { readWhiteboard } from './store.js';
@@ -12,14 +12,14 @@ import { widgetPayloadOf, type WhiteboardElement } from './widgets.js';
 export interface BoardAgent {
   /** The card's element id. */
   id: string;
-  /** The automation slug the card points at. */
+  /** The agent slug the card points at. */
   slug: string;
   /** The agent's title, else the card's stamped title, else the slug. */
   title: string;
   /** The agent's manifest names THIS board as its home (`whiteboard: <board>`): it acts only
    *  here. False for an agent that is only attached. */
   home: boolean;
-  /** No manifest by that slug: the card stays on the board and says so. */
+  /** No agent by that slug: the card stays on the board and says so. */
   missing: boolean;
 }
 
@@ -29,13 +29,14 @@ export function agentsOnElements(contextRoot: string, board: string, elements: r
   for (const el of liveElements(elements)) {
     const dc = widgetPayloadOf(el);
     if (dc?.kind !== 'agent' || !dc.ref) continue;
-    const manifest = getAutomation(contextRoot, dc.ref);
+    // A card is an AGENT: its title and home board are the agent's own, never a same-slug job's.
+    const agent = getAgent(contextRoot, dc.ref);
     out.push({
       id: el.id,
       slug: dc.ref,
-      title: manifest?.title || dc.title || dc.ref,
-      home: manifest?.whiteboard === board,
-      missing: !manifest,
+      title: agent?.title || dc.title || dc.ref,
+      home: agent?.whiteboard === board,
+      missing: !agent,
     });
   }
   return out;

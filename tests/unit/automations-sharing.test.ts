@@ -259,3 +259,73 @@ describe('input guards', () => {
     expect(() => unshareAutomation(contextRoot, '   ')).toThrow();
   });
 });
+
+// ─── Agents: their own block and ordering check ─────────────────────────────
+
+import * as agentSharing from '../../src/lib/automations/sharing.js';
+import * as agentTypes from '../../src/lib/agents/types.js';
+
+describe('agent sharing (its own .gitignore block)', () => {
+  let agentProj: string;
+  let agentCtx: string;
+
+  beforeEach(() => {
+    agentProj = mkdtempSync(join(tmpdir(), 'dc-agent-share-'));
+    agentCtx = join(agentProj, '_dream_context');
+    mkdirSync(agentCtx, { recursive: true });
+    writeFileSync(join(agentCtx, '.gitignore'), `${agentTypes.AGENTS_GITIGNORE_ENTRIES.join('\n')}\n`);
+    writeFileSync(join(agentProj, '.gitignore'), `${agentTypes.AGENTS_GITIGNORE_ENTRIES_ROOT.join('\n')}\n`);
+  });
+
+  afterEach(() => {
+    rmSync(agentProj, { recursive: true, force: true });
+  });
+
+  it('shareAgent appends an EFFECTIVE negation to both files, and listSharedAgentSlugs reports it', () => {
+    agentSharing.shareAgent(agentCtx, 'scout');
+    expect(readFileSync(join(agentCtx, '.gitignore'), 'utf-8')).toContain('!agents/scout.md');
+    expect(readFileSync(join(agentProj, '.gitignore'), 'utf-8')).toContain('!_dream_context/agents/scout.md');
+    expect(agentSharing.listSharedAgentSlugs(agentCtx)).toEqual(['scout']);
+    expect(agentSharing.assertAgentShareOrdering(agentCtx).ok).toBe(true);
+  });
+
+  it('the agents ordering check catches a negation above its wildcard (which shareOrderingProblems never would), and shareAgent repairs it', () => {
+    writeFileSync(join(agentCtx, '.gitignore'), '!agents/old.md\nagents/*.md\n');
+    expect(agentSharing.assertAgentShareOrdering(agentCtx).ok).toBe(false);
+    expect(agentSharing.listSharedAgentSlugs(agentCtx)).toEqual([]);
+    const r = agentSharing.shareAgent(agentCtx, 'scout');
+    expect(r.repairedOrdering).toBe(true);
+    expect(agentSharing.listSharedAgentSlugs(agentCtx)).toEqual(['old', 'scout']);
+  });
+
+  it('unshareAgent removes the negation from both files', () => {
+    agentSharing.shareAgent(agentCtx, 'scout');
+    agentSharing.unshareAgent(agentCtx, 'scout');
+    expect(agentSharing.listSharedAgentSlugs(agentCtx)).toEqual([]);
+    expect(readFileSync(join(agentProj, '.gitignore'), 'utf-8')).not.toContain('scout');
+  });
+
+  it('sharing an automation shares the agent it runs as', () => {
+    agentSharing.shareAutomation(agentCtx, 'scout-daily', { agent: 'scout' });
+    expect(agentSharing.listSharedSlugs(agentCtx)).toContain('scout-daily');
+    expect(agentSharing.listSharedAgentSlugs(agentCtx)).toEqual(['scout']);
+  });
+
+  it('git really publishes a shared agent and keeps a private one out', () => {
+    execFileSync('git', ['init', '-q'], { cwd: agentProj });
+    mkdirSync(join(agentCtx, 'agents'), { recursive: true });
+    writeFileSync(join(agentCtx, 'agents', 'scout.md'), 'x');
+    writeFileSync(join(agentCtx, 'agents', 'secret.md'), 'x');
+    agentSharing.shareAgent(agentCtx, 'scout');
+    const ignored = (rel: string) => {
+      try {
+        execFileSync('git', ['check-ignore', '-q', rel], { cwd: agentProj });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(ignored('_dream_context/agents/scout.md')).toBe(false);
+    expect(ignored('_dream_context/agents/secret.md')).toBe(true);
+  });
+});

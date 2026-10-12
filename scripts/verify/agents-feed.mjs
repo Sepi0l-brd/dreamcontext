@@ -48,6 +48,17 @@ import {
   STRONG_RGB, strongFills, textLadder,
 } from './lib/measure.mjs';
 
+/** process.env minus what makes the CLI believe it runs inside a Claude session or an agent
+ *  run: `approve` refuses there by design (A12), and the gate may itself run inside one. */
+function hostEnv() {
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) {
+    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_')
+      || k === 'DREAMCONTEXT_AGENT_SELF' || k === 'DREAMCONTEXT_AUTOMATION_RUN') delete env[k];
+  }
+  return env;
+}
+
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DIST_INDEX = distIndex(REPO);
 
@@ -83,7 +94,7 @@ const freePort = () => new Promise((res, rej) => {
 
 function cli(args, opts = {}) {
   const r = spawnSync(process.execPath, [DIST_INDEX, ...args], {
-    cwd: PROJ, env: { ...process.env, HOME }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME }, encoding: 'utf-8',
   });
   if (r.status !== 0 && !opts.allowFail) {
     throw new Error(`cli ${args.join(' ')} failed: ${r.stderr || r.stdout}`);
@@ -101,6 +112,7 @@ function cli(args, opts = {}) {
  */
 const STANDIN = `#!${process.execPath}
 import { spawnSync } from 'node:child_process';
+
 const slug = process.env.DREAMCONTEXT_AUTOMATION_SLUG || '';
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
 
@@ -240,7 +252,7 @@ function seed() {
 async function startServer(port) {
   const PATH = [join(HOME, '.local', 'bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin', dirname(process.execPath)].join(':');
   const srv = spawn(process.execPath, [DIST_INDEX, 'dashboard', '--no-open', '-p', String(port)], {
-    cwd: PROJ, env: { ...process.env, HOME, PATH, DREAMCONTEXT_DESKTOP: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: PROJ, env: { ...hostEnv(), HOME, PATH, DREAMCONTEXT_DESKTOP: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -255,7 +267,7 @@ async function startServer(port) {
 function runAgent(slug) {
   const PATH = [join(HOME, '.local', 'bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin', dirname(process.execPath)].join(':');
   return spawnSync(process.execPath, [DIST_INDEX, 'automations', 'run', slug, '--force'], {
-    cwd: PROJ, env: { ...process.env, HOME, PATH }, encoding: 'utf-8',
+    cwd: PROJ, env: { ...hostEnv(), HOME, PATH }, encoding: 'utf-8',
   });
 }
 
@@ -581,11 +593,12 @@ async function main() {
     // file. The refusal has to stop the clear from running at all.
     check('…and so is the attachment, which a text-only restore would have dropped',
       await chip.count() === 1, `chips left: ${await chip.count()}`);
-    // AND IT SURVIVES A VIEW SWITCH. The Messages/Agents toggle unmounts the feed — so does
+    // AND IT SURVIVES A VIEW SWITCH. The Messages/Automations toggle unmounts the feed — so does
     // clicking an agent's name in any message — and the chips are keyed by channel, not by
     // component, precisely so a glance at the roster does not throw away a file you just
     // attached. The bucket is dropped when the PAGE goes, not when the feed remounts.
-    await page.locator('.agents-switch-opt', { hasText: 'Agents' }).first().click();
+    // (The roster tab reads "Automations" since agents got their own page.)
+    await page.locator('.agents-switch-opt', { hasText: 'Automations' }).first().click();
     await page.locator('.agents-switch-opt', { hasText: 'Messages' }).first().click();
     check('a staged attachment survives a trip to the roster and back',
       await until(async () => (await chip.count()) === 1, 5000), `chips: ${await chip.count()}`);

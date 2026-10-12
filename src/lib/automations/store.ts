@@ -1,12 +1,31 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import matter from 'gray-matter';
 import { defaultGitTrackedCheck, type GitTrackedCheck } from '../git-tracked.js';
 import { basename, dirname, join, normalize, resolve, sep } from 'node:path';
 import fg from 'fast-glob';
-import { readFrontmatter, writeFrontmatter, updateFrontmatterFields } from '../frontmatter.js';
 import { generateId } from '../id.js';
 import { ensureGitignoreEntries } from '../gitignore.js';
 import { formatSchedule, parseScheduleDetailed, parseSlot, serializeSchedule, serializeSlot } from './schedule.js';
 import { isValidWhiteboardSlug } from '../whiteboards/validate.js';
+import {
+  agentKeyOf,
+  classifyAutomationSlot,
+  isSafeAutomationSlug,
+  parseManifestFrontmatter,
+  slotFromFrontmatter,
+} from '../agents/slot.js';
+import { composeRun, legacyPair } from '../agents/compose.js';
+import {
+  agentCallTarget,
+  agentPath,
+  getAgent,
+  listAgentTargets,
+  placeholderAgent,
+  recordAgentLesson,
+  updateAgent,
+} from '../agents/store.js';
+import { approveAutomation, approvePair } from './registry.js';
 import {
   AutomationError,
   AUTOMATIONS_GITIGNORE_ENTRIES,
@@ -37,12 +56,13 @@ import {
   PATTERN_LESSONS_HEADING,
   PATTERN_PLAYBOOK_MAX_CHARS,
   PATTERN_SECTION_MAX_CHARS,
-  RESERVED_SLUGS,
   REVIEW_MODES,
   sharedSlugNegations,
   type AutomationCache,
+  type AutomationJob,
   type AutomationManifest,
   type AutomationMode,
+  type RunKind,
   type AutomationPattern,
   type EffortLevel,
   type FlowGraph,
@@ -92,20 +112,66 @@ export function sidecarPathFor(contextRoot: string, slug: string): string {
   return join(automationCacheDir(contextRoot), `.${slug}.run.json`);
 }
 
-/** Kebab-case, path-safe automation slug (lab's rule, plus the reserved
- *  sibling-directory names `cache`/`output` — manifests are flat, so a slug
- *  shares a namespace with those directories). */
-export function isSafeAutomationSlug(slug: string): boolean {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return false;
-  if (slug.includes('--')) return false;
-  if (slug.endsWith('-')) return false;
-  if ((RESERVED_SLUGS as readonly string[]).includes(slug)) return false;
-  return true;
+/** `isSafeAutomationSlug` lives in `../agents/slot.ts` (the approval registry
+ *  needs it and must not import this module); re-exported here so every
+ *  existing importer keeps working. */
+export { isSafeAutomationSlug };
+
+// ─── Manifest file writes: never through a symlink, never half-written ──────
+//
+// A manifest is synced markdown a teammate can replace with anything, a symlink
+// included. Writing through `writeFileSync(path)` would follow such a link and
+// rewrite whatever it points at, so every manifest write here checks the path
+// with `lstat` first and lands through a temp file + rename (an existing file)
+// or an exclusive create (a new one). The same helpers serve agent files.
+
+/** Throws unless `path` is a regular file (not a symlink, not a directory). */
+export function assertRegularFile(path: string): void {
+  const st = lstatSync(path);
+  if (st.isSymbolicLink() || !st.isFile()) {
+    throw new AutomationError(`Refusing to touch ${basename(path)}: it is not a regular file (a symlink or a folder).`);
+  }
+}
+
+/** True when anything at all sits at `path`, a dangling symlink included
+ *  (`existsSync` follows links and calls a dangling one absent). */
+export function pathOccupied(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    // ENOENT (or an unreadable parent): nothing we could write over.
+    return false;
+  }
+}
+
+/** Replace an EXISTING manifest file's text: lstat-checked, then temp + rename,
+ *  so a reader never sees half a file and a symlink is never followed. */
+export function rewriteManifestText(path: string, text: string): void {
+  assertRegularFile(path);
+  const tmp = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+  writeFileSync(tmp, text, 'utf-8');
+  renameSync(tmp, path);
+}
+
+/** Create a NEW manifest file exclusively: fails if anything (a dangling
+ *  symlink included) already sits at the path. */
+export function createManifestText(path: string, text: string): void {
+  writeFileSync(path, text, { encoding: 'utf-8', flag: 'wx' });
+}
+
+/** Merge `fields` into a manifest's frontmatter, leaving the body untouched.
+ *  Byte-for-byte the same output `updateFrontmatterFields` produced, through
+ *  the guarded write above. */
+export function patchManifestFrontmatter(path: string, fields: Record<string, unknown>): void {
+  assertRegularFile(path);
+  const { data, content } = parseManifestFrontmatter(readFileSync(path, 'utf-8'));
+  rewriteManifestText(path, matter.stringify(content, { ...data, ...fields }));
 }
 
 // ─── Internal lenient-parse helpers ─────────────────────────────────────────
 
-function strOrNull(v: unknown): string | null {
+export function strOrNull(v: unknown): string | null {
   if (v === undefined || v === null) return null;
   const s = String(v).trim();
   return s === '' || s === 'null' ? null : s;
@@ -129,7 +195,7 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 /** Missing/non-finite/non-positive ⇒ `def`; otherwise clamped to [min, max]. */
-function numberOrDefault(v: unknown, def: number, min: number, max: number): number {
+export function numberOrDefault(v: unknown, def: number, min: number, max: number): number {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return def;
   return clamp(n, min, max);
@@ -283,12 +349,11 @@ export function renderFlowSection(graph: FlowGraph): string {
  *  outside it — see {@link upsertSection}. Never touches frontmatter, so it
  *  cannot disturb a field the approval hash covers other than `flow` itself. */
 export function writeFlowSection(contextRoot: string, slug: string, graph: FlowGraph): AutomationManifest {
-  const manifest = getAutomation(contextRoot, slug);
+  const manifest = automationFileTarget(contextRoot, slug);
   if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
-  writeFileSync(
+  rewriteManifestText(
     manifest.path,
     upsertSection(readFileSync(manifest.path, 'utf-8'), FLOW_HEADING, renderFlowSection(graph)),
-    'utf-8',
   );
   return readAutomationFile(manifest.path);
 }
@@ -544,15 +609,90 @@ export function cadenceLabel(m: Pick<AutomationManifest, 'mode' | 'schedule' | '
 
 // ─── Manifest read ───────────────────────────────────────────────────────────
 
+/**
+ * What an `automations/<slug>.md` file holds, before any composition:
+ *  - `legacy` — an unsplit manifest (no `agent:` key). It is its own agent, and
+ *               reads exactly as every manifest always has.
+ *  - `bound`  — a split automation (`agent: <slug>`): only the job, which
+ *               {@link readAutomationFile} joins to its agent.
+ *
+ * THROWS for a symlink, a non-file, unparseable YAML, or an `agent:` key that is
+ * present but not a safe slug — every caller that lists or looks up manifests
+ * already skips a manifest that throws, so a symlinked or broken file is skipped
+ * uniformly, legacy or new.
+ */
+export type ManifestParts =
+  | { kind: 'legacy'; legacy: AutomationManifest }
+  | { kind: 'bound'; job: AutomationJob };
+
+export function readManifestParts(filePath: string): ManifestParts {
+  assertRegularFile(filePath);
+  const { data, content } = parseManifestFrontmatter(readFileSync(filePath, 'utf-8'));
+  const key = agentKeyOf(data);
+  if (key.kind === 'invalid') {
+    throw new AutomationError(`${basename(filePath)} names an agent that is not a valid agent slug.`);
+  }
+  const legacy = legacyManifestFrom(filePath, data, content);
+  if (key.kind === 'none') return { kind: 'legacy', legacy };
+  return {
+    kind: 'bound',
+    job: {
+      slug: legacy.slug,
+      id: legacy.id,
+      title: legacy.title,
+      agent: key.slug,
+      mode: legacy.mode,
+      enabled: legacy.enabled,
+      schedule: legacy.schedule,
+      scheduleError: legacy.scheduleError ?? null,
+      timeoutMinutes: legacy.timeoutMinutes,
+      catchupHours: legacy.catchupHours,
+      outputDir: legacy.outputDir,
+      shared: legacy.shared,
+      notify: legacy.notify,
+      review: legacy.review,
+      outputInstructions: legacy.outputInstructions,
+      job: extractSection(content, JOB_HEADING),
+      flow: legacy.flow,
+      path: legacy.path,
+      body: legacy.body,
+    },
+  };
+}
+
+/** The `## Job` heading of a split automation. */
+export const JOB_HEADING = 'Job';
+
+/**
+ * Read one automation file as its RUN TARGET.
+ *
+ * A legacy file reads exactly as before the agent split. A split (bound) file
+ * is joined to its agent (`agents/<slug>.md`, or the legacy file that still
+ * holds it): identity from the agent, everything else from the job. A `## Prompt`
+ * or `## Pattern` left inside a bound file (an older CLI writing back) is
+ * IGNORED — the agent file wins.
+ *
+ * An agent that is missing on this machine (a shared automation whose private
+ * agent never arrived) composes from an empty placeholder identity: the hash
+ * then matches nothing, so the target is blocked rather than hidden, and a
+ * caller can name the reason with `getAgent(contextRoot, m.agent) === null`.
+ */
 export function readAutomationFile(filePath: string): AutomationManifest {
-  const { data, content } = readFrontmatter<Record<string, unknown>>(filePath);
+  const parts = readManifestParts(filePath);
+  if (parts.kind === 'legacy') return parts.legacy;
+  const contextRoot = dirname(dirname(filePath));
+  return composeRun(getAgent(contextRoot, parts.job.agent) ?? placeholderAgent(parts.job.agent), parts.job);
+}
+
+function legacyManifestFrom(filePath: string, data: Record<string, unknown>, content: string): AutomationManifest {
   const slug = basename(filePath, '.md');
+  const title = typeof data.title === 'string' && data.title.trim() ? data.title : slug;
   const output = asRecord(data.output);
   const parsedSchedule = parseScheduleDetailed(data.schedule);
   return {
     slug,
     id: typeof data.id === 'string' && data.id.trim() ? data.id : '',
-    title: typeof data.title === 'string' && data.title.trim() ? data.title : slug,
+    title,
     // Lenient toward 'sched' — every manifest written before this field
     // existed is scheduled, and reading a missing value as 'call' would
     // silently stop all of them. See AutomationMode's doc comment.
@@ -610,6 +750,18 @@ export function readAutomationFile(filePath: string): AutomationManifest {
     // slug: dropping a bad value would silently unscope the agent, keeping it
     // means the spawn path refuses it (no such board) and fails closed.
     whiteboard: typeof data.whiteboard === 'string' && data.whiteboard.trim() ? data.whiteboard.trim() : null,
+    // Every file read here is an AUTOMATION run target, exactly as before the
+    // agent split; a legacy manifest is its own agent and has no `## Job`. Only
+    // the store composes an agent's call target (with real bindings and a
+    // classified `legacyKey`). `legacyKey` is set from this file's own slot —
+    // the same predicate the registry classifies with — although the registry
+    // reads it only on an agent's call target.
+    runKind: 'automation',
+    agent: slug,
+    agentTitle: title,
+    job: '',
+    bindings: [],
+    legacyKey: slotFromFrontmatter(data) === 'legacy-call',
     path: filePath,
     body: content.trim(),
   };
@@ -705,15 +857,41 @@ export interface RecordLessonInput {
  * a run recording what it learned must never be able to block itself.
  */
 export function recordLesson(contextRoot: string, slug: string, input: RecordLessonInput): AutomationManifest {
-  const manifest = getAutomation(contextRoot, slug);
-  if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
+  if (!isSafeAutomationSlug(slug)) throw new AutomationError(`No such automation: ${slug}`);
+  const path = automationPath(contextRoot, slug);
+  if (!pathOccupied(path)) {
+    // An agent with no automation of its own (its call target): the pattern is
+    // the agent's, so a call run's `automations learn <slug>` lands there.
+    if (!getAgent(contextRoot, slug)) throw new AutomationError(`No such automation: ${slug}`);
+    recordAgentLesson(contextRoot, slug, input);
+    const target = getRunTarget(contextRoot, slug, 'agent');
+    if (!target) throw new AutomationError(`No such automation: ${slug}`);
+    return target;
+  }
+  const parts = readManifestParts(path);
+  if (parts.kind === 'bound') {
+    // The pattern is identity: every automation of one agent teaches the same agent.
+    recordAgentLesson(contextRoot, parts.job.agent, input);
+    return readAutomationFile(path);
+  }
+  writeLessonToFile(path, parts.legacy.pattern, input);
+  return readAutomationFile(path);
+}
+
+/**
+ * Append a lesson (and/or rewrite the playbook) to the `## Pattern` section of
+ * ONE file — a legacy manifest or an agent file, which share the section's
+ * format. `currentPattern` is the section as read. Byte-surgical outside the
+ * section ({@link upsertSection}), through the guarded write.
+ */
+export function writeLessonToFile(path: string, currentPattern: string, input: RecordLessonInput): void {
   const lesson = input.lesson?.trim();
   const playbook = input.playbook?.trim();
   if (!lesson && playbook === undefined) {
     throw new AutomationError('Nothing to record — pass a lesson, a playbook, or both.');
   }
 
-  const current = parsePattern(manifest.pattern);
+  const current = parsePattern(currentPattern);
   const next: AutomationPattern = {
     playbook: playbook === undefined ? current.playbook : playbook,
     lessons: lesson
@@ -721,8 +899,7 @@ export function recordLesson(contextRoot: string, slug: string, input: RecordLes
       : current.lessons,
   };
 
-  writeFileSync(manifest.path, upsertSection(readFileSync(manifest.path, 'utf-8'), PATTERN_HEADING, renderPattern(next)), 'utf-8');
-  return readAutomationFile(manifest.path);
+  rewriteManifestText(path, upsertSection(readFileSync(path, 'utf-8'), PATTERN_HEADING, renderPattern(next)));
 }
 
 /** `YYYY-MM-DD` in LOCAL time — schedules are machine-local wall-clock, so a
@@ -769,29 +946,128 @@ export function upsertSection(raw: string, heading: string, body: string): strin
   return [...lines.slice(0, startIdx), ...block, ...tail].join('\n');
 }
 
-/** All automations, sorted by slug (stable). Missing directory ⇒ empty list. */
-export function listAutomations(contextRoot: string): AutomationManifest[] {
-  const dir = automationsDir(contextRoot);
-  if (!existsSync(dir)) return [];
-  const files = fg.sync('*.md', { cwd: dir, absolute: true }).sort();
+/** Every readable `automations/*.md` file as its run target, sorted by slug.
+ *  A symlinked, broken or unparseable manifest is skipped. */
+export function listAutomationFileTargets(contextRoot: string): AutomationManifest[] {
   const out: AutomationManifest[] = [];
-  for (const file of files) {
+  for (const file of listManifestFiles(contextRoot)) {
     try {
       out.push(readAutomationFile(file));
     } catch {
-      // skip a manifest that won't even parse as frontmatter
+      // skip a manifest that won't parse, is a symlink, or names a bad agent
     }
   }
   return out;
 }
 
+/** Absolute paths of `automations/*.md`, sorted. Missing directory ⇒ empty. */
+export function listManifestFiles(contextRoot: string): string[] {
+  const dir = automationsDir(contextRoot);
+  if (!existsSync(dir)) return [];
+  return fg.sync('*.md', { cwd: dir, absolute: true }).sort();
+}
+
+/**
+ * Every RUN TARGET, sorted by slug (stable). Missing directory ⇒ empty list.
+ *
+ * Each automation file, plus the call target of every agent that has no file in
+ * the automation slot of its own slug — the agents you only call. On a vault
+ * with no `agents/` folder that second half is empty, so this is exactly the
+ * list it always was.
+ */
+export function listAutomations(contextRoot: string): AutomationManifest[] {
+  const out = listAutomationFileTargets(contextRoot);
+  if (!existsSync(join(contextRoot, 'agents'))) return out;
+  for (const target of listAgentTargets(contextRoot)) {
+    if (classifyAutomationSlot(contextRoot, target.slug) === 'absent') out.push(target);
+  }
+  return out.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+}
+
+/**
+ * The run target named `slug`: its automation file when one sits in the slot
+ * (the file, never a fallback, even when that file is unreadable), else the
+ * call target of an agent with no file of its own.
+ */
 export function getAutomation(contextRoot: string, slug: string): AutomationManifest | null {
+  if (!isSafeAutomationSlug(slug)) return null;
   const path = automationPath(contextRoot, slug);
-  if (!isSafeAutomationSlug(slug) || !existsSync(path)) return null;
+  if (!pathOccupied(path)) return getRunTarget(contextRoot, slug, 'agent');
   try {
     return readAutomationFile(path);
   } catch {
     return null;
+  }
+}
+
+/**
+ * THE way to get a run target for an approval check.
+ *
+ *  - `'automation'`: the automation file in the slot, as its run target, or null.
+ *  - `'agent'`: the agent's CALL TARGET, with `legacyKey` set from the slot
+ *    (true exactly when it is absent or an unsplit on-call file) and `bindings`
+ *    filled with the current composed hash of every automation bound to the
+ *    agent — both computed from the SAME resolved agent object the target is
+ *    built from. A target built any other way carries `legacyKey: false` and
+ *    no bindings, and silently loses the approvals that depend on them.
+ */
+export function getRunTarget(contextRoot: string, slug: string, kind: RunKind): AutomationManifest | null {
+  if (!isSafeAutomationSlug(slug)) return null;
+  if (kind === 'agent') {
+    const agent = getAgent(contextRoot, slug);
+    return agent ? agentCallTarget(contextRoot, agent) : null;
+  }
+  const path = automationPath(contextRoot, slug);
+  if (!pathOccupied(path)) return null;
+  try {
+    const m = readAutomationFile(path);
+    return m.runKind === 'automation' ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The automation FILE in the slot as its run target — never an agent's call
+ *  target. Every automation write path resolves through this, so a write meant
+ *  for an automation can never land in an agent file. */
+export function automationFileTarget(contextRoot: string, slug: string): AutomationManifest | null {
+  return getRunTarget(contextRoot, slug, 'automation');
+}
+
+/**
+ * Every JOB, sorted by slug: each split automation, and the job half of each
+ * unsplit scheduled manifest. An unsplit on-call manifest is an agent, not a
+ * job, so it is not here.
+ */
+export function listAutomationJobs(contextRoot: string): AutomationJob[] {
+  const out: AutomationJob[] = [];
+  for (const file of listManifestFiles(contextRoot)) {
+    try {
+      const parts = readManifestParts(file);
+      if (parts.kind === 'bound') out.push(parts.job);
+      else if (parts.legacy.mode !== 'call') {
+        const { job } = legacyPair(parts.legacy);
+        if (job) out.push(job);
+      }
+    } catch {
+      // skipped, as listAutomations skips it
+    }
+  }
+  return out;
+}
+
+/** Section names a split automation file carries that the agent file owns
+ *  (`## Prompt`, `## Pattern`) — written back by an older CLI. Ignored on
+ *  read; `doctor` reports them. Empty for a legacy file. */
+export function strayIdentitySections(contextRoot: string, slug: string): string[] {
+  try {
+    const path = automationPath(contextRoot, slug);
+    const parts = readManifestParts(path);
+    if (parts.kind !== 'bound') return [];
+    const { content } = parseManifestFrontmatter(readFileSync(path, 'utf-8'));
+    return ['Prompt', PATTERN_HEADING].filter((h) => content.split('\n').some((l) => l.trim() === `## ${h}`));
+  } catch {
+    return [];
   }
 }
 
@@ -941,6 +1217,7 @@ export function readRunSidecar(contextRoot: string, slug: string): RunSidecar | 
       fireAt: r.fireAt,
       startedAt: r.startedAt,
       timeoutAt: r.timeoutAt,
+      ...(r.target === 'agent' ? { target: 'agent' as const } : {}),
     };
   } catch {
     return null;
@@ -961,6 +1238,17 @@ export function clearRunSidecar(contextRoot: string, slug: string): void {
 export interface CreateAutomationInput {
   slug: string;
   title: string;
+  /** The agent this automation runs as. Omitted ⇒ an unsplit (legacy-format)
+   *  manifest that is its own agent, exactly as every create wrote before the
+   *  agent split. Given ⇒ a split automation file (`agent: <slug>`) carrying
+   *  only the job; the agent must exist, and the automation may share a slug
+   *  only with the agent it is bound to. Identity fields in this input (prompt,
+   *  model, effort, learning, whiteboard, photo) are then ignored: they are the
+   *  agent's. */
+  agent?: string;
+  /** The `## Job` section of a split automation: what it asks of its agent on
+   *  top of the agent's own prompt. Ignored without `agent`. */
+  job?: string;
   /** Omitted ⇒ `'sched'`, which is what every automation was before this field
    *  existed. `'call'` makes `days`/`at` irrelevant: the manifest is written
    *  with `schedule: null` and the dispatcher never evaluates it. */
@@ -1173,12 +1461,93 @@ function ensureAutomationsGitignore(contextRoot: string, slug: string): void {
  * `outputDir` containment (`resolveOutputDir`, defined in this file, since it
  * needs `contextRoot`) → the governing `.gitignore` entries.
  */
-export function createAutomation(contextRoot: string, i: CreateAutomationInput): AutomationManifest {
+/** How `createAutomation` approves what it created, when asked to. */
+export interface CreateAutomationOptions {
+  /** Approve the new automation on THIS machine (the local author is
+   *  consenting). For a same-slug pair this goes through `approvePair`, so a
+   *  (b)-approved agent keeps its run approval. Omitted ⇒ no approval write;
+   *  the caller approves, as every caller did before the agent split. */
+  approve?: { now: Date; home?: string };
+}
+
+export function createAutomation(
+  contextRoot: string,
+  i: CreateAutomationInput,
+  opts: CreateAutomationOptions = {},
+): AutomationManifest {
   validateAutomationForWrite(i);
   const slug = i.slug.trim();
   const path = automationPath(contextRoot, slug);
-  if (existsSync(path)) throw new AutomationError(`Automation already exists: ${slug}`);
+  if (pathOccupied(path)) throw new AutomationError(`Automation already exists: ${slug}`);
 
+  const created = i.agent === undefined ? createLegacyManifest(contextRoot, slug, path, i) : createBoundAutomation(contextRoot, slug, path, i);
+  if (opts.approve) {
+    const projectRoot = dirname(contextRoot);
+    const agentTarget = created.agent === slug && i.agent !== undefined ? getRunTarget(contextRoot, slug, 'agent') : null;
+    if (agentTarget) approvePair(projectRoot, created, agentTarget, opts.approve.now, opts.approve.home);
+    else approveAutomation(projectRoot, created, opts.approve.now, opts.approve.home);
+  }
+  return created;
+}
+
+/** The body every new manifest's `## Output instructions` starts with. */
+const OUTPUT_INSTRUCTIONS_PLACEHOLDER =
+  '(Optional — extra guidance for how the output should be formatted or where else it should go.)';
+
+/**
+ * A split automation: the job only, bound to an existing agent. The slug may
+ * equal an agent's slug only when that agent is the one it is bound to (a
+ * same-slug pair); any other agent of that name owns the slug.
+ */
+function createBoundAutomation(contextRoot: string, slug: string, path: string, i: CreateAutomationInput): AutomationManifest {
+  const agentSlug = (i.agent ?? '').trim();
+  if (!isSafeAutomationSlug(agentSlug) || !getAgent(contextRoot, agentSlug)) {
+    throw new AutomationError(`No agent named "${agentSlug}" in this project.`);
+  }
+  if (slug !== agentSlug && getAgent(contextRoot, slug)) {
+    throw new AutomationError(`"${slug}" is already an agent's name; an automation may share a name only with its own agent.`);
+  }
+  if ((i.mode ?? 'sched') !== 'sched') {
+    throw new AutomationError('An automation runs on a schedule. An agent you only call needs no automation.');
+  }
+  if (i.outputDir !== undefined && i.outputDir !== null) resolveOutputDir(contextRoot, i.outputDir, slug);
+  ensureAutomationsGitignore(contextRoot, slug);
+
+  const frontmatter: Record<string, unknown> = {
+    id: generateId('auto'),
+    title: i.title.trim(),
+    agent: agentSlug,
+    mode: 'sched',
+    enabled: i.enabled ?? true,
+    schedule: serializeSchedule(scheduleFromInput(i)),
+    timeout_minutes: numberOrDefault(i.timeoutMinutes, DEFAULT_TIMEOUT_MINUTES, 1, MAX_TIMEOUT_MINUTES),
+    catchup_hours: numberOrDefault(i.catchupHours, DEFAULT_CATCHUP_HOURS, 1, MAX_CATCHUP_HOURS),
+    output: { dir: i.outputDir ?? null },
+    shared: i.shared ?? false,
+    notify: i.notify ?? true,
+    review: i.review ?? 'off',
+  };
+  const job = i.job?.trim();
+  const body = [
+    ...(job ? [`## ${JOB_HEADING}`, '', job, ''] : []),
+    '## Output instructions',
+    '',
+    i.outputInstructions?.trim() || OUTPUT_INSTRUCTIONS_PLACEHOLDER,
+    '',
+  ].join('\n');
+
+  mkdirSync(automationsDir(contextRoot), { recursive: true });
+  createManifestText(path, matter.stringify(body, frontmatter));
+  return readAutomationFile(path);
+}
+
+/** An unsplit manifest that is its own agent — byte for byte what every create
+ *  wrote before the agent split. Refused when an agent file of that name
+ *  exists: the legacy file would shadow it on read. */
+function createLegacyManifest(contextRoot: string, slug: string, path: string, i: CreateAutomationInput): AutomationManifest {
+  if (pathOccupied(agentPath(contextRoot, slug))) {
+    throw new AutomationError(`"${slug}" is already an agent's name; create the automation for that agent instead.`);
+  }
   const mode: AutomationMode = i.mode ?? 'sched';
   // An on-call agent is written with NO schedule at all. That is defence in
   // depth rather than bookkeeping: `mode` alone already stops the dispatcher,
@@ -1224,12 +1593,12 @@ export function createAutomation(contextRoot: string, i: CreateAutomationInput):
     '',
     '## Output instructions',
     '',
-    i.outputInstructions?.trim() || '(Optional — extra guidance for how the output should be formatted or where else it should go.)',
+    i.outputInstructions?.trim() || OUTPUT_INSTRUCTIONS_PLACEHOLDER,
     '',
   ].join('\n');
 
   mkdirSync(automationsDir(contextRoot), { recursive: true });
-  writeFrontmatter(path, frontmatter, body);
+  createManifestText(path, matter.stringify(body, frontmatter));
   return readAutomationFile(path);
 }
 
@@ -1262,6 +1631,10 @@ export interface UpdateAutomationInput {
   /** Replaces the `## Prompt` section VERBATIM. This is the approval-hashed
    *  field, which is exactly why the caller must re-approve after an edit. */
   prompt?: string;
+  /** Replaces the `## Job` section of a split automation (what it asks of its
+   *  agent); `null` or blank removes the section. Approval-hashed like the
+   *  prompt. Refused for an unsplit automation, which has no job of its own. */
+  job?: string | null;
 }
 
 /**
@@ -1277,59 +1650,87 @@ export interface UpdateAutomationInput {
  * that edits a manifest on behalf of a teammate cannot accidentally grant
  * trust on their behalf.
  *
- * Frontmatter is patched through `updateFrontmatterFields` and the prompt
+ * Frontmatter is patched through `patchManifestFrontmatter` and the prompt
  * through `upsertSection`, so every byte outside the touched keys and the
  * `## Prompt` body survives — including `## Pattern`, `## Flow` and the
- * automation's own changelog.
+ * automation's own changelog. For a split automation the identity fields
+ * (model, effort, photo, prompt) land in its AGENT's file; for an agent with
+ * no automation file of its own only identity may change here.
  */
 export function updateAutomation(
   contextRoot: string,
   slug: string,
   patch: UpdateAutomationInput,
 ): AutomationManifest {
-  const manifest = getAutomation(contextRoot, slug);
-  if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
+  if (!isSafeAutomationSlug(slug)) throw new AutomationError(`No such automation: ${slug}`);
+  const path = automationPath(contextRoot, slug);
+  if (!pathOccupied(path)) {
+    if (patch.job !== undefined) throw new AutomationError(JOB_NEEDS_BOUND);
+    return updateAgentOnlyTarget(contextRoot, slug, patch);
+  }
+  let parts: ManifestParts;
+  try {
+    parts = readManifestParts(path);
+  } catch {
+    throw new AutomationError(`No such automation: ${slug}`);
+  }
+  // Checked before anything is written, so a refused job leaves the file untouched.
+  if (parts.kind === 'legacy' && patch.job !== undefined) throw new AutomationError(JOB_NEEDS_BOUND);
+  return parts.kind === 'legacy'
+    ? updateLegacyManifest(contextRoot, slug, parts.legacy, patch)
+    : updateBoundAutomation(contextRoot, slug, parts.job, patch);
+}
 
+/**
+ * Which schedule an edit ends with. `undefined` ⇒ untouched: the field on disk
+ * is not rewritten at all. A scheduled agent must END UP with a real schedule,
+ * so turning `call` back into `sched` with nothing supplied gets the daily 09:00
+ * default rather than a `schedule: null` that `isDue` would silently refuse
+ * forever, and an untouched schedule that is BROKEN on disk is refused rather
+ * than quietly replaced.
+ */
+function nextScheduleFor(
+  current: Pick<AutomationManifest, 'mode' | 'schedule' | 'scheduleError'>,
+  mode: AutomationMode,
+  patch: UpdateAutomationInput,
+): Schedule | null | undefined {
+  if (mode === 'call') return current.mode === 'call' && current.schedule === null ? undefined : null;
+  if (patch.slots !== undefined) return scheduleFromInput({ slots: patch.slots });
+  if (patch.days !== undefined || patch.at !== undefined) {
+    const first = current.schedule?.slots[0];
+    const firstWeekly = first?.kind === 'weekly' ? first : undefined;
+    return scheduleFromInput({
+      days: patch.days ?? firstWeekly?.days ?? 'daily',
+      at: patch.at ?? (first && first.kind !== 'cron' ? first.at : '09:00'),
+    });
+  }
+  if (current.schedule !== null) return undefined;
+  if (current.scheduleError) {
+    throw new AutomationError(
+      `This agent's schedule on disk is broken (${current.scheduleError}) — pass a new schedule with the edit.`,
+    );
+  }
+  return scheduleFromInput({ days: 'daily', at: '09:00' });
+}
+
+/** An unsplit manifest: every field lives in this one file, exactly as before
+ *  the agent split. */
+function updateLegacyManifest(
+  contextRoot: string,
+  slug: string,
+  manifest: AutomationManifest,
+  patch: UpdateAutomationInput,
+): AutomationManifest {
   const mode: AutomationMode = patch.mode ?? manifest.mode;
   if (!(AUTOMATION_MODES as readonly string[]).includes(mode)) {
     throw new AutomationError(`Invalid mode "${mode}" — must be one of: ${AUTOMATION_MODES.join(', ')}.`);
   }
-
   const title = patch.title === undefined ? manifest.title : patch.title.trim();
   if (!title) throw new AutomationError('An automation title is required.');
-
-  // Which schedule this edit ends with. `undefined` ⇒ untouched: the field on
-  // disk is not rewritten at all. A scheduled agent must END UP with a real
-  // schedule, so turning `call` back into `sched` with nothing supplied gets the
-  // daily 09:00 default rather than a `schedule: null` that `isDue` would
-  // silently refuse forever, and an untouched schedule that is BROKEN on disk
-  // is refused rather than quietly replaced.
-  let nextSchedule: Schedule | null | undefined;
-  if (mode === 'call') {
-    nextSchedule = manifest.mode === 'call' && manifest.schedule === null ? undefined : null;
-  } else if (patch.slots !== undefined) {
-    nextSchedule = scheduleFromInput({ slots: patch.slots });
-  } else if (patch.days !== undefined || patch.at !== undefined) {
-    const first = manifest.schedule?.slots[0];
-    const firstWeekly = first?.kind === 'weekly' ? first : undefined;
-    nextSchedule = scheduleFromInput({
-      days: patch.days ?? firstWeekly?.days ?? 'daily',
-      at: patch.at ?? (first && first.kind !== 'cron' ? first.at : '09:00'),
-    });
-  } else if (manifest.schedule !== null) {
-    nextSchedule = undefined;
-  } else if (manifest.scheduleError) {
-    throw new AutomationError(
-      `This agent's schedule on disk is broken (${manifest.scheduleError}) — pass a new schedule with the edit.`,
-    );
-  } else {
-    nextSchedule = scheduleFromInput({ days: 'daily', at: '09:00' });
-  }
+  const nextSchedule = nextScheduleFor(manifest, mode, patch);
 
   // Reuse the create-path validator so an edit can never write a value
-  // `create` would have refused. The schedule was already validated above
-  // through the same `scheduleFromInput`; handing the validator the resolved
-  // slots keeps it one rule set.
+  // `create` would have refused.
   validateAutomationForWrite({
     slug,
     title,
@@ -1351,49 +1752,148 @@ export function updateAutomation(
   if (patch.enabled !== undefined) fields.enabled = patch.enabled;
   if (patch.photo !== undefined) fields.photo = patch.photo;
 
-  updateFrontmatterFields(manifest.path, fields);
+  patchManifestFrontmatter(manifest.path, fields);
 
   if (patch.prompt !== undefined) {
     const prompt = patch.prompt.trim();
     if (!prompt) throw new AutomationError('The prompt cannot be empty — it is what the run actually does.');
-    writeFileSync(manifest.path, upsertSection(readFileSync(manifest.path, 'utf-8'), 'Prompt', prompt), 'utf-8');
+    rewriteManifestText(manifest.path, upsertSection(readFileSync(manifest.path, 'utf-8'), 'Prompt', prompt));
   }
-
   return readAutomationFile(manifest.path);
 }
 
+/** Why a `job` edit is refused anywhere but a split automation. */
+const JOB_NEEDS_BOUND = 'A job belongs to an automation that picks an agent. This one has no job of its own.';
+
+/** `raw` with its `## <heading>` section taken out (up to the next `## `), or
+ *  `raw` unchanged when there is none. Byte-surgical like `upsertSection`:
+ *  nothing outside the removed section is touched. */
+function removeSection(raw: string, heading: string): string {
+  const marker = `## ${heading}`;
+  const lines = raw.split('\n');
+  const startIdx = lines.findIndex((l) => l.trim() === marker);
+  if (startIdx === -1) return raw;
+  const rest = lines.slice(startIdx + 1);
+  const relEnd = rest.findIndex((l) => /^##\s/.test(l));
+  const tail = relEnd === -1 ? [] : rest.slice(relEnd);
+  return [...lines.slice(0, startIdx), ...tail].join('\n');
+}
+
+/** A split automation: the job's own fields (title, schedule, timeout, enabled,
+ *  its `## Job`) land in its file, identity fields (model, effort, photo,
+ *  prompt) in its agent's. */
+function updateBoundAutomation(
+  contextRoot: string,
+  slug: string,
+  job: AutomationJob,
+  patch: UpdateAutomationInput,
+): AutomationManifest {
+  if (patch.mode === 'call') {
+    throw new AutomationError('An automation runs on a schedule. An agent you only call needs no automation.');
+  }
+  const title = patch.title === undefined ? job.title : patch.title.trim();
+  if (!title) throw new AutomationError('An automation title is required.');
+  const nextSchedule = nextScheduleFor(job, 'sched', patch);
+  validateAutomationForWrite({
+    slug,
+    title,
+    mode: 'sched',
+    slots: (nextSchedule ?? job.schedule ?? { slots: [{ kind: 'weekly', days: 'daily', at: '09:00' }] }).slots,
+    timeoutMinutes: patch.timeoutMinutes,
+  });
+
+  const identity: AgentIdentityPatchInput = {};
+  if (patch.model !== undefined) identity.model = patch.model;
+  if (patch.effort !== undefined) identity.effort = patch.effort;
+  if (patch.photo !== undefined) identity.photo = patch.photo;
+  if (patch.prompt !== undefined) identity.prompt = patch.prompt;
+  if (Object.keys(identity).length > 0) updateAgent(contextRoot, job.agent, identity);
+
+  const fields: Record<string, unknown> = { title, mode: 'sched' };
+  if (nextSchedule !== undefined) fields.schedule = serializeSchedule(nextSchedule);
+  if (patch.timeoutMinutes !== undefined) {
+    fields.timeout_minutes = numberOrDefault(patch.timeoutMinutes, DEFAULT_TIMEOUT_MINUTES, 1, MAX_TIMEOUT_MINUTES);
+  }
+  if (patch.enabled !== undefined) fields.enabled = patch.enabled;
+  patchManifestFrontmatter(job.path, fields);
+
+  if (patch.job !== undefined) {
+    const text = patch.job?.trim() ?? '';
+    const raw = readFileSync(job.path, 'utf-8');
+    rewriteManifestText(job.path, text ? upsertSection(raw, JOB_HEADING, text) : removeSection(raw, JOB_HEADING));
+  }
+  return readAutomationFile(job.path);
+}
+
+/** An agent with no automation file of its own (its call target): only its
+ *  identity can change here. Its call settings have no editor in this build, and
+ *  a schedule needs an automation. */
+function updateAgentOnlyTarget(contextRoot: string, slug: string, patch: UpdateAutomationInput): AutomationManifest {
+  if (!getAgent(contextRoot, slug)) throw new AutomationError(`No such automation: ${slug}`);
+  const schedulish =
+    (patch.mode !== undefined && patch.mode !== 'call') ||
+    patch.slots !== undefined ||
+    patch.days !== undefined ||
+    patch.at !== undefined ||
+    patch.timeoutMinutes !== undefined ||
+    patch.enabled !== undefined;
+  if (schedulish) {
+    throw new AutomationError(`"${slug}" is an agent you only call: give it an automation to put it on a schedule.`);
+  }
+  const identity: AgentIdentityPatchInput = {};
+  if (patch.title !== undefined) identity.title = patch.title;
+  if (patch.model !== undefined) identity.model = patch.model;
+  if (patch.effort !== undefined) identity.effort = patch.effort;
+  if (patch.photo !== undefined) identity.photo = patch.photo;
+  if (patch.prompt !== undefined) identity.prompt = patch.prompt;
+  if (Object.keys(identity).length > 0) updateAgent(contextRoot, slug, identity);
+  const target = getRunTarget(contextRoot, slug, 'agent');
+  if (!target) throw new AutomationError(`No such automation: ${slug}`);
+  return target;
+}
+
+/** The identity half of an edit, as the agents store takes it. */
+type AgentIdentityPatchInput = {
+  title?: string;
+  prompt?: string;
+  model?: string | null;
+  effort?: EffortLevel | null;
+  photo?: string | null;
+};
+
 export function setAutomationEnabled(contextRoot: string, slug: string, enabled: boolean): AutomationManifest {
-  const manifest = getAutomation(contextRoot, slug);
+  const manifest = automationFileTarget(contextRoot, slug);
   if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
-  updateFrontmatterFields(manifest.path, { enabled });
+  patchManifestFrontmatter(manifest.path, { enabled });
   return readAutomationFile(manifest.path);
 }
 
 /**
  * Flip the `shared` frontmatter flag. Frontmatter ONLY — deliberately never
- * touches `.gitignore`. Publishing a slug means both the flag AND its three
+ * touches `.gitignore`. Publishing a slug means both the flag AND its
  * negation lines must be in place (see `sharedSlugNegations`); coordinating
- * both atomically is `sharing.ts`'s `shareAutomation`/`unshareAutomation`
- * (a same-wave sibling module this file must not import — see
- * `shareStateFor` below). Called directly only when a caller genuinely wants
- * the flag alone, e.g. a drift repair that found the flag already correct.
+ * both is `sharing.ts`'s `shareAutomation`/`unshareAutomation`. Called directly
+ * only when a caller genuinely wants the flag alone, e.g. a drift repair that
+ * found the flag already correct.
  */
 export function setAutomationShared(contextRoot: string, slug: string, shared: boolean): AutomationManifest {
-  const manifest = getAutomation(contextRoot, slug);
+  const manifest = automationFileTarget(contextRoot, slug);
   if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
-  updateFrontmatterFields(manifest.path, { shared });
+  patchManifestFrontmatter(manifest.path, { shared });
   return readAutomationFile(manifest.path);
 }
 
 /**
- * Delete the manifest and its machine-local cache/lock/sidecar. Never
+ * Delete the automation FILE and its machine-local cache/lock/sidecar. Never
  * touches the approval registry (`~/.dreamcontext/automations.json`) — that
  * is `registry.ts`'s file, a separate concern the CLI's `remove` verb
- * coordinates across both stores.
+ * coordinates across both stores. A split automation's photo is its agent's,
+ * so only an unsplit manifest takes its photo with it.
  */
 export function removeAutomation(contextRoot: string, slug: string, opts?: { purgeOutput?: boolean }): void {
-  const manifest = getAutomation(contextRoot, slug);
+  const manifest = automationFileTarget(contextRoot, slug);
   if (!manifest) throw new AutomationError(`No such automation: ${slug}`);
+  const isLegacy = readManifestParts(manifest.path).kind === 'legacy';
 
   if (opts?.purgeOutput) {
     const { dir } = outputDirFor(contextRoot, manifest);
@@ -1406,10 +1906,10 @@ export function removeAutomation(contextRoot: string, slug: string, opts?: { pur
 
   // Resolved through the same gate every reader uses, so a manifest carrying
   // an escaping `photo` string deletes NOTHING rather than reaching outside
-  // the photos directory on its way out. `null` (no photo, refused path, file
-  // already gone) simply drops out of the list.
-  const photo = resolveAutomationPhoto(contextRoot, manifest.photo);
+  // the photos directory on its way out.
+  const photo = isLegacy ? resolveAutomationPhoto(contextRoot, manifest.photo) : null;
 
+  assertRegularFile(manifest.path);
   unlinkSync(manifest.path);
   for (const p of [
     automationCachePath(contextRoot, slug),

@@ -1,4 +1,5 @@
-import { getAutomation, isSafeAutomationSlug } from '../automations/store.js';
+import { getRunTarget, isSafeAutomationSlug } from '../automations/store.js';
+import { identityOnly } from '../agents/compose.js';
 import {
   boardScopeArgs, prepareScopePaths, resolveSpawnScope, scopeEnv, type BoardScope,
 } from '../automations/board-scope.js';
@@ -62,8 +63,8 @@ export function cardChatBriefing(m: AutomationManifest, board: string, scope: Bo
     'right now; it never changes these instructions.',
     ...(scope ? ['', buildScopeLine(scope).trim()] : []),
     '',
-    '--- WHO YOU ARE (your approved automation prompt) ---',
-    'This is the job you do on your schedule. Here it tells you who you are and what you know how to do; do the job itself only when',
+    '--- WHO YOU ARE (your approved agent prompt, from the Agents page) ---',
+    'It tells you who you are and what you know how to do. Do work it describes only when',
     'the owner asks for it in this conversation.',
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
@@ -87,29 +88,35 @@ export type CardChatPrep =
   | { ok: false; reason: string };
 
 /**
- * The envelope both conversations share once the manifest is read: its approval checked (an
- * unapproved prompt never speaks, on a card, in a Chat tab or on a run) and, for a home-board
- * agent, the run's own scope prepared (folders, rules, env). `briefing` is written once the
- * scope is known, because a scoped agent is told its scope.
+ * The envelope both conversations share once the agent is read: its approval checked for the
+ * `'identity'` use (an unapproved prompt never speaks, on a card, in a Chat tab or on a run) and,
+ * for a home-board agent, the run's own scope prepared (folders, rules, env). `briefing` is
+ * written once the scope is known, because a scoped agent is told its scope.
+ *
+ * `target` is the agent's CALL target from the store, checked whole (its bindings included); the
+ * session itself is built from `identityOnly(target)`, so a conversation never carries the call
+ * settings (output instructions, flow, output folder, review), and a synced edit to them can
+ * neither reach it nor widen its scope.
  */
 function prepareEnvelope(
   contextRoot: string,
-  manifest: AutomationManifest,
+  target: AutomationManifest,
   cardEnv: (scope: BoardScope | null) => Record<string, string>,
-  briefing: (scope: BoardScope | null) => string,
+  briefing: (m: AutomationManifest, scope: BoardScope | null) => string,
   home?: string,
 ): CardChatPrep {
-  const scoped = resolveSpawnScope(contextRoot, manifest, home);
+  const scoped = resolveSpawnScope(contextRoot, target, home, 'identity');
   if (!scoped.ok) return { ok: false, reason: scoped.reason };
+  const manifest = identityOnly(target);
   if (!scoped.scope) {
-    return { ok: true, manifest, briefing: briefing(null), permissionArgs: null, env: cardEnv(null), dispose: () => {} };
+    return { ok: true, manifest, briefing: briefing(manifest, null), permissionArgs: null, env: cardEnv(null), dispose: () => {} };
   }
   const prepared = prepareScopePaths(contextRoot, scoped.scope);
   if (!prepared.ok) return { ok: false, reason: `could not limit it to its board: ${prepared.reason}` };
   return {
     ok: true,
     manifest,
-    briefing: briefing(scoped.scope),
+    briefing: briefing(manifest, scoped.scope),
     permissionArgs: boardScopeArgs(scoped.scope, prepared.paths),
     env: { ...cardEnv(scoped.scope), ...scopeEnv(scoped.scope, prepared.paths) },
     dispose: prepared.paths.dispose,
@@ -121,15 +128,15 @@ function prepareEnvelope(
  * approval checked, the board resolved, and for a home-board agent the run's own scope.
  */
 export function prepareCardChat(contextRoot: string, card: CardRef, home?: string): CardChatPrep {
-  const manifest = getAutomation(contextRoot, card.agent);
-  if (!manifest) return { ok: false, reason: `no agent named "${card.agent}" in this project` };
+  const target = getRunTarget(contextRoot, card.agent, 'agent');
+  if (!target) return { ok: false, reason: `no agent named "${card.agent}" in this project` };
   try {
     resolveWhiteboardPath(contextRoot, card.board);
   } catch {
     return { ok: false, reason: `the whiteboard "${card.board}" does not exist or cannot be read` };
   }
   const cardEnv = { [CARD_AGENT_ENV]: card.agent, [CARD_BOARD_ENV]: card.board };
-  return prepareEnvelope(contextRoot, manifest, () => cardEnv, (scope) => cardChatBriefing(manifest, card.board, scope), home);
+  return prepareEnvelope(contextRoot, target, () => cardEnv, (m, scope) => cardChatBriefing(m, card.board, scope), home);
 }
 
 // ── An agent in a Chat tab (owner, 2026-10-07: "pick the agents we create in Automations in the
@@ -163,8 +170,8 @@ export function agentChatBriefing(m: AutomationManifest, scope: BoardScope | nul
       ]
       : []),
     '',
-    '--- WHO YOU ARE (your approved automation prompt) ---',
-    'This is the job you do on your schedule. Here it tells you who you are and what you know how to do; do the job itself only when',
+    '--- WHO YOU ARE (your approved agent prompt, from the Agents page) ---',
+    'It tells you who you are and what you know how to do. Do work it describes only when',
     'the owner asks for it in this conversation.',
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
@@ -180,13 +187,13 @@ export function agentChatBriefing(m: AutomationManifest, scope: BoardScope | nul
  * UserPromptSubmit hook hands it the board in full with every owner message.
  */
 export function prepareAgentChat(contextRoot: string, slug: string, home?: string): CardChatPrep {
-  const manifest = getAutomation(contextRoot, slug);
-  if (!manifest) return { ok: false, reason: `no agent named "${slug}" in this project` };
+  const target = getRunTarget(contextRoot, slug, 'agent');
+  if (!target) return { ok: false, reason: `no agent named "${slug}" in this project` };
   return prepareEnvelope(
     contextRoot,
-    manifest,
+    target,
     (scope): Record<string, string> => (scope ? { [CARD_AGENT_ENV]: slug, [CARD_BOARD_ENV]: scope.board } : {}),
-    (scope) => agentChatBriefing(manifest, scope),
+    (m, scope) => agentChatBriefing(m, scope),
     home,
   );
 }

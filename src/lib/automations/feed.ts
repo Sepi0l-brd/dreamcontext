@@ -44,6 +44,11 @@ export interface FeedMessage {
   key: string;
   slug: string;
   title: string;
+  /** The agent that ran: the automation's bound agent, or the slug itself for an
+   *  agent's own call target and an unsplit file. */
+  agent: string;
+  /** That agent's display name (falls back to `title`). */
+  agentTitle: string;
   hasPhoto: boolean;
   /** `RunEvent.firedAt`. The thread's root key and the run's only identity. */
   runId: string;
@@ -126,7 +131,7 @@ export interface FeedResult {
   /** Every agent in the channel, for the chip row and the avatars — including
    *  those that have never run, so a new agent is visible before its first
    *  fire. */
-  agents: { slug: string; title: string; hasPhoto: boolean }[];
+  agents: { slug: string; title: string; agent: string; agentTitle: string; hasPhoto: boolean }[];
 }
 
 /**
@@ -360,11 +365,19 @@ function sessionRunFor(runId: string, ordered: ThreadEntry[], run: RunEvent | nu
   return history.find((e) => e.sessionId && e.firedAt <= runId)?.firedAt ?? null;
 }
 
+/** The agent behind a target, falling back to the target itself (a hand-built
+ *  fixture, or a target composed before the field existed). */
+function agentOf(
+  m: Pick<AutomationManifest, 'slug' | 'title'> & Partial<Pick<AutomationManifest, 'agent' | 'agentTitle'>>,
+): { agent: string; agentTitle: string } {
+  return { agent: m.agent || m.slug, agentTitle: m.agentTitle || m.title };
+}
+
 /** One run's message. Exported for the grouping fixture, which drives it with
  *  hand-built entries rather than a live vault. */
 export function buildFeedMessage(
   contextRoot: string,
-  manifest: Pick<AutomationManifest, 'slug' | 'title'>,
+  manifest: Pick<AutomationManifest, 'slug' | 'title'> & Partial<Pick<AutomationManifest, 'agent' | 'agentTitle'>>,
   hasPhoto: boolean,
   runId: string,
   entries: ThreadEntry[],
@@ -435,6 +448,7 @@ export function buildFeedMessage(
     key: `${manifest.slug}::${runId}`,
     slug: manifest.slug,
     title: manifest.title,
+    ...agentOf(manifest),
     hasPhoto,
     runId,
     // An ASK is the first thing that happened, and it happened before the
@@ -516,7 +530,7 @@ export function buildFeed(
 
   for (const manifest of manifests) {
     const hasPhoto = resolveAutomationPhoto(contextRoot, manifest.photo) !== null;
-    agents.push({ slug: manifest.slug, title: manifest.title, hasPhoto });
+    agents.push({ slug: manifest.slug, title: manifest.title, ...agentOf(manifest), hasPhoto });
 
     // ONE bounded read per agent, and everything else is derived from it.
     // Unread used to come from `threadUnread`, which re-read the same files a

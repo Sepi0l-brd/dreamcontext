@@ -43,12 +43,15 @@ import {
   createQuestion,
   noteResolution as noteQuestionResolution,
   pendingQuestion,
+  pendingQuestionFor,
   refreshQuestion,
   reopenQuestion,
+  runKindOf,
 } from './hitl.js';
 import {
   clearRunSidecar,
   getAutomation,
+  getRunTarget,
   lockPathFor,
   readRunSidecar,
   writeRunSidecar,
@@ -217,7 +220,8 @@ export function proposeFromRun(
       reason: `\`propose\` may only be called from inside "${slug}"'s own run (run pid ${sidecar.childPid})`,
     };
   }
-  const open = pendingQuestion(contextRoot, slug);
+  // This run's target only: the other half of a same-slug pair may be waiting on its own.
+  const open = pendingQuestionFor(contextRoot, slug, runKindOf(contextRoot, slug, sidecar.target === 'agent' ? 'agent' : undefined));
   if (open) {
     return { ok: false, reason: `"${slug}" already has a question awaiting an answer (${open.id})` };
   }
@@ -225,6 +229,9 @@ export function proposeFromRun(
     slug,
     runFiredAt: sidecar.fireAt,
     kind: 'flow-hitl',
+    // From the run's own sidecar, never the caller: a task run on a same-slug
+    // pair is the agent, and its answer must resume the agent.
+    ...(sidecar.target === 'agent' ? { target: 'agent' as const } : {}),
     // Not taken from the caller: a run knows its own id, but accepting it here
     // would hand the guard's whole point back as an argument. Resolved from the
     // run's cache record by the caller that has one (the CLI passes it
@@ -413,6 +420,26 @@ interface ResumeScope {
 }
 
 /**
+ * The target a resume runs: the agent's CALL target when the asking run recorded
+ * one (a task run on a same-slug pair resumes the agent, never the slug's job),
+ * else what `getAutomation` resolves — exactly what a question recorded before
+ * the field existed always resumed.
+ */
+function resumeTarget(contextRoot: string, slug: string, recorded?: 'agent'): AutomationManifest | null {
+  return recorded === 'agent' ? getRunTarget(contextRoot, slug, 'agent') : getAutomation(contextRoot, slug);
+}
+
+/**
+ * The manifest an `approval` question asks the owner to trust — the one every
+ * answer path must approve. Same resolution as a flow question's resume: an
+ * agent call target recorded `target: 'agent'`, and for a same-slug pair
+ * `getAutomation` would hand back the AUTOMATION, whose fields were never shown.
+ */
+export function approvalQuestionTarget(contextRoot: string, question: AutomationQuestion): AutomationManifest | null {
+  return resumeTarget(contextRoot, question.slug, question.target);
+}
+
+/**
  * Re-decide the envelope under the lock, right before the spawn: the manifest re-read from
  * disk (a queued message may have waited minutes), approval re-checked (for every agent: the
  * Telegram and answer paths never checked it), the board resolved and its folders prepared.
@@ -422,10 +449,14 @@ function resolveResumeScope(
   contextRoot: string,
   slug: string,
   opts: VerdictOptions,
+  /** The target the asking run recorded (`AutomationQuestion.target`). */
+  recorded?: 'agent',
 ): { ok: true; manifest: AutomationManifest; resume: ResumeScope | null } | { ok: false; reason: string } {
-  const manifest = getAutomation(contextRoot, slug);
+  const manifest = resumeTarget(contextRoot, slug, recorded);
   if (!manifest) return { ok: false, reason: `no such automation: ${slug}` };
-  const scoped = resolveSpawnScope(contextRoot, manifest, opts.home);
+  // Strict 'run' use: a resume EXECUTES the target (an agent's call target included),
+  // so a binding's identity-only approval never lets it resume.
+  const scoped = resolveSpawnScope(contextRoot, manifest, opts.home, 'run');
   if (!scoped.ok) return { ok: false, reason: scoped.reason };
   if (!scoped.scope) return { ok: true, manifest, resume: null };
   const prepared = prepareScopePaths(contextRoot, scoped.scope);
@@ -583,7 +614,7 @@ export async function resumeWithAnswer(
     return { question, status: 'refused', error: 'an empty answer resolves nothing', result: null };
   }
 
-  const manifest = getAutomation(contextRoot, question.slug);
+  const manifest = resumeTarget(contextRoot, question.slug, question.target);
   if (!manifest) {
     return { question, status: 'refused', error: `no such automation: ${question.slug}`, result: null };
   }
@@ -627,7 +658,7 @@ export async function resumeWithAnswer(
   let resume: ResumeScope | null = null;
   try {
     // BEFORE the claim: a refusal here must leave the question pending, since nothing ran.
-    const envelope = resolveResumeScope(contextRoot, question.slug, opts);
+    const envelope = resolveResumeScope(contextRoot, question.slug, opts, question.target);
     if (!envelope.ok) return { question, status: 'refused', error: envelope.reason, result: null };
     resume = envelope.resume;
     // References expand fresh for the prompt; the ANSWER on record is the display text, so
@@ -781,6 +812,8 @@ function spawnSessionResume(
           fireAt,
           startedAt: startedAt.toISOString(),
           timeoutAt: new Date(startedAt.getTime() + timeoutMs).toISOString(),
+          // A resumed agent call target stays the agent if it proposes again.
+          ...(m.runKind === 'agent' ? { target: 'agent' as const } : {}),
         });
       },
     });

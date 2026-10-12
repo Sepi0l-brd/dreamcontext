@@ -17,6 +17,8 @@ import {
   canonicalFlowJson,
   checkApproval,
   approveAutomation,
+  approvePair,
+  revokeAgent,
   revokeApproval,
   getApproval,
   readDispatcherHeartbeat,
@@ -37,6 +39,15 @@ import {
   type AutomationManifest,
   type FlowGraph,
 } from '../../src/lib/automations/types.js';
+import {
+  automationPath,
+  createAutomation,
+  deriveFlowFromManifest,
+  readAutomationFile,
+  writeFlowSection,
+} from '../../src/lib/automations/store.js';
+import { composeRun, legacyPair } from '../../src/lib/agents/compose.js';
+import { classifyAutomationSlot } from '../../src/lib/agents/slot.js';
 
 /** Fixed, injected — never Date.now() in assertions. */
 const NOW = new Date('2026-07-25T18:00:00.000Z');
@@ -327,6 +338,7 @@ describe('approvalFields', () => {
       review: 'off',
       flow: null,
       whiteboard: null,
+      job: '',
     });
   });
 
@@ -343,20 +355,20 @@ describe('approvalFields', () => {
 });
 
 describe('APPROVAL_DIFF_FIELDS', () => {
-  it('is prompt/outputInstructions/model/effort/timeoutMinutes/outputDir/learning/review/flow/whiteboard, in that exact order', () => {
+  it('is prompt/outputInstructions/model/effort/timeoutMinutes/outputDir/learning/review/flow/whiteboard/job, in that exact order', () => {
     expect(APPROVAL_DIFF_FIELDS).toEqual([
       'prompt', 'outputInstructions', 'model', 'effort', 'timeoutMinutes', 'outputDir', 'learning', 'review', 'flow',
-      'whiteboard',
+      'whiteboard', 'job',
     ]);
-    expect(APPROVAL_DIFF_FIELDS.length).toBe(10);
+    expect(APPROVAL_DIFF_FIELDS.length).toBe(11);
   });
 
-  it('keeps `flow` then `whiteboard` LAST — the position is what preserves every legacy hash', () => {
-    // `canonicalApprovalPayload` appends `flow`, then `whiteboard`, to the end of
-    // its literal, and JSON.stringify emits keys in insertion order. Any other
-    // position would shift the serialization of the fields around it and
-    // re-block every already-approved automation on upgrade.
-    expect(APPROVAL_DIFF_FIELDS.slice(-2)).toEqual(['flow', 'whiteboard']);
+  it('keeps `flow`, `whiteboard` then `job` LAST — the position is what preserves every legacy hash', () => {
+    // `canonicalApprovalPayload` appends `flow`, then `whiteboard`, then `job`, to
+    // the end of its literal, and JSON.stringify emits keys in insertion order.
+    // Any other position would shift the serialization of the fields around it
+    // and re-block every already-approved automation on upgrade.
+    expect(APPROVAL_DIFF_FIELDS.slice(-3)).toEqual(['flow', 'whiteboard', 'job']);
   });
 });
 
@@ -682,7 +694,7 @@ describe('checkApproval', () => {
   it('approved: true immediately after approveAutomation, unchanged manifest', () => {
     const m = makeManifest();
     const entry = approveAutomation(PROJECT_A, m, NOW, home);
-    expect(checkApproval(PROJECT_A, m, home)).toEqual({ approved: true, entry });
+    expect(checkApproval(PROJECT_A, m, home)).toEqual({ approved: true, entry, via: 'self' });
   });
 
   it('manifest-changed after editing any hashed field post-approval', () => {
@@ -957,5 +969,381 @@ describe('negationIsEffective / shareOrderingProblems', () => {
 
   it('shareOrderingProblems returns empty for an empty gitignore', () => {
     expect(shareOrderingProblems('', BASE)).toEqual([]);
+  });
+});
+
+// ─── `## Job`: hashed, omitted when empty, LAST ─────────────────────────────
+
+describe('job is hashed, but only when the automation HAS one', () => {
+  it('an empty, missing or whitespace-only job hashes byte-identically to a manifest written before the field', () => {
+    const legacy = canonicalApprovalPayload(makeManifest());
+    expect(canonicalApprovalPayload(makeManifest({ job: '' }))).toBe(legacy);
+    expect(canonicalApprovalPayload(makeManifest({ job: '  \n ' }))).toBe(legacy);
+    const { job: _omit, ...noKey } = makeManifest({ job: 'x' });
+    expect(canonicalApprovalPayload(noKey as AutomationManifest)).toBe(legacy);
+  });
+
+  it('is serialized LAST, after whiteboard, and editing it changes the hash', () => {
+    const payload = canonicalApprovalPayload(makeManifest({ whiteboard: 'growth', job: 'Write the digest.' }));
+    expect(payload.endsWith(',"whiteboard":"growth","job":"Write the digest."}')).toBe(true);
+    expect(manifestHash(makeManifest({ job: 'A' }))).not.toBe(manifestHash(makeManifest({ job: 'B' })));
+  });
+
+  it('approvalFields shows it, as "" when absent', () => {
+    expect(approvalFields(makeManifest({ job: 'Do it.' })).job).toBe('Do it.');
+    expect(approvalFields(makeManifest()).job).toBe('');
+  });
+});
+
+// ─── Agents: rules (a)/(b)/(c), Invariant 2, approvePair, revokeAgent ────────
+//
+// These run against REAL files: the legacy-key rule depends on what sits in the
+// automation slot, and the registry re-classifies it inside its own writes. The
+// targets are composed exactly as the store will compose them (wave 2): the call
+// target's `legacyKey` from the slot classifier, `bindings` from the current
+// composed hash of each bound automation.
+
+describe('agent approval: one predicate, three rules, the legacy-key rule', () => {
+  let proj: string;
+  let ctx: string;
+
+  beforeEach(() => {
+    proj = mkdtempSync(join(tmpdir(), 'dc-agent-approval-'));
+    ctx = join(proj, '_dream_context');
+    mkdirSync(join(ctx, 'automations'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(proj, { recursive: true, force: true });
+  });
+
+  const CALL_FILE = '---\nid: auto_help1\ntitle: Helper\nmode: call\n---\n\n## Prompt\nAnswer when asked.\n';
+  const SCHED_FILE =
+    '---\nid: auto_dig1\ntitle: Digest\nmode: sched\nschedule:\n  days: daily\n  at: "18:00"\n---\n\n## Prompt\nSummarise the day.\n';
+
+  function writeSlot(slug: string, text: string): AutomationManifest {
+    const path = join(ctx, 'automations', `${slug}.md`);
+    writeFileSync(path, text);
+    return readAutomationFile(path);
+  }
+
+  /** What the store will set: true exactly when the slot is absent or an unsplit on-call file. */
+  function storeLegacyKey(slug: string): boolean {
+    const slot = classifyAutomationSlot(ctx, slug);
+    return slot === 'absent' || slot === 'legacy-call';
+  }
+
+  /** The agent call target of a legacy manifest, composed the way the store will. */
+  function callTarget(legacy: AutomationManifest, bindings: Array<{ slug: string; sha256: string }> = []): AutomationManifest {
+    return composeRun(legacyPair(legacy).agent, null, bindings, storeLegacyKey(legacy.slug));
+  }
+
+  describe('rules', () => {
+    it('(c) is never consulted for a run, and use defaults to run', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const { agent, job } = legacyPair(legacy);
+      const automation = composeRun(agent, job);
+      approveAutomation(proj, automation, NOW, home);
+      const target = composeRun(agent, null, [{ slug: 'digest', sha256: manifestHash(automation) }], storeLegacyKey('digest'));
+      expect(checkApproval(proj, target, home).approved).toBe(false);
+      expect(checkApproval(proj, target, home, 'run').approved).toBe(false);
+      const identity = checkApproval(proj, target, home, 'identity');
+      expect(identity).toMatchObject({ approved: true, via: { binding: 'digest' } });
+    });
+
+    it("(c) returns the binding's own entry, whiteboard included", () => {
+      const legacy = writeSlot('digest', SCHED_FILE.replace('mode: sched', 'mode: sched\nwhiteboard: growth'));
+      const { agent, job } = legacyPair(legacy);
+      const automation = composeRun(agent, job);
+      const entry = approveAutomation(proj, automation, NOW, home);
+      expect(entry.whiteboard).toBe('growth');
+      const target = composeRun(agent, null, [{ slug: 'digest', sha256: manifestHash(automation) }], false);
+      expect(checkApproval(proj, target, home, 'identity')).toEqual({ approved: true, entry, via: { binding: 'digest' } });
+    });
+
+    it('(c) ignores a binding whose automation changed since it was approved', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const { agent, job } = legacyPair(legacy);
+      approveAutomation(proj, composeRun(agent, job), NOW, home);
+      const edited = composeRun(agent, { ...job!, timeoutMinutes: 59 });
+      const target = composeRun(agent, null, [{ slug: 'digest', sha256: manifestHash(edited) }], false);
+      expect(checkApproval(proj, target, home, 'identity').approved).toBe(false);
+    });
+
+    it('(a) a direct grant approves both uses, and reports payload-format-changed on an old entry', () => {
+      const legacy = writeSlot('helper', CALL_FILE);
+      const target = callTarget(legacy);
+      approveAutomation(proj, target, NOW, home);
+      expect(checkApproval(proj, target, home, 'run')).toMatchObject({ approved: true, via: 'self' });
+      expect(checkApproval(proj, target, home, 'identity')).toMatchObject({ approved: true, via: 'self' });
+      const reg = readAutomationsRegistry(home);
+      reg.projects[proj].agentApprovals!.helper.payloadVersion = 'automation-approval/v0';
+      writeAutomationsRegistry(reg, home);
+      expect(checkApproval(proj, target, home)).toMatchObject({ approved: false, reason: 'payload-format-changed' });
+    });
+
+    it('A5: a synced ADD to call settings blocks the run even with an approved binding; a conversation still passes', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const { agent, job } = legacyPair(legacy);
+      const automation = composeRun(agent, job);
+      approveAutomation(proj, automation, NOW, home);
+      const binding = [{ slug: 'digest', sha256: manifestHash(automation) }];
+      // The owner granted the call target directly, with default call settings.
+      approveAutomation(proj, composeRun(agent, null, binding, false), NOW, home);
+      // A teammate adds a call output folder and a review gate is dropped… either way the hash moves.
+      const synced = composeRun({ ...agent, call: { ...agent.call, outputDir: 'exfil' } }, null, binding, false);
+      expect(checkApproval(proj, synced, home, 'run').approved).toBe(false);
+      expect(checkApproval(proj, synced, home, 'identity')).toMatchObject({ approved: true, via: { binding: 'digest' } });
+    });
+
+    it('A5b: a synced STRIP of a migrated call agent\'s gate and flow blocks the run; identity still passes through a bound automation', () => {
+      const created = createAutomation(ctx, { slug: 'gated', title: 'Gated', mode: 'call', prompt: 'Ask first.', review: 'output' });
+      writeFlowSection(ctx, 'gated', deriveFlowFromManifest(created));
+      const legacy = readAutomationFile(automationPath(ctx, 'gated'));
+      approveAutomation(proj, legacy, NOW, home); // approved before the split, as the file
+      rmSync(automationPath(ctx, 'gated')); // the split removed the on-call file
+      const { agent } = legacyPair(legacy);
+      expect(checkApproval(proj, callTarget(legacy), home, 'run')).toMatchObject({ approved: true, via: 'legacy-key' });
+
+      // The owner later created automation `y` on this agent, and approved it.
+      const ySrc = writeSlot('y', SCHED_FILE.replace('auto_dig1', 'auto_y1'));
+      const automationY = composeRun(agent, { ...legacyPair(ySrc).job!, agent: 'gated' });
+      approveAutomation(proj, automationY, NOW, home);
+      const binding = [{ slug: 'y', sha256: manifestHash(automationY) }];
+
+      // A teammate strips the review gate, the output instructions and the flow.
+      const stripped = composeRun(
+        { ...agent, call: { ...agent.call, review: 'off', flow: null, outputInstructions: '' } },
+        null,
+        binding,
+        storeLegacyKey('gated'),
+      );
+      expect(checkApproval(proj, stripped, home, 'run').approved).toBe(false);
+      expect(checkApproval(proj, stripped, home, 'identity')).toMatchObject({ approved: true, via: { binding: 'y' } });
+    });
+  });
+
+  describe('R1–R7', () => {
+    it('R1: an unsplit legacy on-call file approved in approvals[x] runs AND chats (rule (b))', () => {
+      const legacy = writeSlot('helper', CALL_FILE);
+      approveAutomation(proj, legacy, NOW, home); // today's approval of the file
+      const target = callTarget(legacy);
+      expect(target.legacyKey).toBe(true);
+      expect(checkApproval(proj, target, home, 'run')).toMatchObject({ approved: true, via: 'legacy-key' });
+      expect(checkApproval(proj, target, home, 'identity')).toMatchObject({ approved: true, via: 'legacy-key' });
+      // Mutation sentinel: the same record, read without the legacy key, does not approve.
+      expect(checkApproval(proj, { ...target, legacyKey: false }, home, 'run').approved).toBe(false);
+    });
+
+    it('R2: an unsplit scheduled file is never read through (b), even when approvals[x] holds the call hash', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const target = callTarget(legacy);
+      expect(target.legacyKey).toBe(false);
+      const reg = readAutomationsRegistry(home);
+      reg.projects[proj] = {
+        approvals: { digest: { manifestSha256: manifestHash(target), approvedAt: NOW.toISOString(), payloadVersion: 'automation-approval/v1' } },
+      };
+      writeAutomationsRegistry(reg, home);
+      expect(checkApproval(proj, target, home, 'run').approved).toBe(false);
+      // Mutation sentinel: only the flag stood between that record and an approval.
+      expect(checkApproval(proj, { ...target, legacyKey: true }, home, 'run').approved).toBe(true);
+    });
+
+    it('R3: re-stamped by a local edit, then the original legacy file restored byte for byte → blocked, approvals[x] gone', () => {
+      const legacy = writeSlot('helper', CALL_FILE);
+      approveAutomation(proj, legacy, NOW, home);
+      rmSync(automationPath(ctx, 'helper')); // split: agent only
+      const { agent } = legacyPair(legacy);
+      expect(checkApproval(proj, callTarget(legacy), home, 'run')).toMatchObject({ approved: true, via: 'legacy-key' });
+
+      // The owner edits the agent's prompt on this Mac; the write re-approves its direct grant.
+      const edited = composeRun({ ...agent, prompt: 'Answer, then cite sources.' }, null, [], storeLegacyKey('helper'));
+      approveAutomation(proj, edited, LATER, home);
+      expect(getApproval(proj, 'helper', home)).toBeNull(); // the legacy record went in the same write
+      expect(checkApproval(proj, edited, home, 'run')).toMatchObject({ approved: true, via: 'self' });
+
+      // A teammate (or an old CLI) restores the superseded legacy file, byte for byte.
+      const restored = writeSlot('helper', CALL_FILE);
+      expect(checkApproval(proj, callTarget(restored), home, 'run').approved).toBe(false);
+      expect(checkApproval(proj, callTarget(restored), home, 'identity').approved).toBe(false);
+      // …and the runner / `say` path, which today reads the file as an automation, is blocked too.
+      expect(checkApproval(proj, restored, home).approved).toBe(false);
+    });
+
+    it('R4: a direct agent grant never deletes a pair\'s automation record', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const pairEntry = approveAutomation(proj, legacy, NOW, home);
+      const target = callTarget(legacy);
+      approveAutomation(proj, target, LATER, home);
+      expect(getApproval(proj, 'digest', home)).toEqual(pairEntry);
+      expect(checkApproval(proj, legacy, home).approved).toBe(true);
+      // A8: the agent kind never returns the pair's automation record.
+      expect(getApproval(proj, 'digest', home, 'agent')?.manifestSha256).toBe(manifestHash(target));
+      expect(getApproval(proj, 'digest', home, 'agent')?.manifestSha256).not.toBe(pairEntry.manifestSha256);
+    });
+
+    it('A8: getApproval(x, "agent") is null for a pair that has no direct agent grant', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      approveAutomation(proj, legacy, NOW, home);
+      expect(getApproval(proj, 'digest', home, 'agent')).toBeNull();
+    });
+
+    it('R5: a symlinked or unreadable slot is never read through (b), and an agent grant deletes approvals[x]', () => {
+      for (const [slug, makeSlot] of [
+        ['linked', () => {
+          const real = join(proj, 'elsewhere.md');
+          writeFileSync(real, CALL_FILE);
+          symlinkSync(real, join(ctx, 'automations', 'linked.md'));
+          return readAutomationFile(real);
+        }],
+        ['garbled', () => {
+          const parsed = readAutomationFile(join(ctx, 'automations', 'tmp.md'));
+          writeFileSync(join(ctx, 'automations', 'garbled.md'), '---\ntitle: [unclosed\n---\n');
+          return { ...parsed, slug: 'garbled' };
+        }],
+      ] as Array<[string, () => AutomationManifest]>) {
+        writeFileSync(join(ctx, 'automations', 'tmp.md'), CALL_FILE);
+        const legacy = makeSlot();
+        rmSync(join(ctx, 'automations', 'tmp.md'), { force: true });
+        expect(classifyAutomationSlot(ctx, slug)).toBe('unreadable');
+        const target = composeRun(legacyPair({ ...legacy, slug }).agent, null, [], storeLegacyKey(slug));
+        expect(target.legacyKey).toBe(false);
+        const reg = readAutomationsRegistry(home);
+        const project = reg.projects[proj] ?? { approvals: {} };
+        project.approvals[slug] = { manifestSha256: manifestHash(target), approvedAt: NOW.toISOString(), payloadVersion: 'automation-approval/v1' };
+        reg.projects[proj] = project;
+        writeAutomationsRegistry(reg, home);
+        expect(checkApproval(proj, target, home, 'run').approved).toBe(false);
+        approveAutomation(proj, target, LATER, home);
+        expect(getApproval(proj, slug, home)).toBeNull();
+      }
+    });
+
+    describe('R6: deleting an agent revokes approvals[x] unless it is provably the current automation\'s record', () => {
+      function approvedMigratedCallAgent(): AutomationManifest {
+        const legacy = writeSlot('helper', CALL_FILE);
+        approveAutomation(proj, legacy, NOW, home);
+        rmSync(automationPath(ctx, 'helper'));
+        expect(checkApproval(proj, callTarget(legacy), home, 'run').approved).toBe(true);
+        return legacy;
+      }
+
+      function expectRestoreBlocked(): void {
+        const restored = writeSlot('helper', CALL_FILE);
+        expect(checkApproval(proj, callTarget(restored), home, 'run').approved).toBe(false);
+        expect(checkApproval(proj, restored, home).approved).toBe(false);
+      }
+
+      it('slot made unreadable by a teammate → revoked; restoring the legacy file stays blocked', () => {
+        approvedMigratedCallAgent();
+        writeFileSync(automationPath(ctx, 'helper'), '---\ntitle: [unclosed\n---\n');
+        expect(revokeAgent(proj, 'helper', null, home)).toBe(true);
+        expect(getApproval(proj, 'helper', home)).toBeNull();
+        expectRestoreBlocked();
+      });
+
+      it('slot bound to ANOTHER agent with a stale record → revoked; restore stays blocked', () => {
+        approvedMigratedCallAgent();
+        const other = writeSlot('helper', '---\nid: auto_o1\ntitle: Other job\nagent: other\nmode: sched\n---\n\n## Job\nx\n');
+        expect(classifyAutomationSlot(ctx, 'helper')).toBe('automation');
+        expect(revokeAgent(proj, 'helper', other, home)).toBe(true);
+        expect(getApproval(proj, 'helper', home)).toBeNull();
+        expectRestoreBlocked();
+      });
+
+      it('slot holding a mode: call automation whose record matches → STILL revoked', () => {
+        approvedMigratedCallAgent();
+        const callJob = writeSlot('helper', '---\nid: auto_o2\ntitle: Other\nagent: other\nmode: call\n---\n\n## Job\nx\n');
+        approveAutomation(proj, callJob, LATER, home);
+        expect(revokeAgent(proj, 'helper', callJob, home)).toBe(true);
+        expect(getApproval(proj, 'helper', home)).toBeNull();
+      });
+
+      it('slot holding a scheduled automation whose record matches its current hash → kept', () => {
+        const job = writeSlot('helper', '---\nid: auto_o3\ntitle: Other\nagent: other\nmode: sched\n---\n\n## Job\nx\n');
+        const entry = approveAutomation(proj, job, NOW, home);
+        revokeAgent(proj, 'helper', job, home);
+        expect(getApproval(proj, 'helper', home)).toEqual(entry);
+      });
+
+      it('always drops the direct grant', () => {
+        const legacy = approvedMigratedCallAgent();
+        approveAutomation(proj, callTarget(legacy), LATER, home);
+        expect(getApproval(proj, 'helper', home, 'agent')).not.toBeNull();
+        expect(revokeAgent(proj, 'helper', null, home)).toBe(true);
+        expect(getApproval(proj, 'helper', home, 'agent')).toBeNull();
+        expect(readAutomationsRegistry(home).projects[proj].agentApprovals).toBeUndefined();
+      });
+    });
+
+    describe('R7: creating a same-slug pair on a (b)-approved agent keeps it approved to run', () => {
+      function setup() {
+        const legacy = writeSlot('helper', CALL_FILE);
+        approveAutomation(proj, legacy, NOW, home);
+        rmSync(automationPath(ctx, 'helper'));
+        const { agent } = legacyPair(legacy);
+        const agentTarget = composeRun(agent, null, [], false);
+        const pairFile = writeSlot('helper', '---\nid: auto_p1\ntitle: Helper job\nagent: helper\nmode: sched\n---\n\n## Job\nDaily check.\n');
+        const automation = composeRun(agent, { ...legacyPair(pairFile).job!, agent: 'helper', job: 'Daily check.' });
+        return { legacy, agentTarget, automation };
+      }
+
+      it('approvePair moves the matching (b) record into agentApprovals[x] in the same write', () => {
+        const { legacy, agentTarget, automation } = setup();
+        const legacyHash = manifestHash(callTarget(legacy));
+        approvePair(proj, automation, agentTarget, LATER, home);
+        expect(getApproval(proj, 'helper', home, 'agent')?.manifestSha256).toBe(legacyHash);
+        expect(getApproval(proj, 'helper', home)?.manifestSha256).toBe(manifestHash(automation));
+        expect(checkApproval(proj, agentTarget, home, 'run')).toMatchObject({ approved: true, via: 'self' });
+        expect(checkApproval(proj, automation, home)).toMatchObject({ approved: true, via: 'self' });
+      });
+
+      it('mutation sentinel: a plain approval of the automation costs the agent its run approval', () => {
+        const { agentTarget, automation } = setup();
+        approveAutomation(proj, automation, LATER, home);
+        expect(checkApproval(proj, agentTarget, home, 'run').approved).toBe(false);
+      });
+
+      it('never overwrites an existing direct grant, and copies nothing that does not match', () => {
+        const { agentTarget, automation } = setup();
+        const reg = readAutomationsRegistry(home);
+        reg.projects[proj].approvals.helper.manifestSha256 = 'not-the-call-hash';
+        writeAutomationsRegistry(reg, home);
+        approvePair(proj, automation, agentTarget, LATER, home);
+        expect(getApproval(proj, 'helper', home, 'agent')).toBeNull();
+      });
+
+      it('refuses anything but an automation and the call target of its same-slug agent', () => {
+        const { agentTarget, automation } = setup();
+        expect(() => approvePair(proj, agentTarget, agentTarget, LATER, home)).toThrow();
+        expect(() => approvePair(proj, automation, automation, LATER, home)).toThrow();
+        expect(() => approvePair(proj, { ...automation, slug: 'elsewhere' }, agentTarget, LATER, home)).toThrow();
+      });
+    });
+  });
+
+  describe('the registry file', () => {
+    it('round-trips agentApprovals, drops malformed entries, and omits an empty map', () => {
+      const entry = { manifestSha256: 'abc', approvedAt: NOW.toISOString(), payloadVersion: 'automation-approval/v1' };
+      writeAutomationsRegistry({
+        projects: {
+          [proj]: { approvals: {}, agentApprovals: { good: entry, bad: { ...entry, manifestSha256: '' } } },
+          [PROJECT_B]: { approvals: {}, agentApprovals: {} },
+        },
+      }, home);
+      const read = readAutomationsRegistry(home);
+      expect(read.projects[proj].agentApprovals).toEqual({ good: entry });
+      expect(read.projects[PROJECT_B]).toEqual({ approvals: {} });
+    });
+
+    it('revokeApproval(kind: agent) touches only the direct grant', () => {
+      const legacy = writeSlot('digest', SCHED_FILE);
+      const pair = approveAutomation(proj, legacy, NOW, home);
+      approveAutomation(proj, callTarget(legacy), NOW, home);
+      expect(revokeApproval(proj, 'digest', home, 'agent')).toBe(true);
+      expect(getApproval(proj, 'digest', home, 'agent')).toBeNull();
+      expect(getApproval(proj, 'digest', home)).toEqual(pair);
+      expect(revokeApproval(proj, 'digest', home, 'agent')).toBe(false);
+    });
   });
 });

@@ -67,6 +67,9 @@ export const KNOWN_LOCAL_ONLY_TASK_FIELDS: readonly string[] = [
   'description',
   'id',
   'created_at',
+  // The agent a task is assigned to: an agent is a vault entity with no remote
+  // counterpart, and agents are never people, so it never becomes an assignee.
+  'agent',
 ];
 
 /** Identity fields the mirror-rebuild path mints fresh rather than restoring. */

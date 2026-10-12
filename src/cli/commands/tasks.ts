@@ -36,6 +36,9 @@ import {
   type HandoffFields,
 } from '../../lib/handoff-readiness.js';
 import { distillTranscript } from './transcript.js';
+import { commitAssignment, logAssignmentResult, prepareAssignment } from '../../lib/agents/task-assignment.js';
+import { runAutomation } from '../../lib/automations/runner.js';
+import { AGENT_SELF_ENV } from '../../lib/automations/types.js';
 import { buildDigest, writeDigest } from '../../lib/session-digest.js';
 import { appendCompactionRecord } from '../../lib/sleep-consolidation.js';
 import { readSleepState, writeSleepState } from './sleep.js';
@@ -1627,6 +1630,64 @@ export function registerTasksCommand(program: Command): void {
         + '\nthe PARENT, and the child rides beside it as its `dc:<key>` marker — so nothing has to be'
         + '\ncreated on the provider. Declare more in `_dream_context/overrides/task.md` or in Settings.',
       ));
+    });
+
+  // Assign to agent — the same shared steps as the dashboard route, then a
+  // foreground run of the agent's call target with the task as data.
+  tasks
+    .command('assign-agent')
+    .argument('<task>', 'Task name or slug')
+    .argument('[agent]', 'Agent slug')
+    .option('--note <text>', 'A note for the agent (fenced as data with the task)')
+    .option('--clear', 'Remove the agent from the task (runs nothing)')
+    .description('Assign a task to an agent: sets agent:, moves an open task to in_progress, and runs the agent on it now')
+    .action(async (name: string, agentSlug: string | undefined, opts: { note?: string; clear?: boolean }) => {
+      // An agent run never hands work to an agent: that is the owner's call.
+      if (process.env[AGENT_SELF_ENV] !== undefined || process.env.DREAMCONTEXT_AUTOMATION_RUN !== undefined) {
+        error('An agent run cannot assign tasks to agents. Ask the owner to assign it from the Tasks page.');
+        process.exitCode = 1;
+        return;
+      }
+      const root = ensureContextRoot();
+      const backend = getTaskBackend();
+      const slug = await resolveTaskSlug(backend, name);
+      if (!slug) return;
+      if (opts.clear) {
+        await backend.updateFields(slug, { agent: null, updated_at: today() });
+        success(`Cleared the agent on ${slug}.`);
+        return;
+      }
+      if (!agentSlug) {
+        error('Name the agent to assign (or pass --clear).');
+        process.exitCode = 1;
+        return;
+      }
+      const prep = prepareAssignment(root, slug, agentSlug, { source: 'cli', ...(opts.note !== undefined ? { note: opts.note } : {}) });
+      if (!prep.ok) {
+        error(prep.message);
+        process.exitCode = 1;
+        return;
+      }
+      const fireAt = new Date();
+      const agentTitle = prep.target.agentTitle || prep.target.title;
+      const { statusMoved, from } = commitAssignment(root, prep, fireAt, { source: 'cli' });
+      info(`Assigned ${slug} to ${agentTitle}${statusMoved ? ` (status ${from ?? 'none'} → in_progress)` : ''}. Running it now…`);
+      const outcome = await runAutomation(root, prep.target.slug, {
+        host: 'cli',
+        force: true,
+        fireAt,
+        target: 'agent',
+        task: { slug: prep.task.slug, name: prep.task.name, note: prep.dataNote },
+      });
+      logAssignmentResult(root, slug, { slug: prep.target.slug, title: agentTitle }, {
+        status: outcome.status, outputPath: outcome.outputPath, runId: fireAt.toISOString(),
+      });
+      if (outcome.status === 'ok' || outcome.status.startsWith('awaiting-')) {
+        success(`${agentTitle} finished: ${outcome.status}.`);
+      } else {
+        error(`${agentTitle}: ${outcome.status}${outcome.error ? ` — ${outcome.error}` : ''}`);
+        process.exitCode = 1;
+      }
     });
 
   // Log entry (cross-session continuity)

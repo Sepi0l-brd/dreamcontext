@@ -2,6 +2,80 @@
   "version": 1,
   "endpoints": [
     {
+      "path": "agents",
+      "desc": "Agents — who does the work: a prompt, a model, a home board. Automations and tasks pick one",
+      "args": [],
+      "group": true
+    },
+    {
+      "path": "agents approve",
+      "desc": "Review and approve an agent to run on this machine (refused inside a Claude session or an agent run)",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
+      "path": "agents create",
+      "desc": "Create an agent, approved on this machine",
+      "args": [
+        "<slug>"
+      ],
+      "valueFlags": [
+        "--title",
+        "--prompt",
+        "--model",
+        "--effort",
+        "--whiteboard"
+      ]
+    },
+    {
+      "path": "agents edit",
+      "desc": "Edit an agent's identity; what was approved directly here stays approved",
+      "args": [
+        "<slug>"
+      ],
+      "valueFlags": [
+        "--title",
+        "--prompt",
+        "--model",
+        "--effort",
+        "--whiteboard"
+      ]
+    },
+    {
+      "path": "agents list",
+      "desc": "List every agent, with whether it may chat and whether it may run on this machine",
+      "args": []
+    },
+    {
+      "path": "agents remove",
+      "desc": "Delete an agent (refused while an automation runs as it)",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
+      "path": "agents share",
+      "desc": "Publish this agent to the synced brain — private by default",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
+      "path": "agents show",
+      "desc": "Show an agent: its prompt, its approval on this machine, and where it is used",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
+      "path": "agents unshare",
+      "desc": "Stop publishing this agent from this machine (refused while a shared automation uses it)",
+      "args": [
+        "<slug>"
+      ]
+    },
+    {
       "path": "app",
       "desc": "Manage the dreamcontext desktop app (install / update / status)",
       "args": [],
@@ -221,7 +295,9 @@
         "--catchup",
         "--prompt-file",
         "--review",
-        "--whiteboard"
+        "--whiteboard",
+        "--agent",
+        "--job"
       ]
     },
     {
@@ -2864,6 +2940,17 @@
       "desc": "Create tasks, log progress, insert into sections, and mark complete",
       "args": [],
       "group": true
+    },
+    {
+      "path": "tasks assign-agent",
+      "desc": "Assign a task to an agent: sets agent:, moves an open task to in_progress, and runs the agent on it now",
+      "args": [
+        "<task>",
+        "[agent]"
+      ],
+      "valueFlags": [
+        "--note"
+      ]
     },
     {
       "path": "tasks complete",

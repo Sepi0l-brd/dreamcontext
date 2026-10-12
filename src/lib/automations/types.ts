@@ -243,6 +243,43 @@ export type AutomationMode = 'sched' | 'call';
 
 export const AUTOMATION_MODES = ['sched', 'call'] as const;
 
+/**
+ * What a run target IS. `'automation'` is an automation (an agent plus a job
+ * and a schedule), keyed by the automation's slug. `'agent'` is an agent's
+ * CALL TARGET (the agent plus its call settings, no schedule), keyed by the
+ * agent's slug. Approval reads them differently — see `checkApproval`.
+ *
+ * Declared here, not in `src/lib/agents/types.ts`, because this file is the
+ * contract root and imports nothing; the agents module re-exports it.
+ */
+export type RunKind = 'automation' | 'agent';
+
+/**
+ * What an approval check is FOR. `'run'` executes the target (a run, a resume,
+ * a task assignment) and needs a direct grant on this Mac. `'identity'` is a
+ * conversation (Chat, card chat, a chat sub-agent) built from the agent's
+ * identity alone, which a bound automation's approval may also lend.
+ */
+export type ApprovalUse = 'run' | 'identity';
+
+/** One automation bound to an agent, as its CURRENT composed hash. Computed by
+ *  the store from the files, never read from a file. */
+export interface ApprovalBinding {
+  slug: string;
+  sha256: string;
+}
+
+/**
+ * What sits at `automations/<slug>.md`, as the approval registry needs to know it:
+ *  - `'absent'`      — nothing at the path.
+ *  - `'legacy-call'` — a regular file with no `agent:` key whose `mode` is `call`:
+ *                      an unsplit on-call agent, i.e. the agent's OWN record.
+ *  - `'automation'`  — any other regular file that parses.
+ *  - `'unreadable'`  — a symlink, a non-file, unparseable YAML, or an `agent:` key
+ *                      that is present but empty, null or not a safe slug.
+ */
+export type AutomationSlot = 'absent' | 'legacy-call' | 'automation' | 'unreadable';
+
 /** Where an agent's photo lives, contextRoot-relative. One file per slug,
  *  extension derived from the uploaded bytes' magic number — never from a
  *  client-supplied filename. */
@@ -382,6 +419,68 @@ export interface AutomationManifest {
    * before this field existed keeps its exact hash.
    */
   whiteboard: string | null;
+  /**
+   * Which kind of run target this is — see {@link RunKind}. Every manifest read
+   * from `automations/<slug>.md` is `'automation'`; only the store composes an
+   * agent's call target.
+   */
+  runKind: RunKind;
+  /** The slug of the agent this target runs as. A legacy manifest is its own
+   *  agent, so it reads its own slug. NOT approval-hashed (the agent's identity
+   *  fields are, one by one). */
+  agent: string;
+  /** The agent's display name. NOT approval-hashed, like `title`. */
+  agentTitle: string;
+  /**
+   * The automation's `## Job` section: what THIS job asks of its agent, on top
+   * of the agent's own prompt. `''` when absent, which is every manifest that
+   * exists today and every agent's call target.
+   *
+   * IS approval-hashed, OMITTED when empty and LAST, for the same byte-identity
+   * reason as `flow` and `whiteboard`.
+   */
+  job: string;
+  /** For an agent's call target only: every automation bound to the agent, as
+   *  its current composed hash. `[]` for an automation. Rule (c) of
+   *  `checkApproval` reads it, for an `'identity'` use only. */
+  bindings: readonly ApprovalBinding[];
+  /**
+   * For an agent's call target only: may the agent's legacy record
+   * `approvals[<slug>]` be honoured (rule (b))? True exactly when the
+   * automation slot is `'absent'` or `'legacy-call'`. Anything not built by the
+   * store reads `false`, which fails closed.
+   */
+  legacyKey: boolean;
+  path: string;
+  body: string;
+}
+
+/**
+ * The automation file's OWN fields, after the agent split: the job, its schedule
+ * and how its runs behave. The agent's identity (prompt, model, effort, learning,
+ * pattern, home board, photo) lives in the agent file and is joined in by
+ * `composeRun`.
+ */
+export interface AutomationJob {
+  slug: string;
+  id: string;
+  title: string;
+  /** The agent this automation runs as. */
+  agent: string;
+  mode: AutomationMode;
+  enabled: boolean;
+  schedule: Schedule | null;
+  scheduleError?: string | null;
+  timeoutMinutes: number;
+  catchupHours: number;
+  outputDir: string | null;
+  shared: boolean;
+  notify: boolean;
+  review: ReviewMode;
+  outputInstructions: string;
+  /** The `## Job` section, `''` when absent. */
+  job: string;
+  flow: FlowGraph | null;
   path: string;
   body: string;
 }
@@ -642,6 +741,15 @@ export interface AutomationQuestion {
   /** Filename-safe, unique per slug. */
   id: string;
   slug: string;
+  /** `'agent'` when the asking run was the agent's CALL target (a task
+   *  assignment on a same-slug pair): the answer must resume that target, never
+   *  the slug's job. Absent ⇒ whatever `getAutomation` resolves, as before. */
+  target?: 'agent';
+  /** `kind: 'approval'` only: the task the asking agent run carried, so approving
+   *  re-runs the agent WITH it. Absent ⇒ no task (approving then does not
+   *  re-run an agent target: a bare re-run would have nothing to do). The run's
+   *  `ask` text is never recorded here — it is not stored anywhere by design. */
+  task?: { slug: string; name: string; note?: string | null };
   /** The scheduled fire the asking run answered for — ties the question back to
    *  its RunEvent without duplicating the event. */
   runFiredAt: string;
@@ -791,6 +899,9 @@ export interface RunSidecar {
    * {@link AutomationManifest.flow} may not.
    */
   kind?: 'run' | 'question';
+  /** `'agent'` when this run is the agent's call target (`target: 'agent'`), so a
+   *  question its child proposes records it. Absent ⇒ what `getAutomation` resolves. */
+  target?: 'agent';
 }
 
 /**
@@ -855,6 +966,10 @@ export interface ApprovalPayloadFields {
    *  until a human here re-approves. Present as `null` when unset, for the same
    *  display reason as `flow`. */
   whiteboard: string | null;
+  /** Hashed because it is part of what the run is told to do: an automation's
+   *  `## Job` sits beside its agent's prompt. Present as `''` when absent, for
+   *  the same display reason as `flow`. */
+  job: string;
 }
 
 /** Env var naming a home-board agent's board for its spawned child; the CLI's
@@ -917,9 +1032,9 @@ export const APPROVAL_PAYLOAD_VERSION = 'automation-approval/v1';
  *  ApprovalPayloadFields so the CLI's review surface can never diverge from
  *  what is actually hashed. `effort` sits between `model` and
  *  `timeoutMinutes`: all three are execution-envelope levers on an
- *  already-approved prompt. `flow` then `whiteboard` are LAST, mirroring their
- *  position in `canonicalApprovalPayload`'s literal — the two orders must not
- *  drift, or the surface a human reviews stops matching the bytes that were
+ *  already-approved prompt. `flow`, `whiteboard` then `job` are LAST, mirroring
+ *  their position in `canonicalApprovalPayload`'s literal — the two orders must
+ *  not drift, or the surface a human reviews stops matching the bytes that were
  *  hashed. */
 export const APPROVAL_DIFF_FIELDS = [
   'prompt',
@@ -932,6 +1047,7 @@ export const APPROVAL_DIFF_FIELDS = [
   'review',
   'flow',
   'whiteboard',
+  'job',
 ] as const;
 
 // ─── Pattern caps ────────────────────────────────────────────────────────────

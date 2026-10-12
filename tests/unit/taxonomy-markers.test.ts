@@ -459,3 +459,52 @@ describe('people-first docs markers', () => {
     expect(content).toContain("`'other'` prose lane");
   });
 });
+
+// Agents became their own entity in 0.31.0 (`agents/<slug>.md`, the Agents page).
+// Without a router row and a CLI-reference section, "make an agent" shadow-routes to
+// an automation manifest, and "give this task to the reviewer" to a person: tag.
+describe('Agents — skill wiring markers', () => {
+  const skill = readFileSync(join(ROOT, 'skill', 'SKILL.md'), 'utf-8');
+  const cli = readFileSync(join(ROOT, 'skill', 'references', 'cli-reference.md'), 'utf-8');
+  const automations = readFileSync(join(ROOT, 'skill', 'references', 'automations.md'), 'utf-8');
+  const tasks = readFileSync(join(ROOT, 'skill', 'references', 'tasks-and-features.md'), 'utf-8');
+
+  it('SKILL.md has the Agents capabilities row and an Agent router row', () => {
+    expect(skill).toContain('| **Agents** |');
+    expect(skill).toContain('**Agent**: `agents/<slug>.md`');
+    expect(skill).toContain('dreamcontext agents create <slug>');
+    expect(skill).toContain('automations create <slug> --agent <a>');
+  });
+
+  it('SKILL.md lists agent among the reserved entity nouns and the recall channels', () => {
+    expect(skill).toContain('trigger, agent, automation, release, person');
+    expect(skill).toMatch(/Recall before grep\.[^\n]*automations, agents/);
+  });
+
+  it('automations.md carries the Agents section with its invariants', () => {
+    expect(automations).toContain('## Agents: who does the work');
+    expect(automations).toContain('### Approving an agent');
+    expect(automations).toContain('not a security boundary');
+    expect(automations).toContain('**Never approve on an older CLI**');
+    expect(automations).toContain('`identityOnly`');
+    expect(automations).toContain('`automations create <slug> --agent <agent>');
+  });
+
+  it('cli-reference.md documents every agents verb, assign-agent and the approve refusal', () => {
+    for (const verb of [
+      '`agents list`', '`agents show <slug>`', '`agents create <slug>`', '`agents edit <slug>`',
+      '`agents approve <slug>`', '`agents share <slug>`', '`agents remove <slug>`',
+      '`tasks assign-agent <name> [agent]`', '`--agent <slug>` runs it as an existing agent',
+    ]) {
+      expect(cli).toContain(verb);
+    }
+    expect(cli).toContain('Refused, with or without `-y`, inside a Claude session or an agent run');
+    expect(cli).toContain('**Agents split** check');
+  });
+
+  it('tasks-and-features.md documents Assign to agent: the status rule and that agents are not people', () => {
+    expect(tasks).toContain('## Assign to agent');
+    expect(tasks).toContain('**Agents are not people**');
+    expect(tasks).toContain('only when it has no status or an open-kind one');
+  });
+});

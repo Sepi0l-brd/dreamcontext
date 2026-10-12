@@ -1,5 +1,6 @@
 import { dirname } from 'node:path';
-import { listAutomations } from './store.js';
+import { listAgentTargets } from '../agents/store.js';
+import { identityOnly } from '../agents/compose.js';
 import { checkApproval } from './registry.js';
 import { buildPatternBlock, buildTurnLearningDirective, sanitizeAutomationPrompt } from './runner.js';
 import type { AutomationManifest } from './types.js';
@@ -17,6 +18,11 @@ import type { AutomationManifest } from './types.js';
  * A sub-agent runs inside the calling chat, under THAT chat's permissions: a home-board agent's
  * run scope is a property of its own spawns (runs, cards, its Chat tab), not of a sub-agent. The
  * owner is in the chat whose permission mode governs it.
+ *
+ * The roster is every AGENT (`listAgentTargets`: the agents of same-slug pairs and on-call agents
+ * included), checked for the `'identity'` use: a conversation lends the agent its identity and never
+ * runs its call target, so a bound automation's approval (rule (c)) is enough here. Each entry is
+ * built from `identityOnly`, so a synced edit to call settings can neither reach nor gate it.
  *
  * Pure but for the reads: the manifests and the machine-local approval registry.
  */
@@ -38,6 +44,11 @@ export interface ChatSubagents {
   roster: string;
 }
 
+/** The agent's display name: its own title, never a bound automation's. */
+function nameOf(m: AutomationManifest): string {
+  return m.agentTitle || m.title;
+}
+
 /** The first `SUMMARY_CHARS` of the prompt, on one line. */
 function summaryOf(m: AutomationManifest): string {
   const flat = sanitizeAutomationPrompt(m.prompt).replace(/\s+/g, ' ').trim();
@@ -49,13 +60,13 @@ export function subagentPrompt(m: AutomationManifest): string {
   const pattern = buildPatternBlock(m);
   const learning = buildTurnLearningDirective(m);
   return [
-    `You are "${m.title}" (the dreamcontext agent \`${m.slug}\`), called as a sub-agent by the owner's Claude in a dreamcontext Chat tab.`,
+    `You are "${nameOf(m)}" (the dreamcontext agent \`${m.slug}\`), called as a sub-agent by the owner's Claude in a dreamcontext Chat tab.`,
     'Do what the request asks, as yourself, and end with your answer as your final message: the calling Claude relays it to the owner.',
     'This is NOT your automation thread: nothing here is posted to the Agents channel and your scheduled runs never see it, so never',
     'use `dreamcontext automations post` or `say`.',
     '',
-    '--- WHO YOU ARE (your approved automation prompt) ---',
-    'This is the job you do on your schedule. Here it tells you who you are and what you know how to do; do the job itself only when',
+    '--- WHO YOU ARE (your approved agent prompt, from the Agents page) ---',
+    'It tells you who you are and what you know how to do. Do work it describes only when',
     'the request asks for it.',
     '',
     sanitizeAutomationPrompt(m.prompt).trim(),
@@ -71,28 +82,30 @@ export function subagentPrompt(m: AutomationManifest): string {
  */
 export function chatSubagents(contextRoot: string, opts: { exclude?: string; home?: string } = {}): ChatSubagents | null {
   const callable: AutomationManifest[] = [];
-  for (const m of listAutomations(contextRoot)) {
+  let targets: AutomationManifest[] = [];
+  try { targets = listAgentTargets(contextRoot); } catch { targets = []; }
+  for (const m of targets) {
     if (m.slug === opts.exclude) continue;
     let approved = false;
-    try { approved = checkApproval(dirname(contextRoot), m, opts.home).approved; } catch { approved = false; }
+    try { approved = checkApproval(dirname(contextRoot), m, opts.home, 'identity').approved; } catch { approved = false; }
     if (!approved) continue;
-    callable.push(m);
+    callable.push(identityOnly(m));
     if (callable.length >= MAX_CHAT_SUBAGENTS) break;
   }
   if (callable.length === 0) return null;
   const agents: Record<string, SubagentDefinition> = {};
   for (const m of callable) {
     agents[m.slug] = {
-      description: `${m.title}, a dreamcontext agent of this project: ${summaryOf(m)} Call it when the owner names it or asks for its job.`,
+      description: `${nameOf(m)}, a dreamcontext agent of this project: ${summaryOf(m)} Call it when the owner names it or asks for its job.`,
       prompt: subagentPrompt(m),
     };
   }
   const roster = [
     "## This project's agents",
-    'The owner made these agents in Automations. You can call any of them as a sub-agent: the Agent tool with `subagent_type` set',
+    'The owner made these agents on the Agents page. You can call any of them as a sub-agent: the Agent tool with `subagent_type` set',
     'to its slug. When the owner names one ("ask the funnel agent…") or asks for its job, dispatch it with a complete, self-contained',
     'request, relay what it returns, and say which agent answered. Do its job yourself only when the owner asks you to.',
-    ...callable.map((m) => `- \`${m.slug}\` ${m.title}: ${summaryOf(m)}`),
+    ...callable.map((m) => `- \`${m.slug}\` ${nameOf(m)}: ${summaryOf(m)}`),
   ].join('\n');
   return { agents, roster };
 }

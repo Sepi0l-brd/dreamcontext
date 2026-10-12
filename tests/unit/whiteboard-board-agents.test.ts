@@ -4,7 +4,7 @@
  * while open, the drop target, and the card's last lines (agentCardModel.ts).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { AutomationSummary } from '../../dashboard/src/hooks/useAutomations.js';
+import type { AgentSummary } from '../../dashboard/src/hooks/useAgents.js';
 
 const store = new Map<string, string>();
 vi.stubGlobal('localStorage', {
@@ -17,7 +17,7 @@ const panel = await import('../../dashboard/src/components/whiteboard/agentPanel
 const { lastLines, lineOpacity } = await import('../../dashboard/src/components/whiteboard/agentCardModel.js');
 
 const agent = (slug: string, title: string, whiteboard: string | null = null) =>
-  ({ slug, title, whiteboard, approved: true, hasPhoto: false }) as unknown as AutomationSummary;
+  ({ slug, title, whiteboard, approvedForChat: true, hasPhoto: false }) as unknown as AgentSummary;
 
 const card = (id: string, ref: string, extra: Record<string, unknown> = {}) => ({
   id, type: 'embeddable', isDeleted: false, customData: { dc: { v: 1, kind: 'agent', ref, size: 'l' } }, ...extra,

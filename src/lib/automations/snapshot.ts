@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { listAutomations, readAutomationCache, readRunSidecar } from './store.js';
+import { listAgentTargets } from '../agents/store.js';
 import { checkApproval } from './registry.js';
 import { pendingQuestion } from './hitl.js';
 import { pendingOutputsSince } from './consumption.js';
@@ -177,10 +178,14 @@ export function buildAutomationsSnapshot(
     }
 
     // ─── Blocked pending approval — independent of any cache record ────────
-    const verdict = checkApproval(projectRoot, manifest, opts.home);
-    if (!verdict.approved) {
+    // An agent's own call target (no automation file) is reported by the agent
+    // lines below, from `listAgentTargets`, never here. Names the Automations
+    // page and NO command, like the agent lines: a session that reads the
+    // snapshot must not be one shell line away from approving the job itself.
+    const verdict = manifest.runKind === 'agent' ? null : checkApproval(projectRoot, manifest, opts.home, 'run');
+    if (verdict && !verdict.approved) {
       blockedLines.push(
-        `- ${manifest.slug}: blocked pending approval (${verdict.reason}) — run \`dreamcontext automations approve ${manifest.slug}\``,
+        `- ${manifest.slug}: blocked pending approval (${verdict.reason}) — needs approval on the Automations page in the dashboard`,
       );
     }
 
@@ -208,6 +213,24 @@ export function buildAutomationsSnapshot(
       );
     }
   }
+
+  // ─── Agents that may not run — from `listAgentTargets`, the only list an agent
+  // approval surface iterates. Names the Agents page and NO command: a session
+  // reading this must not be one shell line away from approving an agent. An
+  // agent that only runs through its approved automations (approved for
+  // conversation via its binding) is not news here: it needs a run approval only
+  // when someone assigns it work, and the assignment asks for it then.
+  const blockedSlugs = new Set(blockedLines.map((l) => l.slice(2, l.indexOf(':'))));
+  const agentLines: string[] = [];
+  let agentTargets: ReturnType<typeof listAgentTargets> = [];
+  try { agentTargets = listAgentTargets(contextRoot); } catch { agentTargets = []; }
+  for (const target of agentTargets) {
+    if (blockedSlugs.has(target.slug)) continue;
+    if (checkApproval(projectRoot, target, opts.home, 'run').approved) continue;
+    if (target.bindings.length > 0 && checkApproval(projectRoot, target, opts.home, 'identity').approved) continue;
+    agentLines.push(`- agent ${target.slug}: ${target.agentTitle || target.title} needs approval on the Agents page`);
+  }
+  blockedLines.push(...agentLines);
 
   // ─── Pending automation output (Change C) — ONE combined line, not one per
   // slug: this is a nudge that consolidation has material waiting, not a

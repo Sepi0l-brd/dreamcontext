@@ -56,7 +56,8 @@ import { join } from 'node:path';
 import { generateId } from '../id.js';
 import { acquireFileLock, releaseFileLock } from '../file-lock.js';
 import { isSafeSessionId } from '../transcript-locate.js';
-import { isSafeAutomationSlug } from './store.js';
+import { isSafeTaskSlug } from '../task-backend/local.js';
+import { getAutomation, isSafeAutomationSlug } from './store.js';
 import {
   HITL_CHANNELS,
   HITL_DIR,
@@ -71,6 +72,7 @@ import {
   type QuestionState,
   type QuestionSteer,
   type ReviewChannel,
+  type RunKind,
 } from './types.js';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
@@ -167,6 +169,52 @@ function parseChoices(v: unknown): string[] {
     .slice(0, QUESTION_CHOICES_MAX);
 }
 
+/** The longest task name or note an approval question keeps. The runner fences and
+ *  re-caps both when it builds the prompt; this only bounds the file. */
+const QUESTION_TASK_TEXT_MAX_CHARS = 2000;
+
+/**
+ * An approval question's recorded task, or undefined. Only `approval` questions
+ * carry one, and a task slug that is not a safe task slug drops the whole record:
+ * approving would otherwise re-run the agent on a task path nobody assigned.
+ */
+function parseQuestionTask(v: unknown): AutomationQuestion['task'] {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const r = v as Record<string, unknown>;
+  const slug = asString(r.slug);
+  const name = asString(r.name).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, QUESTION_TASK_TEXT_MAX_CHARS);
+  if (!slug || !isSafeTaskSlug(slug) || !name) return undefined;
+  const note = typeof r.note === 'string' ? r.note.slice(0, QUESTION_TASK_TEXT_MAX_CHARS) : null;
+  return { slug, name, ...(note ? { note } : {}) };
+}
+
+/**
+ * Which run target a slug's run (or question) is, given the target it recorded:
+ * `'agent'` when it recorded one, else whatever `getAutomation` resolves — the
+ * agent's call target for an agent with no automation of its own, the
+ * automation file otherwise. The same rule the answer paths resume by
+ * (`resumeTarget` in verdict.ts), so the gate and the answer agree.
+ */
+export function runKindOf(contextRoot: string, slug: string, recorded?: 'agent'): RunKind {
+  if (recorded === 'agent') return 'agent';
+  return getAutomation(contextRoot, slug)?.runKind === 'agent' ? 'agent' : 'automation';
+}
+
+/**
+ * The oldest pending question that belongs to ONE run target of a slug. A
+ * same-slug pair is two targets: the agent's pending approval must not hold the
+ * automation's scheduled fires, nor the automation's question the agent's
+ * task runs. An old question with no recorded target belongs to whatever
+ * `getAutomation` resolves, which is where it has always been answered.
+ */
+export function pendingQuestionFor(contextRoot: string, slug: string, kind: RunKind): AutomationQuestion | null {
+  return (
+    listQuestions(contextRoot, slug).find(
+      (q) => q.state === 'pending' && runKindOf(contextRoot, slug, q.target) === kind,
+    ) ?? null
+  );
+}
+
 /**
  * Read one question. Null for missing, unparseable, or structurally implausible
  * content — never throws.
@@ -209,6 +257,8 @@ export function readQuestion(path: string): AutomationQuestion | null {
   return {
     id,
     slug,
+    ...(raw.target === 'agent' ? { target: 'agent' as const } : {}),
+    ...(kind === 'approval' && parseQuestionTask(raw.task) ? { task: parseQuestionTask(raw.task) } : {}),
     runFiredAt: asString(raw.runFiredAt),
     // An `approval` question never has a resumable session, whatever the file
     // says — enforced on the way in so a hand-edited one cannot smuggle a
@@ -338,6 +388,10 @@ export interface CreateQuestionInput {
   channel: HitlChannel;
   question: string;
   choices?: string[];
+  /** The run target that asked; only `'agent'` is recorded (see `AutomationQuestion.target`). */
+  target?: RunKind;
+  /** `kind: 'approval'` only — the asking run's task, so approving can re-run with it. */
+  task?: AutomationQuestion['task'] | null;
   /** Injected for determinism in tests; defaults to now. */
   nowISO?: string;
 }
@@ -356,9 +410,12 @@ export function createQuestion(contextRoot: string, input: CreateQuestionInput):
   }
   pruneAnsweredQuestions(contextRoot, input.slug);
   const now = input.nowISO ?? new Date().toISOString();
+  const task = input.kind === 'approval' ? parseQuestionTask(input.task) : undefined;
   const q: AutomationQuestion = {
     id: generateId('q'),
     slug: input.slug,
+    ...(input.target === 'agent' ? { target: 'agent' as const } : {}),
+    ...(task ? { task } : {}),
     runFiredAt: input.runFiredAt,
     // Forced null for `approval`, not merely expected to be null. The caller
     // that has a session id in hand is the runner, and the runner is exactly the

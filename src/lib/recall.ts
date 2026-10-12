@@ -21,7 +21,7 @@ import { resolveWhiteboardPath, whiteboardsDir } from './whiteboards/store.js';
 
 // 'skill' docs are produced ONLY by loadSkillDocs (called directly by the hook);
 // intentionally excluded from buildCorpus defaults so they never pollute the recall corpus.
-export type CorpusType = 'knowledge' | 'feature' | 'task' | 'memory' | 'changelog' | 'skill' | 'objective' | 'insight' | 'thesis' | 'automation' | 'whiteboard' | 'core';
+export type CorpusType = 'knowledge' | 'feature' | 'task' | 'memory' | 'changelog' | 'skill' | 'objective' | 'insight' | 'thesis' | 'automation' | 'agent' | 'whiteboard' | 'core';
 
 /**
  * Every corpus type `buildCorpus` can produce, in snapshot/report order. The
@@ -34,7 +34,7 @@ export type CorpusType = 'knowledge' | 'feature' | 'task' | 'memory' | 'changelo
  */
 export const CORPUS_TYPES: readonly CorpusType[] = [
   'knowledge', 'feature', 'task', 'memory', 'changelog',
-  'objective', 'insight', 'thesis', 'automation', 'whiteboard', 'core',
+  'objective', 'insight', 'thesis', 'automation', 'agent', 'whiteboard', 'core',
 ];
 
 /**
@@ -1143,6 +1143,12 @@ export function buildCorpusWith(
       memo,
     ));
     docs.push(...loadAutomationRunDocs(contextRoot));
+  }
+  if (types.has('agent')) {
+    // Agent files are FLAT at `agents/<slug>.md`. LOCAL ONLY: a body IS the
+    // prompt a run executes, so the channel is not in the cloud allow-list
+    // (`CLOUD_ELIGIBLE_TYPES`) and the federation paths drop it for peers.
+    docs.push(...loadMarkdownDocs(join(contextRoot, 'agents'), 'agent', contextRoot, undefined, memo));
   }
   if (types.has('whiteboard')) {
     docs.push(...loadWhiteboardDocs(contextRoot));

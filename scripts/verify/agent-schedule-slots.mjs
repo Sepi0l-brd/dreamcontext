@@ -19,6 +19,8 @@
  *      three slots and the agent is still approved.
  *   3. Remove takes a row out and the save drops that slot.
  *   4. Nothing in the dialog overflows its width, in light and in dark.
+ *   5. A NEW automation that picks an agent edits its schedule with the same
+ *      rows (the picker hides the identity fields, never the slots).
  *
  * Exit 0 iff every check passed. Screenshots land in test-results/.
  */
@@ -121,7 +123,8 @@ async function main() {
   };
   const showRoster = async () => {
     if ((await page.locator('.agent-card').count()) > 0) return;
-    await page.locator('.agents-switch-opt', { hasText: 'Agents' }).click();
+    // The roster tab is "Automations": the agents themselves have their own page now.
+    await page.locator('.agents-switch-opt', { hasText: 'Automations' }).click();
     await until(async () => (await page.locator('.agent-card').count()) > 0);
   };
   const card = (title) => page.locator('.agent-card', { hasText: title }).first();
@@ -146,7 +149,7 @@ async function main() {
     await page.goto(`${base}/?vault=proj`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
     await dismissOverlays();
-    await page.locator('.sidebar-item', { hasText: 'Agentic Automations' }).first().click();
+    await page.locator('.sidebar-item', { hasText: 'Automations' }).first().click();
     await page.waitForTimeout(1000);
     await showRoster();
 
@@ -210,6 +213,22 @@ async function main() {
     await showRoster();
     const funnelText = (await card('Funnel watch').innerText()).replace(/\s+/g, ' ');
     check('…and the card reads the two slots again', funnelText.includes('mon 09:30 · mon–fri 16:30') && !funnelText.includes('monthly'), funnelText.slice(0, 200));
+
+    console.log('\n═══ 4. A create that picks an agent keeps the slot editor ═══');
+    await page.locator('.agents-new-btn').click();
+    await until(async () => (await page.locator('.agent-modal').count()) > 0);
+    const agentOption = await until(async () =>
+      (await page.locator('.automation-agent-select option[value="funnel-watch"]').count()) > 0, 10000);
+    check('[S2] the New automation dialog lists the roster\'s agents', agentOption);
+    await page.locator('.automation-agent-select').selectOption('funnel-watch');
+    await page.waitForTimeout(300);
+    check('[S2] with an agent picked, the schedule is one slot row', await page.locator('.agent-slot').count() === 1);
+    await page.locator('.agent-slot-add').click();
+    check('[S2] …and "Add another time" still adds a row', await page.locator('.agent-slot').count() === 2);
+    check('[S2] …with nothing overflowing the dialog', (await overflow()) === null, String(await overflow()));
+    await page.screenshot({ path: join(SHOTS, '3-new-automation-picked-agent.png') });
+    await page.keyboard.press('Escape');
+    await until(async () => (await page.locator('.agent-modal').count()) === 0, 8000);
 
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
   } finally {

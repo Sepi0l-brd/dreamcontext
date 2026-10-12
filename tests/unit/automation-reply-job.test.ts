@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -26,9 +26,20 @@ vi.mock('../../src/lib/automations/notifier.js', async (importOriginal) => ({
   notifyViaBundle,
 }));
 
+// The run itself is doubled for the task-assignment jobs below (a real one spawns `claude`).
+// No other test here starts a run job, so the double is inert for them.
+const runAutomation = vi.hoisted(() => vi.fn());
+vi.mock('../../src/lib/automations/runner.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/lib/automations/runner.js')>()),
+  runAutomation,
+}));
+
 const {
   startAutomationReplyJob, currentReplyJob, reconcileReplyThreads, PROCESS_STARTED_AT, agentActivity,
+  startAutomationJob, currentAutomationJob,
 } = await import('../../src/server/automation-job.js');
+const { createAgent } = await import('../../src/lib/agents/store.js');
+const { queuedFire } = await import('../../src/lib/automations/queue.js');
 const { createAutomation, writeRunSidecar, lockPathFor } = await import('../../src/lib/automations/store.js');
 const { appendThreadEntry, readThread, newThreadEntryId, markThreadRead } =
   await import('../../src/lib/automations/threads.js');
@@ -389,5 +400,73 @@ describe('agentActivity — whether an agent is working, asked of its run lock',
     expect(now?.runId).toBe(RUN);
     finish();
     await settled(job.id);
+  });
+});
+
+describe('a task-assignment run logs its result on the task', () => {
+  const FIRE = new Date('2026-10-12T09:00:00.000Z');
+
+  function seedTask(): string {
+    mkdirSync(join(contextRoot, 'state'), { recursive: true });
+    const path = join(contextRoot, 'state', 'fix-login.md');
+    writeFileSync(path, ['---', 'name: Fix login', 'status: in_progress', '---', '', '## Changelog', ''].join('\n'));
+    return path;
+  }
+
+  async function settledRun(slug: string, tries = 50): Promise<ReturnType<typeof currentAutomationJob>> {
+    for (let i = 0; i < tries; i++) {
+      const job = currentAutomationJob(contextRoot, slug);
+      if (job && job.status !== 'running') return job;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    return currentAutomationJob(contextRoot, slug);
+  }
+
+  beforeEach(() => {
+    runAutomation.mockReset();
+    createAgent(contextRoot, { slug: 'scout', title: 'Scout', prompt: 'Scout the market.' });
+  });
+
+  it("passes the target and the task to the run, then writes ONE line with the run's status and document", async () => {
+    const path = seedTask();
+    const doc = join(contextRoot, 'automations', 'output', 'scout', '2026-10-12.md');
+    runAutomation.mockResolvedValue({
+      slug: 'scout', status: 'ok', outputPath: doc, error: null, durationMs: 1, event: null, cache: null,
+      denials: 0, costUsd: null, reviewCardId: null,
+    });
+    startAutomationJob(contextRoot, 'scout', {
+      text: 'Hurry.', fireAt: FIRE, target: 'agent', task: { slug: 'fix-login', name: 'Fix login' },
+    });
+    expect((await settledRun('scout'))?.status).toBe('success');
+    expect(runAutomation).toHaveBeenCalledTimes(1);
+    expect(runAutomation.mock.calls[0][2]).toMatchObject({
+      ask: 'Hurry.', fireAt: FIRE, target: 'agent', task: { slug: 'fix-login', name: 'Fix login' },
+    });
+    const text = readFileSync(path, 'utf-8');
+    expect(text).toMatch(/### \d{4}-\d{2}-\d{2} - Agent Scout \(`scout`\)\n- Run 2026-10-12T09:00:00\.000Z: ok\. Document: automations\/output\/scout\/2026-10-12\.md\./);
+    expect(text.match(/- Run /g)).toHaveLength(1);
+  });
+
+  it('a run that could not start logs "failed" and is NOT queued as a plain fire', async () => {
+    const path = seedTask();
+    runAutomation.mockRejectedValue(new Error('broken host contract'));
+    startAutomationJob(contextRoot, 'scout', {
+      text: '', fireAt: FIRE, target: 'agent', task: { slug: 'fix-login', name: 'Fix login' },
+    });
+    expect((await settledRun('scout'))?.status).toBe('error');
+    expect(readFileSync(path, 'utf-8')).toContain('- Run 2026-10-12T09:00:00.000Z: failed. Document: none.');
+    expect(queuedFire(projectRoot, 'scout', home)).toBeNull();
+  });
+
+  it('a run with no task writes nothing on any task', async () => {
+    const path = seedTask();
+    const before = readFileSync(path, 'utf-8');
+    runAutomation.mockResolvedValue({
+      slug: 'scout', status: 'ok', outputPath: null, error: null, durationMs: 1, event: null, cache: null,
+      denials: 0, costUsd: null, reviewCardId: null,
+    });
+    startAutomationJob(contextRoot, 'scout', { text: 'Hi.', fireAt: FIRE });
+    await settledRun('scout');
+    expect(readFileSync(path, 'utf-8')).toBe(before);
   });
 });

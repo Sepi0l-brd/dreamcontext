@@ -7,8 +7,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { automationPath, createAutomation } from '../../src/lib/automations/store.js';
-import { approveAutomation } from '../../src/lib/automations/registry.js';
+import { automationPath, createAutomation, getRunTarget } from '../../src/lib/automations/store.js';
+import { approveAutomation, checkApproval } from '../../src/lib/automations/registry.js';
+import { createAgent } from '../../src/lib/agents/store.js';
+import { splitLegacyManifest } from '../../src/lib/agents/split.js';
 import { chatSubagents, subagentPrompt, MAX_CHAT_SUBAGENTS } from '../../src/lib/automations/chat-subagents.js';
 
 let projectRoot: string;
@@ -79,5 +81,65 @@ describe('chatSubagents', () => {
     expect(line).not.toContain('\n');
     expect(line.endsWith('…')).toBe(true);
     expect(line).toContain('Line one. Line two');
+  });
+});
+
+/**
+ * WIRING (A14): the roster is every AGENT from `listAgentTargets`, checked for `'identity'`.
+ *
+ * Mutation-tested against two mutations of `chatSubagents`:
+ *  - `listAgentTargets(contextRoot)` swapped back to `listAutomations(contextRoot)`: the bound
+ *    job `daily-digest` (a job, not an agent) joins the roster, so the exact key list fails;
+ *  - `checkApproval(…, 'identity')` swapped for the default `'run'`: `digest` and `writer` are
+ *    approved only through their binding (rule (c)), so both drop out and the key list fails.
+ */
+describe('chatSubagents iterates the agents, for conversation', () => {
+  it('a call agent approved before the split is in the roster, unsplit and migrated', () => {
+    agent('helper', 'Helper', 'Help with anything.');
+    expect(Object.keys(chatSubagents(contextRoot, { home })!.agents)).toEqual(['helper']);
+
+    expect(splitLegacyManifest(contextRoot, 'helper', { home }).outcome).toBe('split');
+    const target = getRunTarget(contextRoot, 'helper', 'agent')!;
+    expect(target.runKind).toBe('agent');
+    expect(checkApproval(projectRoot, target, home, 'run').approved).toBe(true);
+    const out = chatSubagents(contextRoot, { home })!;
+    expect(Object.keys(out.agents)).toEqual(['helper']);
+    expect(out.roster).toContain('- `helper` Helper: Help with anything.');
+  });
+
+  it("a scheduled pair's agent and a bound agent are in it via their binding; the jobs never are", () => {
+    const digest = createAutomation(contextRoot, { slug: 'digest', title: 'Digest', prompt: 'Write the digest.', days: 'daily', at: '09:00' });
+    approveAutomation(projectRoot, digest, NOW, home);
+    createAgent(contextRoot, { slug: 'writer', title: 'Writer', prompt: 'Write clearly.' });
+    createAutomation(
+      contextRoot,
+      { slug: 'daily-digest', title: 'Daily digest', agent: 'writer', days: 'daily', at: '08:00', job: 'Write the daily digest.' },
+      { approve: { now: NOW, home } },
+    );
+
+    // Neither agent may RUN: their only approvals are their automations' records.
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'digest', 'agent')!, home, 'run').approved).toBe(false);
+    expect(checkApproval(projectRoot, getRunTarget(contextRoot, 'writer', 'agent')!, home, 'run').approved).toBe(false);
+
+    const out = chatSubagents(contextRoot, { home })!;
+    expect(Object.keys(out.agents)).toEqual(['digest', 'writer']);
+    expect(out.roster).toContain('- `writer` Writer: Write clearly.');
+    // A conversation never carries the job.
+    expect(out.agents.writer.prompt).not.toContain('Write the daily digest.');
+
+    // Migrating the pair changes nothing: the binding's hash is the legacy hash.
+    expect(splitLegacyManifest(contextRoot, 'digest', { home }).outcome).toBe('split');
+    expect(Object.keys(chatSubagents(contextRoot, { home })!.agents)).toEqual(['digest', 'writer']);
+  });
+
+  it('an agent approved neither directly nor through a binding is absent', () => {
+    agent('helper', 'Helper', 'Help with anything.');
+    createAgent(contextRoot, { slug: 'loner', title: 'Loner', prompt: 'Alone.' });
+    createAgent(contextRoot, { slug: 'quiet', title: 'Quiet', prompt: 'Quiet.' });
+    createAutomation(contextRoot, { slug: 'quiet-job', title: 'Quiet job', agent: 'quiet', days: 'daily', at: '07:00' });
+    const out = chatSubagents(contextRoot, { home })!;
+    expect(Object.keys(out.agents)).toEqual(['helper']);
+    expect(out.roster).not.toContain('loner');
+    expect(out.roster).not.toContain('quiet');
   });
 });

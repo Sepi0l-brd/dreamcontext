@@ -30,7 +30,8 @@ import {
   syncAccountRejections, wireNotchInbox,
 } from '../../lib/assistant/notch-inbox.js';
 import { markThreadRead, plainPostText } from '../../lib/automations/threads.js';
-import { getAutomation } from '../../lib/automations/store.js';
+import { getRunTarget } from '../../lib/automations/store.js';
+import { getAgent } from '../../lib/agents/store.js';
 import { automationProject, invalidateAutomationInbox, runningAutomations, unreadAutomationPosts } from '../assistant-inbox.js';
 import { sayToAgent } from './automations.js';
 import { boardAgents } from '../../lib/whiteboards/agents.js';
@@ -668,14 +669,17 @@ export async function handleAssistantInboxDismiss(req: IncomingMessage, res: Ser
 }
 
 /** The `{vault, slug}` of an inbox automation call, checked against the registry and the
- *  project's own manifests, or the refusal to send. */
+ *  project's own manifests, or the refusal to send. A thread belongs to an automation file or to
+ *  an agent (its call target's thread), so either one names a real thread. */
 function pickAutomation(b: Record<string, unknown>): { vault: string; slug: string; projectRoot: string; contextRoot: string } | string {
   const vault = typeof b.vault === 'string' && b.vault.length <= VAULT_NAME_MAX ? b.vault : '';
   const slug = typeof b.slug === 'string' && SLUG_RE.test(b.slug) ? b.slug : '';
   if (!vault || !slug) return 'vault and slug are required';
   const p = automationProject(vault);
   if (!p) return `unknown project "${vault}"`;
-  if (!getAutomation(p.contextRoot, slug)) return `no automation "${slug}" in ${vault}`;
+  if (!getRunTarget(p.contextRoot, slug, 'automation') && !getAgent(p.contextRoot, slug)) {
+    return `no automation "${slug}" in ${vault}`;
+  }
   return { vault, slug, ...p };
 }
 

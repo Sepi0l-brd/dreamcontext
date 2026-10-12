@@ -1260,3 +1260,133 @@ describe('deriveFlowFromManifest', () => {
     expect(readFileSync(automationPath(contextRoot, 'eod-digest'), 'utf-8')).not.toContain('## Flow');
   });
 });
+
+// ─── Split (bound) automations: the store's file-level write paths ──────────
+
+import * as agentStoreForBound from '../../src/lib/agents/store.js';
+import * as storeForBound from '../../src/lib/automations/store.js';
+
+describe('bound automations through the automation store', () => {
+  let boundProj: string;
+  let boundCtx: string;
+
+  beforeEach(() => {
+    boundProj = mkdtempSync(join(tmpdir(), 'dc-bound-store-'));
+    boundCtx = join(boundProj, '_dream_context');
+    mkdirSync(join(boundCtx, 'automations'), { recursive: true });
+    agentStoreForBound.createAgent(boundCtx, { slug: 'scout', title: 'Scout', prompt: 'Scout the market.' });
+    storeForBound.createAutomation(boundCtx, { slug: 'scout-daily', title: 'Daily', agent: 'scout', days: 'daily', at: '09:00' });
+  });
+
+  afterEach(() => {
+    rmSync(boundProj, { recursive: true, force: true });
+  });
+
+  it('createAutomation with an agent writes the agent key and no identity, and refuses on-call or an unknown agent', () => {
+    const text = readFileSync(join(boundCtx, 'automations', 'scout-daily.md'), 'utf-8');
+    expect(text).toMatch(/^agent: scout$/m);
+    expect(text).not.toContain('## Prompt');
+    expect(() =>
+      storeForBound.createAutomation(boundCtx, { slug: 'x', title: 'X', agent: 'scout', mode: 'call' }),
+    ).toThrow(/runs on a schedule/);
+    expect(() =>
+      storeForBound.createAutomation(boundCtx, { slug: 'y', title: 'Y', agent: 'nobody', days: 'daily', at: '09:00' }),
+    ).toThrow(/No agent named/);
+  });
+
+  it('an automation may share a slug only with its own agent; a legacy create refuses an agent name', () => {
+    agentStoreForBound.createAgent(boundCtx, { slug: 'other', title: 'Other', prompt: 'p' });
+    expect(() =>
+      storeForBound.createAutomation(boundCtx, { slug: 'other', title: 'O', agent: 'scout', days: 'daily', at: '09:00' }),
+    ).toThrow(/already an agent's name/);
+    expect(() =>
+      storeForBound.createAutomation(boundCtx, { slug: 'other', title: 'O', prompt: 'p', days: 'daily', at: '09:00' }),
+    ).toThrow(/already an agent's name/);
+  });
+
+  it('enable, share and remove touch the automation file only; the agent stays', () => {
+    storeForBound.setAutomationEnabled(boundCtx, 'scout-daily', false);
+    expect(storeForBound.getRunTarget(boundCtx, 'scout-daily', 'automation')?.enabled).toBe(false);
+    storeForBound.setAutomationShared(boundCtx, 'scout-daily', true);
+    expect(readFileSync(join(boundCtx, 'agents', 'scout.md'), 'utf-8')).toMatch(/^shared: false$/m);
+    storeForBound.removeAutomation(boundCtx, 'scout-daily');
+    expect(existsSync(join(boundCtx, 'automations', 'scout-daily.md'))).toBe(false);
+    expect(agentStoreForBound.getAgent(boundCtx, 'scout')).not.toBeNull();
+  });
+
+  it('an agent with no automation of its own: identity edits land in the agent, a schedule is refused', () => {
+    const t = storeForBound.updateAutomation(boundCtx, 'scout', { title: 'Market scout' });
+    expect(t.runKind).toBe('agent');
+    expect(agentStoreForBound.getAgent(boundCtx, 'scout')?.title).toBe('Market scout');
+    expect(() => storeForBound.updateAutomation(boundCtx, 'scout', { days: 'daily', at: '10:00' })).toThrow(/only call/);
+    expect(() => storeForBound.updateAutomation(boundCtx, 'scout-daily', { mode: 'call' })).toThrow(/runs on a schedule/);
+  });
+
+  it('listAutomations lists an agent with no automation file as its call target, beside the jobs', () => {
+    const slugs = storeForBound.listAutomations(boundCtx).map((m) => `${m.slug}:${m.runKind}`);
+    expect(slugs).toEqual(['scout:agent', 'scout-daily:automation']);
+    expect(storeForBound.listAutomationJobs(boundCtx).map((j) => j.slug)).toEqual(['scout-daily']);
+  });
+
+  it('a job edit on a bound automation sets, replaces and clears its ## Job, touching nothing else', () => {
+    const path = join(boundCtx, 'automations', 'scout-daily.md');
+    const set = storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: '  Check the top five.  ' });
+    expect(set.job).toBe('Check the top five.');
+    expect(readFileSync(path, 'utf-8')).toContain('## Job\n\nCheck the top five.');
+    expect(readFileSync(path, 'utf-8')).toContain('## Output instructions');
+
+    const replaced = storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: 'Check the top ten.' });
+    expect(replaced.job).toBe('Check the top ten.');
+    expect(readFileSync(path, 'utf-8').match(/## Job/g)).toHaveLength(1);
+
+    // Untouched when absent from the patch.
+    storeForBound.updateAutomation(boundCtx, 'scout-daily', { title: 'Daily market' });
+    expect(storeForBound.getRunTarget(boundCtx, 'scout-daily', 'automation')?.job).toBe('Check the top ten.');
+
+    for (const clear of [null, '', '   ']) {
+      storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: 'Again.' });
+      const cleared = storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: clear });
+      expect(cleared.job ?? '').toBe('');
+      const text = readFileSync(path, 'utf-8');
+      expect(text).not.toContain('## Job');
+      expect(text).toContain('## Output instructions');
+      expect(text).toMatch(/^agent: scout$/m);
+    }
+    // Clearing a job that is already gone is a no-op, not an error.
+    expect(() => storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: null })).not.toThrow();
+    // The job is the automation's: the agent's prompt is untouched.
+    expect(agentStoreForBound.getAgent(boundCtx, 'scout')?.prompt).toBe('Scout the market.');
+  });
+
+  it('a job edit is refused, before any write, on an unsplit automation and on an agent you only call', () => {
+    storeForBound.createAutomation(boundCtx, { slug: 'legacy', title: 'Legacy', prompt: 'Do it.', days: 'daily', at: '09:00' });
+    const legacyPath = join(boundCtx, 'automations', 'legacy.md');
+    const before = readFileSync(legacyPath, 'utf-8');
+    expect(() => storeForBound.updateAutomation(boundCtx, 'legacy', { title: 'Renamed', job: 'Post it.' }))
+      .toThrow(/picks an agent/);
+    expect(readFileSync(legacyPath, 'utf-8')).toBe(before);
+    expect(() => storeForBound.updateAutomation(boundCtx, 'scout', { job: 'Post it.' })).toThrow(/picks an agent/);
+  });
+
+  it('a job edit changes the approval hash, so the automation is blocked until approved again', async () => {
+    const { approveAutomation, checkApproval, manifestHash } = await import('../../src/lib/automations/registry.js');
+    const home = join(boundProj, 'home');
+    mkdirSync(home, { recursive: true });
+    const before = storeForBound.getRunTarget(boundCtx, 'scout-daily', 'automation')!;
+    approveAutomation(boundProj, before, new Date('2026-10-12T09:00:00Z'), home);
+    expect(checkApproval(boundProj, before, home, 'run').approved).toBe(true);
+
+    const after = storeForBound.updateAutomation(boundCtx, 'scout-daily', { job: 'Post a digest.' });
+    expect(manifestHash(after)).not.toBe(manifestHash(before));
+    expect(checkApproval(boundProj, after, home, 'run').approved).toBe(false);
+
+    approveAutomation(boundProj, after, new Date('2026-10-12T09:01:00Z'), home);
+    expect(checkApproval(boundProj, after, home, 'run').approved).toBe(true);
+  });
+
+  it('a lesson recorded by an automation lands in its agent', () => {
+    storeForBound.recordLesson(boundCtx, 'scout-daily', { lesson: 'Check two sources.' });
+    expect(agentStoreForBound.getAgent(boundCtx, 'scout')?.pattern).toContain('Check two sources.');
+    expect(readFileSync(join(boundCtx, 'automations', 'scout-daily.md'), 'utf-8')).not.toContain('Check two sources.');
+  });
+});

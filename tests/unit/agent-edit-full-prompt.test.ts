@@ -30,7 +30,8 @@ describe('a save that is only the preview of a longer prompt is refused', () => 
 });
 
 describe('the edit dialog seeds its prompt from the manifest, not the preview', () => {
-  const src = readFileSync(join(ROOT, 'dashboard/src/components/agents/AgentDialog.tsx'), 'utf-8');
+  // Renamed from AgentDialog.tsx in wave 4b: an automation picks an agent now.
+  const src = readFileSync(join(ROOT, 'dashboard/src/components/agents/AutomationDialog.tsx'), 'utf-8');
 
   it('never initialises the prompt field from agent.description', () => {
     expect(src).not.toMatch(/useState\(\s*agent\?\.description/);
@@ -38,6 +39,8 @@ describe('the edit dialog seeds its prompt from the manifest, not the preview', 
 
   it('reads the full prompt from the detail route and gates Save on it', () => {
     expect(src).toContain('detail.isFetchedAfterMount ? detail.data?.automation.prompt');
-    expect(src).toMatch(/const canSave = promptReady/);
+    // The self-contained form (every edit) is still gated on the full prompt; only a create
+    // with an agent picked, which carries no prompt at all, is not.
+    expect(src).toMatch(/const canSave = bound[\s\S]{0,400}?: promptReady/);
   });
 });

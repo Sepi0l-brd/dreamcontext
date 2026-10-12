@@ -41,6 +41,13 @@ export interface TaskFrontmatter {
   objectives?: string[] | null;
   /** Remote identity — present only for synced tasks on a remote backend. */
   assignee?: string | null;
+  /**
+   * The AGENT this task is assigned to (`agents/<slug>.md`), never a person:
+   * people are `person:<slug>` tags and the `assignee` above. LOCAL-ONLY — it is
+   * not in `REMOTE_MAPPED_TASK_FIELDS`, so no backend pushes it and every pull
+   * preserves it.
+   */
+  agent?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
   /**
@@ -82,6 +89,9 @@ export interface TaskData {
   /** Objective slugs this task serves (many-to-many, local-only). Empty when none. */
   objectives: string[];
   assignee: string | null;
+  /** The agent this task is assigned to, when its frontmatter names a valid
+   *  agent slug. Absent otherwise (never a person — see TaskFrontmatter.agent). */
+  agent?: string;
   /** User-defined custom-field values (override-declared). Empty when none. */
   custom_fields: Record<string, string | number | null>;
   why: string;

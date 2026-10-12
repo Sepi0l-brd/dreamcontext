@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ensureGitignoreEntries, removeGitignoreEntries } from '../gitignore.js';
 import {
+  AGENTS_GITIGNORE_ENTRIES,
+  AGENTS_GITIGNORE_ENTRIES_ROOT,
+  sharedAgentNegations,
+  sharedAgentNegationsRoot,
+} from '../agents/types.js';
+import {
   AUTOMATIONS_GITIGNORE_ENTRIES,
   AUTOMATIONS_GITIGNORE_ENTRIES_ROOT,
   AutomationError,
@@ -119,13 +125,14 @@ export function repairAutomationsBlock(
   root: string,
   baseEntries: readonly string[],
   negationPrefix: string,
+  baseComment: string = LOCK_STATE_COMMENT,
 ): { removed: string[]; added: string[] } {
   const text = readGitignoreText(root);
   const existingNegations = meaningfulLines(text).filter((l) => l.startsWith(negationPrefix));
 
   const removed = removeGitignoreEntries(root, [...baseEntries, ...existingNegations]);
 
-  const addedBase = ensureGitignoreEntries(root, [...baseEntries], { comment: LOCK_STATE_COMMENT });
+  const addedBase = ensureGitignoreEntries(root, [...baseEntries], { comment: baseComment });
   const addedNegations =
     existingNegations.length > 0
       ? ensureGitignoreEntries(root, existingNegations, { comment: SHARE_COMMENT })
@@ -229,7 +236,7 @@ export function migrateThreadIgnoreBlocks(contextRoot: string): { path: string; 
  * leaves the file in a verified-effective order before adding anything new —
  * never appends into a block already known to be broken.
  */
-export function shareAutomation(contextRoot: string, slug: string): ShareResult {
+export function shareAutomation(contextRoot: string, slug: string, opts: { agent?: string } = {}): ShareResult {
   assertNonEmptySlug(slug);
   const projectRoot = dirname(contextRoot);
 
@@ -258,12 +265,16 @@ export function shareAutomation(contextRoot: string, slug: string): ShareResult 
   const addedBrain = ensureGitignoreEntries(contextRoot, sharedSlugNegations(slug), { comment: SHARE_COMMENT });
   const addedRoot = ensureGitignoreEntries(projectRoot, sharedSlugNegationsRoot(slug), { comment: SHARE_COMMENT });
 
+  // A shared automation whose agent stays private reaches a teammate with no
+  // agent to run as, so sharing it shares the agent it runs as too.
+  const agent = opts.agent ? shareAgent(contextRoot, opts.agent) : null;
+
   return {
     slug,
     shared: true,
-    added: [...repairAdded, ...addedBrain, ...addedRoot],
-    removed,
-    repairedOrdering,
+    added: [...repairAdded, ...addedBrain, ...addedRoot, ...(agent?.added ?? [])],
+    removed: [...removed, ...(agent?.removed ?? [])],
+    repairedOrdering: repairedOrdering || (agent?.repairedOrdering ?? false),
   };
 }
 
@@ -342,4 +353,101 @@ export function pruneStrayNegations(contextRoot: string, privateSlugs: string[])
     removed.push(...removeGitignoreEntries(projectRoot, sharedSlugNegationsRoot(slug)));
   }
   return removed;
+}
+
+// ─── Agents: their own block, their own ordering check ──────────────────────
+//
+// `agents/*.md` is a separate block, never appended to the automations base list
+// (appending a wildcard below existing negations makes `negationIsEffective`
+// report every one of them as broken). It has ONE wildcard, so
+// `shareOrderingProblems` — which scopes by the base entries' longest common
+// prefix, here the whole wildcard — would never flag an agents negation at all.
+// The check below is written for this block instead.
+
+const AGENT_SHARE_COMMENT = 'dreamcontext agents — shared (published) agents';
+const AGENT_BASE_COMMENT = 'dreamcontext agents — private by default (shared ones are negated below)';
+const AGENT_BRAIN_NEGATION_PREFIX = '!agents/';
+const AGENT_ROOT_NEGATION_PREFIX = '!_dream_context/agents/';
+const AGENT_BRAIN_NEGATION_RE = /^!agents\/([a-z0-9][a-z0-9-]*)\.md$/;
+const AGENT_ROOT_NEGATION_RE = /^!_dream_context\/agents\/([a-z0-9][a-z0-9-]*)\.md$/;
+
+/** Every agents negation in `text` that git would silently drop: one with the
+ *  agents wildcard at or after it. */
+export function agentShareOrderingProblems(text: string, baseEntries: readonly string[], prefix: string): string[] {
+  return meaningfulLines(text)
+    .filter((line) => line.startsWith(prefix))
+    .filter((line) => !negationIsEffective(text, line, baseEntries))
+    .map((line) => `"${line}" is positioned before its base wildcard and will be silently ignored by git.`);
+}
+
+/** The agents-block ordering faults across BOTH governing `.gitignore` files. */
+export function assertAgentShareOrdering(contextRoot: string): ShareOrderingCheck {
+  const problems = [
+    ...agentShareOrderingProblems(readGitignoreText(contextRoot), AGENTS_GITIGNORE_ENTRIES, AGENT_BRAIN_NEGATION_PREFIX),
+    ...agentShareOrderingProblems(readGitignoreText(dirname(contextRoot)), AGENTS_GITIGNORE_ENTRIES_ROOT, AGENT_ROOT_NEGATION_PREFIX),
+  ];
+  return { ok: problems.length === 0, problems };
+}
+
+/**
+ * Publish ONE agent file: repair the agents block first if it is misordered (so
+ * a negation is never appended into a block already known to be broken), then
+ * append the agent's negation to both governing `.gitignore` files.
+ * `.gitignore` only — the `shared` flag is the store's `setAgentShared`.
+ */
+export function shareAgent(contextRoot: string, slug: string): ShareResult {
+  assertNonEmptySlug(slug);
+  const projectRoot = dirname(contextRoot);
+  const removed: string[] = [];
+  const added: string[] = [];
+  let repairedOrdering = false;
+  const roots: [string, readonly string[], string][] = [
+    [contextRoot, AGENTS_GITIGNORE_ENTRIES, AGENT_BRAIN_NEGATION_PREFIX],
+    [projectRoot, AGENTS_GITIGNORE_ENTRIES_ROOT, AGENT_ROOT_NEGATION_PREFIX],
+  ];
+  for (const [root, base, prefix] of roots) {
+    if (agentShareOrderingProblems(readGitignoreText(root), base, prefix).length > 0) {
+      const r = repairAutomationsBlock(root, base, prefix, AGENT_BASE_COMMENT);
+      removed.push(...r.removed);
+      added.push(...r.added);
+      repairedOrdering = true;
+    }
+  }
+  added.push(...ensureGitignoreEntries(contextRoot, sharedAgentNegations(slug), { comment: AGENT_SHARE_COMMENT }));
+  added.push(...ensureGitignoreEntries(projectRoot, sharedAgentNegationsRoot(slug), { comment: AGENT_SHARE_COMMENT }));
+  return { slug, shared: true, added, removed, repairedOrdering };
+}
+
+/** Un-publish ONE agent file. Like `unshareAutomation`, never rewrites history.
+ *  Refusing while a SHARED automation still runs as the agent is the caller's
+ *  check (it needs the store, which this module does not import). */
+export function unshareAgent(contextRoot: string, slug: string): ShareResult {
+  assertNonEmptySlug(slug);
+  const removed = [
+    ...removeGitignoreEntries(contextRoot, sharedAgentNegations(slug)),
+    ...removeGitignoreEntries(dirname(contextRoot), sharedAgentNegationsRoot(slug)),
+  ];
+  return { slug, shared: false, added: [], removed, repairedOrdering: false };
+}
+
+/** Agent slugs whose negation is present AND effective in either governing
+ *  `.gitignore` — what actually publishes. Union across the two files, as
+ *  {@link listSharedSlugs}. */
+export function listSharedAgentSlugs(contextRoot: string): string[] {
+  const brainText = readGitignoreText(contextRoot);
+  const rootText = readGitignoreText(dirname(contextRoot));
+  const candidates = new Set<string>([
+    ...slugsFromNegations(brainText, AGENT_BRAIN_NEGATION_RE),
+    ...slugsFromNegations(rootText, AGENT_ROOT_NEGATION_RE),
+  ]);
+  const shared: string[] = [];
+  for (const slug of candidates) {
+    if (
+      negationIsEffective(brainText, sharedAgentNegations(slug)[0], AGENTS_GITIGNORE_ENTRIES) ||
+      negationIsEffective(rootText, sharedAgentNegationsRoot(slug)[0], AGENTS_GITIGNORE_ENTRIES_ROOT)
+    ) {
+      shared.push(slug);
+    }
+  }
+  return shared.sort();
 }

@@ -11,6 +11,10 @@ import { dueDateAfterStartMove, dateUpdatesForStatus } from '../../lib/task-date
 import { resolveFeature, applyTaskFeatureLink } from '../../lib/feature-links.js';
 import { PeopleStoreError, listPeople } from '../../lib/people-store.js';
 import { developHandoffGaps } from '../../lib/handoff-readiness.js';
+import { getAgent } from '../../lib/agents/store.js';
+import { isSafeAutomationSlug } from '../../lib/agents/slot.js';
+import { commitAssignment, prepareAssignment, type AssignmentRefusal } from '../../lib/agents/task-assignment.js';
+import { currentAutomationJob, startAutomationJob } from '../automation-job.js';
 import {
   loadTaskOverride,
   loadStatuses,
@@ -935,7 +939,16 @@ export async function handleTasksUpdate(
 
   // `objectives` (roadmap many-to-many, local-only) is PATCHable so the dashboard
   // can link tasks to objectives; the sync mappers never read it, so it stays local.
-  const allowedFields = ['status', 'priority', 'urgency', 'description', 'tags', 'name', 'related_feature', 'version', 'start_date', 'due_date', 'objectives', 'assignee'];
+  // `agent` (local-only, never a person and never synced) may be set to an
+  // existing agent's slug or cleared with null. Setting it here does NOT run the
+  // agent: that is `POST /:slug/assign-agent`.
+  if (body.agent !== undefined && body.agent !== null) {
+    if (typeof body.agent !== 'string' || !isSafeAutomationSlug(body.agent) || !getAgent(contextRoot, body.agent)) {
+      sendError(res, 400, 'invalid_agent', 'agent must be the slug of an agent in this project, or null.');
+      return;
+    }
+  }
+  const allowedFields = ['status', 'priority', 'urgency', 'description', 'tags', 'name', 'related_feature', 'version', 'start_date', 'due_date', 'objectives', 'assignee', 'agent'];
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
       const oldVal = (oldData[field] ?? null) as FieldChange['from'];
@@ -1299,4 +1312,77 @@ export async function handleTasksInsert(
   });
 
   sendJson(res, 200, { success: true });
+}
+
+/** The HTTP status each assignment refusal answers with. */
+const ASSIGN_REFUSAL_STATUS: Record<AssignmentRefusal, 400 | 404 | 409> = {
+  unknown_task: 404,
+  unknown_agent: 404,
+  agent_not_approved_to_run: 409,
+  agent_disabled: 409,
+  note_too_long: 400,
+};
+
+/**
+ * POST /api/tasks/:slug/assign-agent {agent, note?} — "Assign to agent".
+ *
+ * The shared steps (`prepareAssignment` → `commitAssignment`), then the EXISTING
+ * ask run on the agent's call target with the task as data. A note typed here is
+ * the owner speaking, so it rides as the run's ask under the task wording. The
+ * run's result is logged on the task by the job itself (`logAssignmentResult`).
+ *
+ * 409 `agent_not_approved_to_run` names the Agents page and no command. 409
+ * `agent_busy` when the agent is already running: an adopted job would carry
+ * neither this task nor this note.
+ */
+export async function handleTasksAssignAgent(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+  contextRoot: string,
+): Promise<void> {
+  const { slug } = params;
+  if (!isSafeTaskSlug(slug)) { sendError(res, 400, 'invalid_path', `Invalid task slug: ${slug}`); return; }
+  const body = await parseJsonBody(req);
+  if (!body || typeof body.agent !== 'string' || !body.agent.trim()) {
+    sendError(res, 400, 'missing_agent', 'Name the agent to assign.');
+    return;
+  }
+  if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
+    sendError(res, 400, 'invalid_note', 'note must be text.');
+    return;
+  }
+  const prep = prepareAssignment(contextRoot, slug, body.agent.trim(), {
+    source: 'dashboard',
+    ...(typeof body.note === 'string' ? { note: body.note } : {}),
+  });
+  if (!prep.ok) {
+    sendError(res, ASSIGN_REFUSAL_STATUS[prep.code], prep.code, prep.message);
+    return;
+  }
+  if (currentAutomationJob(contextRoot, prep.target.slug)?.status === 'running') {
+    sendError(res, 409, 'agent_busy', `${prep.target.agentTitle || prep.target.title} is running right now. Assign the task when it finishes.`);
+    return;
+  }
+  try {
+    const fireAt = new Date();
+    const { statusMoved } = commitAssignment(contextRoot, prep, fireAt);
+    const { job } = startAutomationJob(contextRoot, prep.target.slug, {
+      text: prep.ownerNote ?? '',
+      fireAt,
+      task: { slug: prep.task.slug, name: prep.task.name },
+      target: 'agent',
+    });
+    recordDashboardChange(contextRoot, {
+      entity: 'task',
+      action: 'update',
+      target: `state/${slug}.md`,
+      field: 'agent',
+      summary: `Assigned task '${slug}' to the agent '${prep.target.slug}'`,
+    });
+    sendJson(res, 202, { jobId: job.id, runId: fireAt.toISOString(), statusMoved });
+  } catch (err) {
+    console.error('[tasks] assign-agent failed', err);
+    sendError(res, 500, 'assign_failed', 'Failed to assign the task.');
+  }
 }

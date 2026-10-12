@@ -306,3 +306,38 @@ describe('AC4: a pull backs up the mirror it is about to overwrite', () => {
     expect(dirs.length).toBeGreaterThan(1);
   });
 });
+
+// ─── The task's `agent` field: local-only, never a person ───────────────────
+
+import * as localOnlyForAgent from '../../src/lib/task-backend/local-only.js';
+import * as localTaskForAgent from '../../src/lib/task-backend/local.js';
+
+describe('the agent a task is assigned to', () => {
+  it('is local-only: never remote-mapped, preserved when a pull drops it', () => {
+    expect(localOnlyForAgent.isLocalOnlyTaskField('agent')).toBe(true);
+    expect(localOnlyForAgent.REMOTE_MAPPED_TASK_FIELDS.has('agent')).toBe(false);
+    expect(localOnlyForAgent.KNOWN_LOCAL_ONLY_TASK_FIELDS).toContain('agent');
+    const local = { name: 'T', agent: 'scout', status: 'todo' };
+    const merged: Record<string, unknown> = { name: 'T', status: 'in_progress' };
+    const guarded = localOnlyForAgent.preserveLocalOnlyFields(local, merged);
+    expect(guarded.fm.agent).toBe('scout');
+  });
+
+  it('reads onto TaskData only as a path-safe slug, and is absent otherwise', () => {
+    const dir = join(tmpdir(), `dc-task-agent-${process.pid}-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const good = join(dir, 'good.md');
+      writeFileSync(good, '---\nid: task_1\nname: Good\nstatus: todo\nagent: scout\n---\n\n## Why\nx\n');
+      expect(localTaskForAgent.readTaskFile(good).agent).toBe('scout');
+      const bad = join(dir, 'bad.md');
+      writeFileSync(bad, '---\nid: task_2\nname: Bad\nstatus: todo\nagent: ../../etc\n---\n\n## Why\nx\n');
+      expect('agent' in localTaskForAgent.readTaskFile(bad)).toBe(false);
+      const none = join(dir, 'none.md');
+      writeFileSync(none, '---\nid: task_3\nname: None\nstatus: todo\n---\n\n## Why\nx\n');
+      expect('agent' in localTaskForAgent.readTaskFile(none)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

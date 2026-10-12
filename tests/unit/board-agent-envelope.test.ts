@@ -207,6 +207,8 @@ describe('boardScopeArgs: the pinned scoped envelope', () => {
       'Bash(dreamcontext automations thread:*)',
       'Bash(dreamcontext automations pattern:*)',
       'Bash(dreamcontext automations flow:*)',
+      'Bash(dreamcontext agents list:*)',
+      'Bash(dreamcontext agents show:*)',
       'Bash(dreamcontext whiteboard add northwind-ops:*)',
       'Bash(dreamcontext whiteboard update northwind-ops:*)',
       'Bash(dreamcontext whiteboard remove northwind-ops:*)',

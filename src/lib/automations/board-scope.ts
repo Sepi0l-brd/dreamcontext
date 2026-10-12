@@ -4,10 +4,12 @@ import { homedir, tmpdir } from 'node:os';
 import { checkApproval } from './registry.js';
 import { outputRootDir } from './store.js';
 import { resolveWhiteboardPath } from '../whiteboards/store.js';
+import { identityOnly } from '../agents/compose.js';
 import {
   AGENT_BOARD_ENV,
   AGENT_SCRATCH_ENV,
   AGENT_SELF_ENV,
+  type ApprovalUse,
   type AutomationManifest,
 } from './types.js';
 
@@ -80,6 +82,9 @@ export const BOARD_AGENT_READ_VERBS = [
   'automations thread',
   'automations pattern',
   'automations flow',
+  // An agent card's read hint (`board-refs.ts`) names `agents show`.
+  'agents list',
+  'agents show',
 ] as const;
 
 /** Verbs that act on the home board; the board slug is part of each rule. */
@@ -134,16 +139,27 @@ export function forbiddenPathReason(label: string, path: string): string | null 
  * this), a manifest whose board disagrees with the board a human here approved, a board
  * together with `outputDir`, and a board that does not exist. `scope: null` is an ordinary,
  * unscoped agent.
+ *
+ * `use` is passed straight to `checkApproval`, and defaults to the strict `'run'`. A
+ * conversation (`'identity'`: Chat, card chat) is approved on the full target but scoped
+ * from {@link identityOnly}, so an agent's call settings — a synced `output_dir` above all —
+ * can never widen what a conversation may write.
  */
-export function resolveSpawnScope(root: string, m: AutomationManifest, home?: string): SpawnScopeResult {
-  const approval = checkApproval(dirname(root), m, home);
+export function resolveSpawnScope(
+  root: string,
+  m: AutomationManifest,
+  home?: string,
+  use: ApprovalUse = 'run',
+): SpawnScopeResult {
+  const approval = checkApproval(dirname(root), m, home, use);
   if (!approval.approved) {
     return {
       ok: false,
       reason: `"${m.slug}" is not approved as it stands (${approval.reason}); approve it again before talking to it`,
     };
   }
-  const fromManifest = m.whiteboard ?? null;
+  const scoped = use === 'identity' ? identityOnly(m) : m;
+  const fromManifest = scoped.whiteboard ?? null;
   const fromEntry = approval.entry.whiteboard ?? null;
   if (fromManifest && fromEntry && fromManifest !== fromEntry) {
     return {
@@ -153,7 +169,7 @@ export function resolveSpawnScope(root: string, m: AutomationManifest, home?: st
   }
   const board = fromManifest ?? fromEntry;
   if (!board) return { ok: true, scope: null };
-  if (m.outputDir) {
+  if (scoped.outputDir) {
     return { ok: false, reason: 'a board agent cannot also set an output folder' };
   }
   try {

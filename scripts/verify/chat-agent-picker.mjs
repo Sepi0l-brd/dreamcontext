@@ -14,12 +14,16 @@
  *      ahead of the tab's mode brief, under the tab's own permission mode.
  *   §1b server: every chat gets `--agents` for the approved agents (never an unapproved one,
  *      never the tab's own agent) and a roster in its briefing saying it can call them.
- *   §2 browser: the mode menu lists every agent under the modes, the unapproved one unpickable;
- *      picking an agent in an EMPTY chat reuses the tab, the trigger names the agent, and the
- *      socket carries `chatAgent`; the agent answers from its identity.
+ *   §2 browser: the mode menu lists every agent of the ROSTER (`/api/agents`) under the modes,
+ *      each with its face; the one not approved for chat says so and offers its Agents page
+ *      instead of a pick; picking an agent in an EMPTY chat reuses the tab, the trigger names
+ *      the agent, and the socket carries `chatAgent`; the agent answers from its identity.
  *   §3 browser: picking Claude in a chat WITH history opens a new tab beside it, without
  *      `chatAgent`, and the agent's tab survives.
  *   §4 browser: a reload restores the agent's tab as that agent (`chatAgent` + `resume`).
+ *   §5 browser: "Talk to it" (the window request the Agents page rings) is ACKed at once and
+ *      opens a NEW chat tab as that agent; `agent` is never a chat mode.
+ *   §6 browser: picking the unapproved agent opens the Agents page, and no chat starts.
  *
  * Isolated fake HOME, always; collect, don't fail fast. Exit 0 iff everything passed.
  * `VERIFY_SHOTS=<dir>` saves the open menu, the agent's chat and the final pane.
@@ -241,18 +245,26 @@ async function browserLeg(chromium, base) {
   console.log('\n── §2 the menu, and an agent picked in an empty chat');
   await modeTrigger().click();
   await page.waitForTimeout(400);
-  const rows = vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents .chat-cmp-pickrow');
+  const rows = vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents .chat-cmp-pickrow[role="menuitemradio"]');
   const chip = (name) => rows.filter({ hasText: name }).first();
   const modes = await vis('.chat-cmp-modemenu .chat-cmp-picklist:not(.is-agents)').first().boundingBox();
   const agentsBox = await vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents').first().boundingBox();
   ok('the agents are listed under the modes', !!modes && !!agentsBox && agentsBox.y > modes.y + modes.height,
     `modes=${JSON.stringify(modes)} agents=${JSON.stringify(agentsBox)}`);
-  const names = (await rows.allInnerTexts()).map((t) => t.trim().split('\n').pop().trim());
+  const names = (await rows.locator('.chat-cmp-pickrow-name').allInnerTexts()).map((t) => t.trim());
   ok('…every agent by name, and no Claude row while Claude holds the chat',
     !names.includes('Claude') && [...names].sort().join('|') === 'Draft agent|Funnel watch|Weekly brief', names.join('|'));
-  ok('…the unapproved agent cannot be picked, and says where to fix it',
-    (await chip('Draft agent').isDisabled())
-    && ((await chip('Draft agent').getAttribute('title')) ?? '').includes('Approve it in Automations first'));
+  // No photo was uploaded, so the face is initials; any <img> there must read the AGENTS route.
+  const faceSrcs = await rows.locator('.chat-cmp-agentface img').evaluateAll((els) => els.map((e) => e.getAttribute('src') ?? ''));
+  ok('…each agent shows its face, read from the agents route',
+    (await rows.locator('.chat-cmp-agentface').count()) === 3 && faceSrcs.every((src) => src.includes('/api/agents/')), faceSrcs.join(' '));
+  ok('…the unapproved agent says so and offers its Agents page, never an approve command',
+    !(await chip('Draft agent').isDisabled())
+    && (await chip('Draft agent').innerText()).includes('Not approved for chat on this Mac')
+    && ((await chip('Draft agent').getAttribute('title')) ?? '').includes('Open Draft agent')
+    && !/approve/i.test((await chip('Draft agent').getAttribute('title')) ?? ''));
+  ok('…and the list ends with Manage agents',
+    (await vis('.chat-cmp-modemenu .chat-cmp-picklist.is-agents .chat-cmp-pickrow[role="menuitem"]').filter({ hasText: 'Manage agents' }).count()) === 1);
   if (shots) await page.screenshot({ path: `${shots}/chat-agent-picker-menu.png` });
   const tabsBefore = await tabCount();
   const socketsBefore = (await sockets()).length;
@@ -288,6 +300,45 @@ async function browserLeg(chromium, base) {
     restored.some((u) => u.includes(`chatAgent=${AGENT}`) && /[?&]resume=/.test(u)), restored.join('\n      '));
   ok('…and the plain tab resumes without it', restored.some((u) => !u.includes('chatAgent=') && /[?&]resume=/.test(u)));
   if (shots) { await openSurface(); await page.waitForTimeout(800); await page.screenshot({ path: `${shots}/chat-agent-picker-final.png` }); }
+
+  console.log('\n── §5 Talk to it opens a new chat as the agent');
+  await openSurface();
+  await page.waitForTimeout(600);
+  const tabsTalk = await tabCount();
+  await page.evaluate(() => { window.__dcChatSockets = []; });
+  // The same window request `requestTalkToAgent` rings; the visible project forwards it to its bus.
+  const accepted = await page.evaluate((slug) => {
+    const detail = { slug, accepted: false };
+    window.dispatchEvent(new CustomEvent('dreamcontext-talk-to-agent-request', { detail }));
+    return detail.accepted;
+  }, AGENT);
+  ok('the request is ACKed at once', accepted === true);
+  ok('…a NEW conversation opens as the agent (chatAgent, sessionId, no resume)',
+    await until(async () => (await sockets()).some((u) => u.includes(`chatAgent=${AGENT}`) && /[?&]sessionId=/.test(u) && !/[?&]resume=/.test(u))),
+    (await sockets()).join('\n      '));
+  ok('…in a tab of its own, beside the others', await until(async () => (await tabCount()) === tabsTalk + 1), `${tabsTalk} → ${await tabCount()}`);
+  ok('…shown, with the trigger naming the agent', await until(async () => (await page.locator('.agent-surface.expanded').count()) > 0
+    && (await modeTrigger().innerText()).includes('Funnel watch')));
+  ok('…and no chat-mode URL carries an agent mode', !(await sockets()).some((u) => /[?&]mode=agent\b/.test(u)));
+  const badTalk = await page.evaluate(() => {
+    const detail = { slug: '../etc', accepted: false };
+    window.dispatchEvent(new CustomEvent('dreamcontext-talk-to-agent-request', { detail }));
+    return detail.accepted;
+  });
+  ok('a malformed slug is never accepted', badTalk === false);
+  if (shots) await page.screenshot({ path: `${shots}/chat-agent-picker-talk.png` });
+
+  console.log('\n── §6 the unapproved agent opens its Agents page');
+  const socketsUnapproved = (await sockets()).length;
+  await modeTrigger().click();
+  await page.waitForTimeout(300);
+  await chip('Draft agent').click();
+  ok('picking it lands on the Agents page', await until(async () => {
+    const current = page.locator('.sidebar-item[aria-current="page"]');
+    return (await current.count()) > 0 && (await current.first().innerText()).trim().startsWith('Agents');
+  }), await page.locator('.sidebar-item[aria-current="page"]').first().innerText().catch(() => '(none)'));
+  ok('…and no chat starts for it', !(await sockets()).slice(socketsUnapproved).some((u) => u.includes(`chatAgent=${DRAFT}`)));
+  if (shots) await page.screenshot({ path: `${shots}/chat-agent-picker-agents-page.png` });
   await browser.close();
 }
 

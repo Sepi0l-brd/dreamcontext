@@ -23,7 +23,7 @@ import { wireNotchInbox } from '../lib/assistant/notch-inbox.js';
 import { handleWindowCommand } from './routes/window-control.js';
 import { serveStatic } from './static.js';
 import { handleHealthGet } from './routes/health.js';
-import { handleTasksList, handleTasksCreate, handleTasksGet, handleTasksReadiness, handleTasksUpdate, handleTasksChangelog, handleTasksInsert, handleTasksSyncStatus, handleTasksSync, handleTasksSyncJobStart, handleTasksSyncJobStatus, handleTasksSyncTest, handleTasksDelete, handleTasksMembers, handleTasksContainers, handleTasksProvision, handleTasksTokenStatus, handleTasksSetToken, handleTaskOverrides, handleTaskOverrideDocGet, handleTaskOverrideDocSave, handleTaskOverrideAddField, handleTaskOverrideRemoveField, handleTaskOverrideAddStatus, handleTaskOverrideRemoveStatus } from './routes/tasks.js';
+import { handleTasksList, handleTasksCreate, handleTasksGet, handleTasksReadiness, handleTasksUpdate, handleTasksChangelog, handleTasksAssignAgent, handleTasksInsert, handleTasksSyncStatus, handleTasksSync, handleTasksSyncJobStart, handleTasksSyncJobStatus, handleTasksSyncTest, handleTasksDelete, handleTasksMembers, handleTasksContainers, handleTasksProvision, handleTasksTokenStatus, handleTasksSetToken, handleTaskOverrides, handleTaskOverrideDocGet, handleTaskOverrideDocSave, handleTaskOverrideAddField, handleTaskOverrideRemoveField, handleTaskOverrideAddStatus, handleTaskOverrideRemoveStatus } from './routes/tasks.js';
 import { handleSleepGet, handleSleepUpdate, handleSleepAutoGet, handleSleepAutoPut, handleSleepAutoCancel, handleSleepSpecialistsGet } from './routes/sleep.js';
 import { handleEmbeddingModelStatus, handleEmbeddingModelDownload, handleEmbeddingIndexStatus, handleEmbeddingIndexBuild } from './routes/embeddings.js';
 import {
@@ -138,6 +138,16 @@ import {
   handleAutomationsPhotoUpload,
   handleAutomationsSay,
 } from './routes/automations.js';
+import {
+  handleAgentsList,
+  handleAgentsShow,
+  handleAgentsCreate,
+  handleAgentsUpdate,
+  handleAgentsDelete,
+  handleAgentsApprove,
+  handleAgentsPhotoGet,
+  handleAgentsPhotoUpload,
+} from './routes/agents.js';
 import {
   handleThesesList,
   handleThesesCreate,
@@ -335,6 +345,9 @@ export function buildRouter(): Router {
   router.delete('/api/tasks/:slug', handleTasksDelete);
   router.patch('/api/tasks/:slug', handleTasksUpdate);
   router.post('/api/tasks/:slug/changelog', handleTasksChangelog);
+  // Assign to agent: sets `agent:`, applies the status rule, starts the agent's
+  // call-target run with the task as data (409 when it is not approved to run).
+  router.post('/api/tasks/:slug/assign-agent', handleTasksAssignAgent);
   router.post('/api/tasks/:slug/insert', handleTasksInsert);
 
   // Sleep
@@ -722,6 +735,18 @@ export function buildRouter(): Router {
   // are POSTs against an already-local manifest — no prompt travels over HTTP;
   // approval, the sleep-lock deferral, and the orphan guard are all enforced
   // inside `runAutomation`, not in these handlers.
+  // Agents — their own entity: identity, approval, usage. Every summary is
+  // computed from `listAgentTargets`. Each `/:slug/<verb>` has a unique literal
+  // suffix, so only the bare collection/`:slug` pair needs ordering, and those
+  // differ by method or segment count.
+  router.get('/api/agents', handleAgentsList);
+  router.post('/api/agents', handleAgentsCreate);
+  router.get('/api/agents/:slug', handleAgentsShow);
+  router.post('/api/agents/:slug/update', handleAgentsUpdate);
+  router.post('/api/agents/:slug/delete', handleAgentsDelete);
+  router.post('/api/agents/:slug/approve', handleAgentsApprove);
+  router.get('/api/agents/:slug/photo', handleAgentsPhotoGet);
+  router.post('/api/agents/:slug/photo', handleAgentsPhotoUpload);
   router.get('/api/automations', handleAutomationsList);
   // Create is a POST on the COLLECTION, so it shares no shape with any `/:slug`
   // route and needs no ordering care. Unlike `run`/`approve` a prompt DOES

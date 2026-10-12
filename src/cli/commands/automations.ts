@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import chalk from 'chalk';
 import { confirm } from '@inquirer/prompts';
 import { ensureContextRoot } from '../../lib/context-path.js';
-import { success, error, header, warn } from '../../lib/format.js';
+import { success, error, header, info, warn } from '../../lib/format.js';
 import {
   AutomationError,
   WEEKDAYS,
@@ -36,6 +36,7 @@ import {
   readAutomationCache,
   readRunSidecar,
   createAutomation,
+  getRunTarget,
   setAutomationEnabled,
   setAutomationShared,
   removeAutomation,
@@ -60,7 +61,10 @@ import {
   readThread,
   threadUnread,
 } from '../../lib/automations/threads.js';
-import { proposeFromRun, resumeWithAnswer } from '../../lib/automations/verdict.js';
+import { approvalQuestionTarget, proposeFromRun, resumeWithAnswer } from '../../lib/automations/verdict.js';
+import { refuseSelfApproval } from './agents.js';
+import { logAssignmentResult } from '../../lib/agents/task-assignment.js';
+import { getAgent, setAgentShared } from '../../lib/agents/store.js';
 import {
   adoptGlobalTelegramConfig,
   forgetTelegramConfigForSlug,
@@ -72,6 +76,7 @@ import {
 import {
   allPendingQuestions,
   claimQuestion,
+  listQuestions,
   pendingQuestion,
   QUESTION_CHOICE_MAX_CHARS,
   QUESTION_CHOICES_MAX,
@@ -208,6 +213,60 @@ function boardExists(contextRoot: string, slug: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * `automations create --agent`: a JOB bound to an existing agent. The agent must
+ * already be approved here for conversation; identity flags do not apply (they
+ * are the agent's). The store approves the new automation on this machine —
+ * `approvePair` for a same-slug pair, its one caller.
+ */
+function createBoundFromFlags(
+  root: string,
+  slug: string,
+  opts: { title: string; slot: string[]; days?: string; at?: string; mode?: string; timeout?: string; catchup?: string;
+    disabled?: boolean; shared?: boolean; notify?: boolean; review?: string; agent?: string; job?: string },
+): void {
+  try {
+    const agentSlug = (opts.agent ?? '').trim();
+    const agentTarget = getRunTarget(root, agentSlug, 'agent');
+    if (!agentTarget) throw new AutomationError(`There is no agent "${agentSlug}" in this project. See \`dreamcontext agents list\`.`);
+    const projectRoot = projectRootFor(root);
+    if (!checkApproval(projectRoot, agentTarget, undefined, 'identity').approved) {
+      throw new AutomationError(`${agentTarget.agentTitle || agentTarget.title} is not approved on this machine. Approve it on the Agents page first.`);
+    }
+    if (opts.mode !== undefined && parseModeFlag(opts.mode) === 'call') {
+      throw new AutomationError('An automation runs on a schedule. An agent you only call needs no automation.');
+    }
+    const slotSpecs = opts.slot ?? [];
+    if (slotSpecs.length > 0 && (opts.days || opts.at)) {
+      throw new AutomationError('--slot and --days/--at both set the schedule — use --slot for every time, or --days/--at for one.');
+    }
+    if (slotSpecs.length === 0 && (!opts.days || !opts.at)) {
+      throw new AutomationError('An automation needs --slot (repeatable) or --days and --at.');
+    }
+    registerProject(projectRoot);
+    const manifest = createAutomation(root, {
+      slug,
+      title: opts.title,
+      agent: agentSlug,
+      job: opts.job ?? '',
+      mode: 'sched',
+      days: parseDaysFlag(opts.days ?? 'daily'),
+      at: opts.at ?? '09:00',
+      slots: slotSpecs.length > 0 ? parseSlotFlags(slotSpecs, new Date()) : undefined,
+      timeoutMinutes: opts.timeout ? Number(opts.timeout) : undefined,
+      catchupHours: opts.catchup ? Number(opts.catchup) : undefined,
+      enabled: !opts.disabled,
+      shared: !!opts.shared,
+      notify: opts.notify,
+      review: opts.review as ReviewMode | undefined,
+    }, { approve: { now: new Date() } });
+    success(`Automation created: automations/${manifest.slug}.md, running as the agent "${agentSlug}" (approved on this machine).`);
+    if (opts.shared) printPublishedPaths(manifest.slug, shareWithAgent(root, manifest.slug, agentSlug));
+  } catch (err) {
+    handleAutomationsError(err);
   }
 }
 
@@ -420,7 +479,29 @@ function printRunOutcome(outcome: RunOutcome): void {
   if (outcome.denials > 0) warn(`  ${outcome.denials} permission denial(s) during this run.`);
 }
 
+/**
+ * Share an automation and, for a split one, the agent it runs as: a shared job
+ * whose agent stays private reaches a teammate as a job with no agent. The agent
+ * is published AND flagged `shared`, in one step, so the Agents page never reads
+ * a published agent as private. A legacy file names itself and has no agent
+ * file, so it shares alone. Sharing only: `unshare` never unshares the agent,
+ * since another automation may run as it.
+ */
+function shareWithAgent(root: string, slug: string, agent: string): ShareResult {
+  if (!getAgent(root, agent)) return shareAutomation(root, slug);
+  const result = shareAutomation(root, slug, { agent });
+  setAgentShared(root, agent, true);
+  return result;
+}
+
 // ─── Questions (human-in-the-loop) ──────────────────────────────────────────
+
+/** Mirrors `SELF_APPROVAL_ENVS` in ./agents.ts (not exported there): a Claude
+ *  session or an agent run, the shells `refuseSelfApproval` refuses. Only decides
+ *  what a listing PRINTS; the refusal itself stays `refuseSelfApproval`. */
+function isSelfApprovalShell(env: NodeJS.ProcessEnv): boolean {
+  return ['CLAUDECODE', AGENT_SELF_ENV, 'DREAMCONTEXT_AUTOMATION_RUN'].some((k) => env[k] !== undefined);
+}
 
 /**
  * Kind-specific label + the answer this kind actually accepts, so a rendered
@@ -429,11 +510,15 @@ function printRunOutcome(outcome: RunOutcome): void {
  * trust decision about the manifest itself, the other is the run asking
  * about its own work.
  */
-function describeQuestionKind(q: AutomationQuestion): { label: string; hint: string } {
+function describeQuestionKind(q: AutomationQuestion, env: NodeJS.ProcessEnv = process.env): { label: string; hint: string } {
   if (q.kind === 'approval') {
     return {
-      label: chalk.red('APPROVAL NEEDED — the manifest changed since it was last approved'),
-      hint: `dreamcontext automations answer ${q.id} approve${chalk.dim(' (or: reject)')}`,
+      label: chalk.red(`APPROVAL NEEDED — the ${q.target === 'agent' ? 'agent' : 'manifest'} changed since it was last approved`),
+      // Inside a Claude session or an agent run, the approve line would be one
+      // shell line from approving itself: name the page instead (A12).
+      hint: isSelfApprovalShell(env)
+        ? `answer it on the ${q.target === 'agent' ? 'Agents' : 'Automations'} page in the dashboard`
+        : `dreamcontext automations answer ${q.id} approve${chalk.dim(' (or: reject)')}`,
     };
   }
   return {
@@ -463,8 +548,9 @@ const APPROVAL_DECISIONS: Record<string, boolean> = { approve: true, yes: true, 
  * re-asked forever, but approves nothing and starts nothing.
  */
 async function answerApprovalQuestion(root: string, question: AutomationQuestion, answerText: string): Promise<void> {
-  const manifest = requireAutomation(root, question.slug);
-  if (!manifest) return;
+  // The manifest the question was about — for an agent call target, the AGENT,
+  // never a same-slug automation that `getAutomation` would return.
+  const manifest = approvalQuestionTarget(root, question);
 
   const decision = answerText.trim().toLowerCase();
   if (!(decision in APPROVAL_DECISIONS)) {
@@ -472,6 +558,19 @@ async function answerApprovalQuestion(root: string, question: AutomationQuestion
     process.exitCode = 1;
     return;
   }
+  // Only APPROVING needs the manifest. A reject must close the question even when
+  // its agent or automation is gone, or nothing could ever clear it.
+  if (APPROVAL_DECISIONS[decision] && !manifest) {
+    error(question.target === 'agent'
+      ? `The agent "${question.slug}" no longer exists, so there is nothing to approve. Reject the question to close it.`
+      : `Automation not found: ${question.slug}`);
+    process.exitCode = 1;
+    return;
+  }
+  // Approving is the owner's step: refused (before anything is claimed) inside a
+  // Claude session or an agent run, like `automations approve` and `agents approve`.
+  // Rejecting stays open — it grants nothing.
+  if (APPROVAL_DECISIONS[decision] && refuseSelfApproval(process.env)) return;
 
   const claim = claimQuestion(root, question, answerText, 'cli');
   if (!claim.claimed) {
@@ -480,7 +579,7 @@ async function answerApprovalQuestion(root: string, question: AutomationQuestion
     return;
   }
 
-  if (!APPROVAL_DECISIONS[decision]) {
+  if (!APPROVAL_DECISIONS[decision] || !manifest) {
     // REJECTED. Recorded and done — no approval, no run. The manifest is left
     // exactly as unapproved as it was; the next fire refuses through the SAME
     // sha256 tripwire, never through a side door opened here.
@@ -488,9 +587,27 @@ async function answerApprovalQuestion(root: string, question: AutomationQuestion
     return;
   }
 
+  // An agent target writes the agent's own grant, exactly what `agents approve` writes.
   approveAutomation(projectRootFor(root), manifest, new Date());
   success(`"${question.slug}" approved.`);
   const now = new Date();
+  if (question.target === 'agent') {
+    // The agent re-runs only with the task its run carried: a bare re-run of a
+    // call target has no ask to answer.
+    if (!question.task) {
+      info('It did not run again: the run that asked carried no task to repeat. Ask it again.');
+      return;
+    }
+    const task = question.task;
+    const outcome = await runAutomation(root, question.slug, {
+      force: true, fireAt: now, now: () => now, host: 'cli', target: 'agent', task,
+    });
+    logAssignmentResult(root, task.slug, { slug: question.slug, title: manifest.agentTitle || manifest.title }, {
+      status: outcome.status, outputPath: outcome.outputPath, runId: now.toISOString(),
+    });
+    printRunOutcome(outcome);
+    return;
+  }
   const outcome = await runAutomation(root, question.slug, { force: true, fireAt: now, now: () => now, host: 'cli' });
   printRunOutcome(outcome);
 }
@@ -711,13 +828,19 @@ export function registerAutomationsCommand(program: Command): void {
       `Stop and ask a human before the work takes effect: ${REVIEW_MODES.join('|')} (default off)`,
     )
     .option('--whiteboard <board>', 'Home this agent on a whiteboard (its slug): every run is scoped to that board')
+    .option('--agent <slug>', 'Run as this existing agent (see `dreamcontext agents list`): the file holds only the job')
+    .option('--job <text>', 'With --agent: what this automation asks of the agent, on top of its prompt')
     .action((slug: string, opts: {
       title: string; slot: string[]; days?: string; at?: string; mode?: string; photo?: string; model?: string;
       effort?: string; timeout?: string;
       catchup?: string; promptFile?: string; disabled?: boolean; shared?: boolean; notify?: boolean;
-      learning?: boolean; review?: string; whiteboard?: string;
+      learning?: boolean; review?: string; whiteboard?: string; agent?: string; job?: string;
     }) => {
       const root = ensureContextRoot();
+      if (opts.agent !== undefined) {
+        createBoundFromFlags(root, slug, opts);
+        return;
+      }
       try {
         // Checked first, before anything is parsed or written: the same two
         // refusals, in the same order, as the HTTP create route. The store
@@ -814,7 +937,7 @@ export function registerAutomationsCommand(program: Command): void {
         console.log(chalk.dim(`  Edit its ## Prompt / ## Output instructions, then \`dreamcontext automations run ${manifest.slug} --force\` to test it live.`));
 
         if (opts.shared) {
-          const result = shareAutomation(root, manifest.slug);
+          const result = shareWithAgent(root, manifest.slug, manifest.agent);
           printPublishedPaths(manifest.slug, result);
         }
 
@@ -850,7 +973,7 @@ export function registerAutomationsCommand(program: Command): void {
             ? null
             : (nextFire(m.schedule, now)?.toISOString() ?? null),
           cache: readAutomationCache(root, m.slug),
-          approved: checkApproval(projectRoot, m).approved,
+          approved: checkApproval(projectRoot, m, undefined, 'run').approved,
           shareState: shareStateFor(root, m),
         }));
         console.log(JSON.stringify(rows, null, 2));
@@ -865,7 +988,7 @@ export function registerAutomationsCommand(program: Command): void {
       const now = new Date();
       for (const m of manifests) {
         const cache = readAutomationCache(root, m.slug);
-        const approval = checkApproval(projectRoot, m);
+        const approval = checkApproval(projectRoot, m, undefined, 'run');
         const enabledBadge = m.enabled ? '' : chalk.dim(' (disabled)');
         const approvalBadge = approval.approved ? '' : chalk.red(` ⚠ ${approval.reason}`);
         const statusBit = cache?.status ? ` · last: ${cache.status}` : ' · never run';
@@ -899,7 +1022,7 @@ export function registerAutomationsCommand(program: Command): void {
       if (!manifest) return;
 
       const cache = readAutomationCache(root, slug);
-      const approval = checkApproval(projectRoot, manifest);
+      const approval = checkApproval(projectRoot, manifest, undefined, 'run');
       const sidecar = readRunSidecar(root, slug);
       const shareState = shareStateFor(root, manifest);
       const historyLimit = opts.history ? Number(opts.history) : 5;
@@ -986,9 +1109,9 @@ export function registerAutomationsCommand(program: Command): void {
         // reason the automation is not running, and a `show` that made you infer
         // that from an `awaiting-review` history entry would be hiding the lede.
         if (question) {
-          const { label } = describeQuestionKind(question);
+          const { label, hint } = describeQuestionKind(question);
           warn(`  ${label} — "${truncateLine(question.question, 100)}" (id ${question.id})`);
-          console.log(chalk.dim(`    it will not run again until you answer — \`dreamcontext automations answer ${question.id} <answer>\``));
+          console.log(chalk.dim(`    it will not run again until you answer — ${hint}`));
         }
       }
       console.log(`  approval: ${approval.approved ? chalk.green('approved') : chalk.red(`NOT approved (${approval.reason})`)}`);
@@ -1409,8 +1532,8 @@ export function registerAutomationsCommand(program: Command): void {
       if (slug) {
         const manifest = requireAutomation(root, slug);
         if (!manifest) return;
-        const q = pendingQuestion(root, slug);
-        open = q ? [q] : [];
+        // Every open one: a same-slug pair can have one per target.
+        open = listQuestions(root, slug).filter((q) => q.state === 'pending');
       } else {
         // No slug ⇒ every open question, project-wide. This is the answer to
         // "what am I holding up?", and it must work with no arguments, because
@@ -1912,7 +2035,7 @@ export function registerAutomationsCommand(program: Command): void {
 
       try {
         setAutomationShared(root, slug, true);
-        const result = shareAutomation(root, slug);
+        const result = shareWithAgent(root, slug, manifest.agent);
         printPublishedPaths(slug, result);
       } catch (err) {
         handleAutomationsError(err);
@@ -1961,13 +2084,15 @@ export function registerAutomationsCommand(program: Command): void {
     .description('Review and approve an automation to run on this machine')
     .option('-y, --yes', 'Skip the interactive confirmation')
     .action(async (slug: string, opts: { yes?: boolean }) => {
+      // Before anything is read: a Claude session or an agent run never approves.
+      if (refuseSelfApproval(process.env)) return;
       const root = ensureContextRoot();
       const projectRoot = projectRootFor(root);
       const manifest = requireAutomation(root, slug);
       if (!manifest) return;
 
       try {
-        const verdict = checkApproval(projectRoot, manifest);
+        const verdict = checkApproval(projectRoot, manifest, undefined, 'run');
         if (verdict.approved) {
           success(`"${slug}" is already approved (${verdict.entry.approvedAt}) — nothing has changed since.`);
           return;

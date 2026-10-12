@@ -136,7 +136,8 @@ export function crossVaultRecall(
       // `memory recall` takes this federated path by default whenever any peer is
       // connected, so an unconditional filter would have made `--types automation`
       // return nothing on exactly the machines that have automations.
-      .filter((doc) => isCurrent || doc.type !== 'automation');
+      // Agents are prompts too (`agents/<slug>.md`): the same exclusion.
+      .filter((doc) => isCurrent || (doc.type !== 'automation' && doc.type !== 'agent'));
 
     const label = target.label ?? target.name;
     const vaultHits = bm25Search(query, corpus, topK, { now });

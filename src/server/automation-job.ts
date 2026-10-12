@@ -11,7 +11,10 @@ import {
 import {
   resumeWithAnswer, resumeWithMessage, type TalkOutcome, type VerdictOptions,
 } from '../lib/automations/verdict.js';
-import type { BoardTurnInput } from '../lib/automations/types.js';
+import type { BoardTurnInput, RunKind, RunStatus } from '../lib/automations/types.js';
+import type { TaskRef } from '../lib/automations/runner.js';
+import { getAgent } from '../lib/agents/store.js';
+import { logAssignmentResult } from '../lib/agents/task-assignment.js';
 import { pendingQuestion } from '../lib/automations/hitl.js';
 import { trackChild } from './lifecycle.js';
 
@@ -42,6 +45,12 @@ export interface AutomationJobState {
 export interface AutomationAsk extends BoardTurnInput {
   text: string;
   fireAt: Date;
+  /** A task assigned to this agent: the run gets the task as data and keeps every
+   *  gate, and its result is logged back on the task when the run settles. */
+  task?: TaskRef;
+  /** `'agent'` runs the agent's call target even when a same-slug automation
+   *  exists (a task assignment). Omitted ⇒ what `getAutomation` resolves. */
+  target?: RunKind;
 }
 
 /**
@@ -199,6 +208,24 @@ function skipText(status: string, error: string | null): string {
       : `The run ended as "${status}" without starting.`}`;
 }
 
+/** The one result line on an assigned task. Best-effort: the run happened, and a
+ *  task file that cannot be written must not change the job's disposition. */
+function logTaskResult(
+  contextRoot: string,
+  slug: string,
+  ask: AutomationAsk,
+  status: RunStatus,
+  outputPath: string | null,
+): void {
+  if (!ask.task) return;
+  try {
+    const title = getAgent(contextRoot, slug)?.title ?? slug;
+    logAssignmentResult(contextRoot, ask.task.slug, { slug, title }, { status, outputPath, runId: ask.fireAt.toISOString() });
+  } catch (err) {
+    console.error(`automation "${slug}": result not logged on task "${ask.task.slug}" — ${(err as Error).message}`);
+  }
+}
+
 async function runJob(contextRoot: string, job: AutomationJobState, ask?: AutomationAsk): Promise<void> {
   try {
     // A declared variable, not an inline literal, so `board` type-checks against
@@ -207,6 +234,8 @@ async function runJob(contextRoot: string, job: AutomationJobState, ask?: Automa
       host: 'server',
       ...(ask ? { ask: ask.text, fireAt: ask.fireAt } : {}),
       ...(ask?.board ? { board: ask.board } : {}),
+      ...(ask?.target ? { target: ask.target } : {}),
+      ...(ask?.task ? { task: ask.task } : {}),
       // CALLBACK form — NEVER trackChild(child). trackChild's ChildProcess
       // branch does `child.kill()`, which signals the PID only; the automation
       // child is `detached: true`, so a PID-only kill leaves its process group
@@ -228,9 +257,11 @@ async function runJob(contextRoot: string, job: AutomationJobState, ask?: Automa
     if (ask && job.runId && outcome.status !== 'ok') {
       answerIfSilent(contextRoot, job.slug, job.runId, skipText(outcome.status, outcome.error));
     }
+    if (ask?.task) logTaskResult(contextRoot, job.slug, ask, outcome.status, outcome.outputPath);
   } catch (err) {
     job.status = 'error';
     job.error = (err as Error).message ?? String(err);
+    if (ask?.task) logTaskResult(contextRoot, job.slug, ask, 'failed', null);
     if (ask && job.runId) {
       answerIfSilent(contextRoot, job.slug, job.runId, 'It did not run. The run could not be started on this machine.');
     }
@@ -244,11 +275,15 @@ async function runJob(contextRoot: string, job: AutomationJobState, ask?: Automa
     // `drainQueue` catches it up, bounded by `catchupHours` like any other
     // deferred fire. Best-effort: a queue write failure must not mask the
     // original error, which is why this is its own try/catch.
-    try {
-      enqueueFire(dirname(contextRoot), job.slug, new Date(job.startedAt).toISOString());
-    } catch {
-      // a queue that cannot be written leaves the fire simply not owed —
-      // the same degrade `runAutomation`'s own enqueue failure accepts.
+    // Never for a run that names its target or carries a task: a replayed bare
+    // slug would fire a same-slug pair's job, or the agent without its task.
+    if (!ask?.target && !ask?.task) {
+      try {
+        enqueueFire(dirname(contextRoot), job.slug, new Date(job.startedAt).toISOString());
+      } catch {
+        // a queue that cannot be written leaves the fire simply not owed —
+        // the same degrade `runAutomation`'s own enqueue failure accepts.
+      }
     }
   } finally {
     job.finishedAt = Date.now();

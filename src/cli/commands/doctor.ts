@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { recallCloudStatus } from '../../lib/recall-cloud-config.js';
 import { cloudIndexReady } from '../../lib/embeddings/vector-store.js';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import chalk from 'chalk';
 import { resolveContextRoot } from '../../lib/context-path.js';
@@ -43,6 +43,8 @@ import {
   type CoreFileSizeAudit,
 } from '../../lib/core-index.js';
 import { measureSnapshot, type SnapshotMeasurement } from './snapshot.js';
+import { agentKeyOf, readManifestFrontmatter } from '../../lib/agents/slot.js';
+import { strayIdentitySections } from '../../lib/automations/store.js';
 import { resolveBudget, HARNESS_PERSIST_CHAR_LIMIT, HARNESS_PREVIEW_CHARS } from '../../lib/snapshot-budget.js';
 import type { NeverEvictSectionId } from '../../lib/snapshot-caps.js';
 
@@ -607,6 +609,98 @@ function checkStatusSet(root: string, statuses: readonly StatusDef[]): CheckResu
  * overrides, dependency resolution + acyclicity, and that task `objectives:`
  * references resolve (surfaced via the roadmap builder's own warnings).
  */
+/** `*.md` names in a directory, symlinks included (fast-glob would follow them). */
+function mdEntries(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((f) => f.endsWith('.md')).sort();
+  } catch {
+    return [];
+  }
+}
+
+function isSymlink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `doctor agents-split` — every slug the agent split could not (yet) move to the
+ * new format, by reason: still legacy (a mismatch is restored to legacy and
+ * reads here), a conflicting `agents/<slug>.md`, an unreadable slot, a stray
+ * `## Prompt`/`## Pattern` in a split automation (ignored: the agent file
+ * wins), and every SKIPPED SYMLINK, legacy or new (a symlinked manifest never
+ * reads, runs or splits). Nothing here pins the vault; all of it is advisory.
+ */
+export function checkAgentsSplit(root: string): CheckResult[] {
+  const autoDir = join(root, 'automations');
+  const agentsDir = join(root, 'agents');
+  const legacy: string[] = [];
+  const conflicts: string[] = [];
+  const unreadable: string[] = [];
+  const stray: string[] = [];
+  const symlinks: string[] = [];
+
+  for (const file of mdEntries(autoDir)) {
+    const slug = file.slice(0, -3);
+    const path = join(autoDir, file);
+    if (isSymlink(path)) { symlinks.push(`automations/${file}`); continue; }
+    const fm = readManifestFrontmatter(path);
+    if (!fm) { unreadable.push(slug); continue; }
+    const key = agentKeyOf(fm.data);
+    if (key.kind === 'invalid') { unreadable.push(slug); continue; }
+    if (key.kind === 'agent') {
+      const sections = strayIdentitySections(root, slug);
+      if (sections.length > 0) stray.push(`${slug} (${sections.map((h) => `## ${h}`).join(', ')})`);
+      continue;
+    }
+    legacy.push(slug);
+    const agentPath = join(agentsDir, file);
+    if (isSymlink(agentPath)) { conflicts.push(slug); continue; }
+    const agentFm = existsSync(agentPath) ? readManifestFrontmatter(agentPath) : undefined;
+    if (agentFm === null || (agentFm && agentFm.data.migrated_from !== fm.data.id)) conflicts.push(slug);
+  }
+  for (const file of mdEntries(agentsDir)) {
+    if (isSymlink(join(agentsDir, file))) symlinks.push(`agents/${file}`);
+  }
+
+  const results: CheckResult[] = [];
+  if (legacy.length > 0) {
+    results.push({
+      name: 'Agents split',
+      status: 'warn',
+      message: `${legacy.length} automation file(s) still in the legacy format (${legacy.join(', ')}) — they work as before; \`dreamcontext update\` splits them`,
+    });
+  }
+  if (conflicts.length > 0) {
+    results.push({
+      name: 'Agents split',
+      status: 'warn',
+      message: `agents/<slug>.md conflicts with a legacy automation (${conflicts.join(', ')}) — the legacy file wins until the agent file is moved or removed`,
+    });
+  }
+  if (unreadable.length > 0) {
+    results.push({ name: 'Agents split', status: 'warn', message: `unreadable automation file(s): ${unreadable.join(', ')}` });
+  }
+  if (stray.length > 0) {
+    results.push({
+      name: 'Agents split',
+      status: 'warn',
+      message: `stray identity section(s) in split automation(s), ignored (the agent file wins): ${stray.join('; ')}`,
+    });
+  }
+  if (symlinks.length > 0) {
+    results.push({
+      name: 'Agents split',
+      status: 'warn',
+      message: `symlinked manifest(s) skipped — they never read, run or split: ${symlinks.join(', ')}`,
+    });
+  }
+  return results;
+}
+
 export function checkObjectives(root: string): CheckResult[] {
   const results: CheckResult[] = [];
   const objectives = listObjectives(root);
@@ -1576,6 +1670,7 @@ export function registerDoctorCommand(program: Command): void {
         ...checkDataStructures(root),
         ...checkOverrides(root),
         ...checkObjectives(root),
+        ...checkAgentsSplit(root),
         ...checkTaskFeatureLinks(root),
         ...checkSharedTaskContainer(root),
         ...checkLab(root),
