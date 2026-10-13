@@ -377,9 +377,9 @@ Here the agent also knows it isn't in a terminal, so it can hand you the thing i
 Leave the laptop and keep working from your phone. **Go** moves the active project (the vault, its linked repos, their worktrees and their Claude sessions) to your own GitHub Codespace and locks it on the laptop. The phone opens a link, signs in with a passphrase and drives the same Chat, and a turn keeps running while the phone is in your pocket. **Return** brings everything back to the laptop: commits, branches, the stash, staged and unstaged changes, files and every session started on the phone. Then it seals and stops the cloud machine and shows a receipt.
 
 ```bash
-dreamcontext handsfree setup      # GitHub sign-in in the browser, creates your private codespace, prints the passphrase once
-dreamcontext handsfree account-login --all   # sign each Claude account in on the cloud machine
+dreamcontext handsfree setup      # GitHub sign-in in the browser, creates your private codespace, shows the passphrase once
 dreamcontext handsfree go         # take the project to the cloud; prints the phone link
+dreamcontext handsfree account-login <id>    # after the first go: sign a Claude account in on the cloud machine
 dreamcontext handsfree return     # bring everything home
 ```
 
