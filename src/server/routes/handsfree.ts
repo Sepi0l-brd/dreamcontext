@@ -28,7 +28,7 @@ import { cutDetachedRunsUnder, detachedRunsUnder } from '../../lib/automations/r
 import { assertTripId } from '../../lib/handsfree/git-snapshot.js';
 import { laptopEnv } from '../../lib/handsfree/laptop-env.js';
 import {
-  abandonTrip, go, HandsfreeError, readReceipt, resumeTrip, returnTrip, revokeAllDevices, rollbackTrip, status, type HandsfreeEnv, type Progress,
+  abandonTrip, go, HandsfreeError, isInterruptedGo, notHomeMessage, readReceipt, resumeTrip, returnTrip, revokeAllDevices, rollbackTrip, status, type HandsfreeEnv, type Progress,
 } from '../../lib/handsfree/orchestrator.js';
 import { handsfreeLockFor, type HandsfreeLock } from '../../lib/handsfree/trip-state.js';
 import { processTurnControl, under, type RunningWork, type TurnControl } from '../../lib/handsfree/turns.js';
@@ -253,7 +253,9 @@ export function makeServerTurns(scan: TurnControl = processTurnControl(createSpa
       // dashboard's child tree; otherwise those children are listed themselves.
       const ownTreeRunning = reg.some((r) => r.busy && (r.kind === 'chat' || r.kind === 'pty'))
         || found.some((f) => f.fromSelf && detachedPids.has(String(f.pid ?? f.id)));
-      const rest = found.filter((f) => !detachedPids.has(String(f.pid ?? f.id)) && !(ownTreeRunning && f.fromSelf));
+      // A chat the scan labelled from the on-disk mirror is this server's own registry entry.
+      const chatIds = new Set(reg.filter((r) => r.kind === 'chat').map((r) => r.id));
+      const rest = found.filter((f) => !detachedPids.has(String(f.pid ?? f.id)) && !(ownTreeRunning && f.fromSelf) && !(f.kind === 'chat' && chatIds.has(f.id)));
       return [...reg, ...rest];
     },
     async cut(roots, o) {
@@ -502,7 +504,8 @@ export async function buildPreflight(env: HandsfreeEnv, contextRoot: string): Pr
   const cfg = readConfig(env.home);
   if (!cfg?.codespace) refuse('not_setup', 'hands-free mode is not set up: run `dreamcontext handsfree setup` first');
   if (st.unreadable) refuse('not_home', st.unreadable);
-  else if (st.phase !== 'home') refuse('not_home', `a trip is already ${st.phase}; return, resume or abandon it first`);
+  // A go interrupted before it sent anything is adopted by the next go (it only locked the laptop).
+  else if (st.phase !== 'home' && !isInterruptedGo(env, st)) refuse('not_home', notHomeMessage(st.phase, st.tripId));
 
   let scopeRoots: Awaited<ReturnType<typeof computeScope>>['roots'] = [];
   try {

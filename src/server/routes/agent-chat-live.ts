@@ -25,6 +25,10 @@
  * tab left open, can never look like the owner doing something.
  */
 
+import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pidAlive, type LiveChatMirror } from '../../lib/handsfree/turns.js';
+
 /** How long an IDLE child may stay detached before it is ended (stdin EOF → linger → kill). */
 export const DETACH_IDLE_MS = 15 * 60_000;
 /** How long a BUSY child may stay detached before it is ended anyway — the backstop for a turn
@@ -97,9 +101,54 @@ const liveChats = new Map<string, LiveChatEntry>();
 const drainingChats = new Set<LiveChatEntry>();
 const drainingSince = new WeakMap<LiveChatEntry, number>();
 
+// ── The on-disk mirror (hands-free #4) ──
+// The CLI's go/return cannot see this registry, so it counted every app chat child and its MCP
+// servers as a running turn and waited forever. The server mirrors {pid, project, busy} to a
+// 0600 file on every edge; the CLI's process scan reads it to tell an idle chat from a turn.
+
+let mirrorPath: string | null = null;
+
+/** Start (a path) or stop (null; the file is removed) mirroring. The server calls it once at listen. */
+export function setLiveChatMirror(path: string | null): void {
+  if (mirrorPath && mirrorPath !== path) rmSync(mirrorPath, { force: true });
+  mirrorPath = path;
+  if (path) pruneDeadMirrors(dirname(path));
+  writeLiveChatMirror();
+}
+
+/** A server killed without its shutdown (SIGKILL, a crash) leaves its file: removed here. */
+function pruneDeadMirrors(dir: string): void {
+  let names: string[] = [];
+  try { names = readdirSync(dir); } catch { return; }
+  for (const n of names) {
+    const m = /^(\d+)\.json(?:\.tmp)?$/.exec(n);
+    if (m && Number(m[1]) !== process.pid && !pidAlive(Number(m[1]))) rmSync(join(dir, n), { force: true });
+  }
+}
+
+function writeLiveChatMirror(): void {
+  if (!mirrorPath) return;
+  const chats: LiveChatMirror['chats'] = [];
+  for (const e of liveChats.values()) if (e.pid) chats.push({ pid: e.pid, conversationId: e.conversationId, projectRoot: e.projectRoot, busy: e.busy });
+  // A draining child is still running and is never adoptable: always a turn.
+  for (const e of drainingChats) if (e.pid) chats.push({ pid: e.pid, conversationId: e.conversationId, projectRoot: e.projectRoot, busy: true });
+  const body: LiveChatMirror = { serverPid: process.pid, chats };
+  try {
+    mkdirSync(dirname(mirrorPath), { recursive: true, mode: 0o700 });
+    const tmp = `${mirrorPath}.tmp`;
+    writeFileSync(tmp, JSON.stringify(body), { mode: 0o600 });
+    renameSync(tmp, mirrorPath);
+  } catch {
+    // Never leave an older mirror behind: it could still say "idle" for a chat now in a turn.
+    // With no file the CLI counts every chat as running (fail closed).
+    try { rmSync(mirrorPath, { force: true }); } catch { /* nothing to remove */ }
+  }
+}
+
 export function registerLiveChat(entry: LiveChatEntry): void {
   if (!entry.conversationId) return;
   liveChats.set(entry.conversationId, entry);
+  writeLiveChatMirror();
 }
 
 /** Remove `entry` — only if it is still the one registered under its id, so a late cleanup of
@@ -107,6 +156,7 @@ export function registerLiveChat(entry: LiveChatEntry): void {
 export function unregisterLiveChat(entry: LiveChatEntry): void {
   if (liveChats.get(entry.conversationId) === entry) liveChats.delete(entry.conversationId);
   drainingChats.delete(entry);
+  writeLiveChatMirror();
 }
 
 /** The child stops being adoptable but stays listed (busy) until it exits: then the caller
@@ -115,6 +165,7 @@ export function markLiveChatDraining(entry: LiveChatEntry, now = Date.now()): vo
   if (liveChats.get(entry.conversationId) === entry) liveChats.delete(entry.conversationId);
   drainingChats.add(entry);
   if (!drainingSince.has(entry)) drainingSince.set(entry, now);
+  writeLiveChatMirror();
 }
 
 export function findLiveChat(conversationId: string): LiveChatEntry | null {
@@ -126,12 +177,14 @@ export function markTurnStarted(entry: LiveChatEntry, now = Date.now()): void {
   if (entry.busy) return;
   entry.busy = true;
   entry.turnStartedAt = now;
+  writeLiveChatMirror();
 }
 export function markTurnEnded(entry: LiveChatEntry, now = Date.now()): void {
   if (!entry.busy) return;
   entry.busy = false;
   entry.turnStartedAt = null;
   entry.lastTurnEndedAt = now;
+  writeLiveChatMirror();
 }
 
 /** The read-only view the cloud's idle clock (wave 2) reads. */

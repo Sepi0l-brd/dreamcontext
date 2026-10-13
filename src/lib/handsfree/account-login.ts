@@ -50,11 +50,16 @@ export function accountIdsFor(selector: { id?: string; all?: boolean }, home?: s
 /**
  * Run the login in the owner's own terminal (stdio inherited: the URL prints there and the
  * code is pasted there). Resolves with gh's exit code; nothing is read from the child.
+ *
+ * `githubToken`: the token `handsfree setup` signed in with (scopes repo + codespace, the
+ * account that owns the codespace). gh gets it as GH_TOKEN for this one call, so the login no
+ * longer depends on the system gh, whose token may lack the `codespace` scope or belong to
+ * another account (both answer "HTTP 403: Must have admin rights to Repository").
  */
-export function launchAccountLogin(codespace: string, accountId: string, spawnImpl: typeof spawn = spawn): Promise<number> {
+export function launchAccountLogin(codespace: string, accountId: string, spawnImpl: typeof spawn = spawn, githubToken?: string): Promise<number> {
   const [cmd, ...args] = accountLoginArgv(codespace, accountId);
   return new Promise((resolvePromise, reject) => {
-    const child = spawnImpl(cmd, args, { stdio: 'inherit' });
+    const child = spawnImpl(cmd, args, { stdio: 'inherit', ...(githubToken ? { env: { ...process.env, GH_TOKEN: githubToken } } : {}) });
     child.on('error', (err) => reject(new AccountLoginError(`could not run gh (${(err as NodeJS.ErrnoException).code ?? err.message}); install the GitHub CLI and run the printed command yourself`)));
     child.on('close', (code) => resolvePromise(code ?? 1));
   });

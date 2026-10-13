@@ -389,6 +389,28 @@ export async function assertTravelableLinks(run: ProcessRunner, checkout: string
   }
 }
 
+/**
+ * D19 for UNTRACKED links: a symlink git does not track (not ignored either) whose target
+ * cannot travel is nobody's committed work, typically a tool's absolute link into a generated
+ * folder. It no longer refuses the whole go: the laptop leaves it out of the worktree snapshot
+ * (so the cloud never sees it and Return never touches it) and lists it 'stays on the laptop'.
+ * Laptop only, repo-relative paths.
+ */
+export async function untrackedLinksStayingHome(run: ProcessRunner, checkout: string): Promise<Array<{ path: string; target: string }>> {
+  const others = (await gitOut(run, checkout, ['ls-files', '-z', '--others', '--exclude-standard'])).split('\0').filter(Boolean);
+  const out: Array<{ path: string; target: string }> = [];
+  for (const path of others) {
+    if (path.endsWith('/')) continue;
+    try {
+      const abs = join(checkout, ...path.split('/'));
+      if (!lstatSync(abs).isSymbolicLink()) continue;
+      const target = readlinkSync(abs);
+      if (linkCannotTravel(checkout, path, target, 'laptop')) out.push({ path, target });
+    } catch { /* gone meanwhile */ }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- preflight
 
 export interface PreflightProblem { kind: RefusalKind; detail: string; path?: string }
@@ -447,7 +469,9 @@ export async function gitPreflight(run: ProcessRunner, checkout: string, o: { si
     const target = await gitOut(run, checkout, ['cat-file', 'blob', oid]);
     if (linkCannotTravel(checkout, path, target, side)) badLinks.set(path, target);
   }
-  const listed = (await gitOut(run, checkout, ['ls-files', '-z', '--cached', '--others', '--exclude-standard'])).split('\0').filter(Boolean);
+  // Tracked paths only: an UNTRACKED link that cannot travel is not refused, it stays on the
+  // laptop ({@link untrackedLinksStayingHome}; often a generated dir's absolute link).
+  const listed = (await gitOut(run, checkout, ['ls-files', '-z', '--cached'])).split('\0').filter(Boolean);
   for (const path of new Set(listed)) {
     if (badLinks.has(path) || path.endsWith('/')) continue;
     try {
@@ -579,6 +603,7 @@ export async function snapshotRepo(run: ProcessRunner, repoPath: string, o: Snap
       indexTree = (await gitOut(run, w.path, ['write-tree'])).trim();
     }
     const nestedRels = allRoots.filter((r) => isInsideDir(w.path, r)).map((r) => relative(w.path, r).split(sep).join('/'));
+    if ((o.side ?? 'laptop') === 'laptop') for (const l of await untrackedLinksStayingHome(run, w.path)) nestedRels.push(l.path);
     const worktreeTree = await worktreeTreeOf(run, w.path, gitDir, inProgress ? headTree : indexTree, nestedRels);
     await assertNoGitlinks(run, w.path, indexTree);
     await assertNoGitlinks(run, w.path, worktreeTree);

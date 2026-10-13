@@ -160,7 +160,7 @@ export class TransferStore {
   consume(idRaw: unknown): { path: string; size: number; sha256: string } {
     const id = TransferStore.assertId(idRaw);
     const meta = this.readMeta(id);
-    if (!meta || !meta.committed) throw new TransferError(409, 'upload_not_committed', 'That upload is missing or not committed.');
+    if (!meta || !meta.committed) throw new TransferError(409, 'upload_not_committed', 'That upload is missing or not committed: it never finished arriving, an earlier request already used it, or the cloud machine restarted since it arrived.');
     const taken = join(this.uploadsDir, `${id}.taken-${randomBytes(4).toString('hex')}`);
     renameSync(this.dataPath(id), taken);
     rmSync(this.metaPath(id), { force: true });

@@ -30,7 +30,7 @@ import { PIN_PATH, pinFile } from '../../src/lib/handsfree/npm-pin.js';
 import {
   abandonTrip, go, HandsfreeError, resumeTrip, returnTrip, rollbackTrip, setup, status, teardown, type HandsfreeEnv,
 } from '../../src/lib/handsfree/orchestrator.js';
-import { readTripState } from '../../src/lib/handsfree/trip-state.js';
+import { beginGoing, readTripState } from '../../src/lib/handsfree/trip-state.js';
 import { readConfig, updateConfig } from '../../src/lib/handsfree/local-store.js';
 import { acquireTripRunLock, journalPath, tripDir, loadJournal } from '../../src/lib/handsfree/journal.js';
 import { NO_TURNS, type TurnControl } from '../../src/lib/handsfree/turns.js';
@@ -410,7 +410,8 @@ describe('quota and the run lock', () => {
     const env = makeEnv({ turns });
     const first = go(env, { contextRoot: ctx });
     await started;
-    await expect(go(makeEnv(), { contextRoot: ctx })).rejects.toMatchObject({ code: 'not_home' });
+    // The running go holds the trip's run lock: a second go never adopts it as "interrupted".
+    await expect(go(makeEnv(), { contextRoot: ctx })).rejects.toMatchObject({ code: 'busy' });
     await expect(resumeTrip(makeEnv())).rejects.toMatchObject({ code: 'busy' });
     release();
     await first;
@@ -430,6 +431,29 @@ describe('quota and the run lock', () => {
     await go(env, { contextRoot: ctx, cutRunning: true });
     expect(cuts).toBe(1);
     expect(readTripState(laptopHome).phase).toBe('away');
+  });
+
+  it('an idle chat that survives its idle cut is running work: the go waits (or cuts it) instead of snapshotting around it', async () => {
+    let fullCuts = 0;
+    let alive = true;
+    const turns: TurnControl = {
+      list: async () => (alive ? [{ kind: 'chat', id: 'c-idle', busy: false }] : []),
+      cut: async (_r, o) => { if (o.all) { fullCuts++; alive = false; } return 1; }, // the idle cut does not kill it
+    };
+    const env = makeEnv({ turns, waitTimeoutMs: 0 });
+    await expect(go(env, { contextRoot: ctx })).rejects.toMatchObject({ code: 'turns_running' });
+    await go(env, { contextRoot: ctx, cutRunning: true });
+    expect(fullCuts).toBe(1);
+    expect(readTripState(laptopHome).phase).toBe('away');
+  });
+
+  it('#5: a go interrupted before its journal (Ctrl+C while waiting) is adopted by the next go; one still running is not', async () => {
+    const env = makeEnv();
+    await beginGoing('t-20261012-0000abcd', [{ rootId: 'r-0000000000000000', path: vault }], laptopHome);
+    // Its process is gone: the run lock is free, no journal exists.
+    await go(env, { contextRoot: ctx });
+    expect(readTripState(laptopHome).phase).toBe('away');
+    expect(existsSync(tripDir(join(laptopHome, '.dreamcontext', 'handsfree'), 't-20261012-0000abcd'))).toBe(false); // swept: it never sent anything
   });
 
   it('live Cut (shouldCut): a go already waiting cuts on its next round once the owner chooses Cut', async () => {

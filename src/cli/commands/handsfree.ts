@@ -1,5 +1,8 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, closeSync, constants, fchmodSync, mkdirSync, openSync, writeSync } from 'node:fs';
+import { join } from 'node:path';
 import { confirm } from '@inquirer/prompts';
 import { error, info, success, warn } from '../../lib/format.js';
 import { resolveContextRoot } from '../../lib/context-path.js';
@@ -8,9 +11,11 @@ import { createSpawnRunner } from '../../lib/handsfree/git-snapshot.js';
 import { laptopEnv } from '../../lib/handsfree/laptop-env.js';
 import { readConfig, readCredentials } from '../../lib/handsfree/local-store.js';
 import {
-  abandonTrip, changePassword, githubDeviceLogin, go, HandsfreeError, resumeTrip, returnTrip, revokeAllDevices, rollbackTrip, setup, status,
+  abandonTrip, changePassword, describeWork, githubDeviceLogin, go, HandsfreeError, resumeTrip, returnTrip, revokeAllDevices, rollbackTrip, setup, status,
   teardown, type HandsfreeEnv, type Progress, type Receipt,
 } from '../../lib/handsfree/orchestrator.js';
+import { CloudError, CloudUnreachableError } from '../../lib/handsfree/cloud-client.js';
+import { handsfreeDir } from '../../lib/handsfree/trip-state.js';
 import { processTurnControl } from '../../lib/handsfree/turns.js';
 import { readRosterSurface, writeMergedRosterSurfaceAsync } from '../../server/routes/agent-sessions.js';
 
@@ -26,19 +31,72 @@ function cliEnv(): HandsfreeEnv {
   return laptopEnv({ run, turns: processTurnControl(run), roster: { read: readRosterSurface, write: (c, s) => writeMergedRosterSurfaceAsync(c, s) } });
 }
 
+let lastWaiting = '';
 const progress: Progress = (e) => {
-  if (e.step === 'waiting') info(`waiting for ${e.detail ?? 'running turns'} (Ctrl+C, then re-run with --cut-running to stop them)`);
+  if (e.step === 'waiting') {
+    // Name WHAT runs, once per change, not just a count every 2 s.
+    const lines = (e.running ?? []).map(describeWork);
+    const key = lines.join('\n');
+    if (key === lastWaiting) return;
+    lastWaiting = key;
+    info(`waiting for ${e.detail ?? 'running turns'} to finish (or Ctrl+C, then \`dreamcontext handsfree go --cut-running\` stops them):`);
+    for (const l of lines) console.log(chalk.dim(`    ${l}`));
+  } else if (e.step === 'size') warn(e.detail ?? '');
   else info(`${e.step}${e.detail ? `: ${e.detail}` : ''}`);
 };
 
-function fail(err: unknown): never {
+/** What to do next after a failure, by its code (every error ends with a next step). */
+function nextStep(err: unknown): string | null {
   if (err instanceof HandsfreeError) {
-    error(err.message);
-    if (err.code === 'quota') console.log(chalk.dim('  Nothing is lost: `dreamcontext handsfree abandon` unlocks this laptop; the cloud work is recovered by the next go.'));
-  } else {
-    error((err as Error)?.message ?? String(err));
+    switch (err.code) {
+      case 'quota': return 'Nothing is lost: `dreamcontext handsfree abandon` unlocks this laptop; the cloud work is recovered by the next go.';
+      case 'turns_running': return 'Let them finish and run go again, or `dreamcontext handsfree go --cut-running` stops them (their conversations stay resumable).';
+      case 'not_home': case 'busy': case 'upload': case 'preflight': return null; // the message already names the step
+      default: return 'See where things stand: `dreamcontext handsfree status` (it lists what you can do now).';
+    }
   }
+  if (err instanceof CloudUnreachableError) return 'The cloud machine did not answer. `dreamcontext handsfree status` shows the trip; `dreamcontext handsfree resume` continues an interrupted go or return.';
+  if (err instanceof CloudError) return `The cloud machine refused (${err.code}). \`dreamcontext handsfree status\` shows the trip; \`dreamcontext handsfree resume\` retries an interrupted go or return.`;
+  return null;
+}
+
+function fail(err: unknown): never {
+  error(err instanceof Error ? err.message : String(err));
+  const next = nextStep(err);
+  if (next) console.log(chalk.dim(`  ${next}`));
   process.exit(1);
+}
+
+/**
+ * Hand the owner a new phone passphrase WITHOUT putting it into a captured stream (#1). The
+ * Chat run card posts its output tail back into the conversation, and a piped stdout may be a
+ * log: there the passphrase goes to the clipboard, or (no clipboard) a 0600 file, and only
+ * where it is gets printed. A plain terminal still shows it once.
+ */
+function deliverPassphrase(passphrase: string, label: string): void {
+  const captured = process.env.DREAMCONTEXT_RUN_CARD === '1' || !process.stdout.isTTY;
+  if (!captured) {
+    console.log(`\n  ${label} (shown ONCE): ${chalk.bold(passphrase)}\n`);
+    return;
+  }
+  const clip = process.platform === 'darwin' ? ['pbcopy', []] as const : process.platform === 'linux' ? ['xclip', ['-selection', 'clipboard']] as const : null;
+  if (clip && spawnSync(clip[0], [...clip[1]], { input: passphrase, stdio: ['pipe', 'ignore', 'ignore'] }).status === 0) {
+    console.log(`\n  ${label}: copied to the clipboard. It is not printed here, because this output is captured (the Chat run card sends it back to the agent).\n`);
+    return;
+  }
+  const dir = handsfreeDir();
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700); // mkdir's mode does not touch a folder that already exists
+  const file = join(dir, 'passphrase.txt');
+  // Never through a symlink, and 0600 even when the file already existed with another mode.
+  const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+  try {
+    fchmodSync(fd, 0o600);
+    writeSync(fd, `${passphrase}\n`);
+  } finally {
+    closeSync(fd);
+  }
+  console.log(`\n  ${label}: written to ${file} (readable only by you). It is not printed here, because this output is captured. Delete the file once the phone is signed in.\n`);
 }
 
 function needContextRoot(): string {
@@ -104,26 +162,37 @@ export function registerHandsfreeCommand(program: Command): void {
         const r = await setup(env, { ...creds, machine: opts.machine, onProgress: progress });
         success(`${r.created ? 'created' : 'kept'} the codespace ${r.codespace.name} (${r.codespace.machine}) from ${r.repo}; it is stopped until your first go`);
         if (r.passphrase) {
-          console.log(`\n  Phone passphrase (shown ONCE): ${chalk.bold(r.passphrase)}\n  Change it any time with \`dreamcontext handsfree password\`.\n`);
+          deliverPassphrase(r.passphrase, 'Phone passphrase');
+          console.log('  Change it any time with `dreamcontext handsfree password`.\n');
         }
-        info('Sign each Claude account in on the cloud machine: `dreamcontext handsfree account-login --all`');
+        info('Next: `dreamcontext handsfree go` from the project. Once that go has reached the cloud, sign a Claude account in there: `dreamcontext handsfree account-login <id>` (one account is enough).');
       } catch (err) { fail(err); }
     });
 
   hf.command('account-login [id]')
-    .description('Sign a Claude account in INSIDE the cloud machine (opens `gh codespace ssh`; nothing is captured or stored)')
+    .description('Sign a Claude account in INSIDE the cloud machine, after the first go (opens `gh codespace ssh`; nothing is captured or stored). One account is enough.')
     .option('--all', 'every registered Claude account, one after another')
     .option('--print', 'only print the command')
     .action(async (id: string | undefined, opts: { all?: boolean; print?: boolean }) => {
       try {
         const cfg = readConfig();
         if (!cfg?.codespace) throw new HandsfreeError('not_setup', 'run `dreamcontext handsfree setup` first');
+        // The cloud's login needs a trip on the machine (its account sandboxes live in the trip's
+        // home); the cloud itself refuses before one, so this only points the way.
+        if (!cfg.lastTrip && !opts.print) warn('no go has finished on this laptop yet; the cloud refuses a sign-in until a trip has reached it (run `dreamcontext handsfree go` first)');
+        const token = readCredentials().githubToken;
+        const failed: string[] = [];
         for (const acc of accountIdsFor({ id, all: opts.all })) {
           const line = accountLoginLine(cfg.codespace.name, acc);
           if (opts.print || !process.stdin.isTTY) { console.log(line); continue; }
           info(`${acc}: running ${line}`);
-          const code = await launchAccountLogin(cfg.codespace.name, acc);
-          if (code !== 0) warn(`${acc}: gh exited with ${code}; run the command above yourself`);
+          const code = await launchAccountLogin(cfg.codespace.name, acc, undefined, token);
+          if (code !== 0) failed.push(acc);
+        }
+        if (failed.length) {
+          throw new HandsfreeError('cloud', token
+            ? `the cloud sign-in failed for ${failed.join(', ')} (gh exited non-zero; its own message is above). Retry one account: \`dreamcontext handsfree account-login ${failed[0]}\``
+            : `the cloud sign-in failed for ${failed.join(', ')}. This laptop has no GitHub sign-in from setup, so the system gh was used: if it said "Must have admin rights" or named the codespace scope, it is signed in as another account or without that scope. \`gh auth refresh -h github.com -s codespace\` as the account that owns ${cfg.codespace.name}, then retry.`);
         }
       } catch (err) { fail(err); }
     });
@@ -133,7 +202,7 @@ export function registerHandsfreeCommand(program: Command): void {
     .action(async () => {
       try {
         const r = await changePassword(cliEnv());
-        console.log(`\n  New phone passphrase (shown ONCE): ${chalk.bold(r.passphrase)}\n`);
+        deliverPassphrase(r.passphrase, 'New phone passphrase');
         if (r.confirmed) success(`the cloud confirmed generation ${r.generation}`);
         else warn(`pending: the cloud has not confirmed generation ${r.generation} yet${r.error ? ` (${r.error})` : ''}; it is pushed at the next contact`);
       } catch (err) { fail(err); }

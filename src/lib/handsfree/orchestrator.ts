@@ -16,7 +16,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import {
-  copyFileSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync,
+  copyFileSync, cpSync, createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, rmSync, statSync,
 } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { generatePassphrase, hashPassphrase, sha256Hex, type VerifierPush } from '../../server/handsfree-auth.js';
@@ -29,7 +29,7 @@ import { CloudError, CloudUnreachableError, manifestDigest, PortPrivateError, ty
 import { addWorktreeNoCheckout, baseTips, gitOpHandlers, parkRefFor, planRepoApply, planWorktree, setBaseRefs, verifyIncoming, type RepoApplyPlan } from './git-apply.js';
 import {
   BundlePrerequisiteError, createBundle, emptyTree, fetchBundle, git, GitError, gitOut, gitPreflight, HandsfreeRefusal, incomingRefFor, isAllowedRef,
-  isWellFormedRef, lsTree, parseRepoSnapshot, snapRefPrefix, snapshotBundleRefs, snapshotId, snapshotRepo, snapStashRef, type PreflightProblem,
+  isWellFormedRef, lsTree, parseRepoSnapshot, snapRefPrefix, snapshotBundleRefs, snapshotId, snapshotRepo, snapStashRef, untrackedLinksStayingHome, type PreflightProblem,
   type ProcessRunner, type RepoSnapshot,
 } from './git-snapshot.js';
 import { stageGlobalSet, vaultNameForPath } from './global-set.js';
@@ -47,7 +47,7 @@ import {
   type GoManifest, type Manifest, type ManifestEntry, type RootSpec,
 } from './manifest.js';
 import { NpmPinError, PIN_PATH, pinFile, registryPin, type VersionPin } from './npm-pin.js';
-import { readPack, writePack } from './pack.js';
+import { PackSourceChangedError, readPack, writePack } from './pack.js';
 import { atomicWriteFile, checkRelPath, PathGuardError } from './paths.js';
 import { coresFor, gitBlobSha, ProviderError, ProviderQuotaError, type CloudProvider, type MachineInfo, type TemplateRepo } from './provider.js';
 import { computeScope, dirBytes, estimateRepoBytes, goManifestFor, lstatKind, transcriptDirKind, type TripScope } from './scope.js';
@@ -88,7 +88,7 @@ export type HandsfreeErrorCode =
   | 'not_setup' | 'not_home' | 'not_away' | 'busy' | 'preflight' | 'disk' | 'quota' | 'port_private' | 'tampered' | 'ownership'
   | 'confirm_take_over' | 'superseded' | 'turns_running' | 'equality' | 'parity' | 'cloud_preflight' | 'trip_lost' | 'write_started' | 'cloud_content'
   | 'nothing_to_resume' | 'nothing_to_roll_back' | 'needs_recovery' | 'unreadable_state' | 'cloud' | 'not_published' | 'registry'
-  | 'cloud_compromised';
+  | 'cloud_compromised' | 'upload';
 
 /** r18: what status and go say once the cloud reported its setup checkout changed by an agent. */
 export const CLOUD_COMPROMISED_MESSAGE = 'The cloud machine\'s setup folder was changed by an agent; run `dreamcontext handsfree teardown` then `setup`';
@@ -761,16 +761,36 @@ async function estimateTripBytes(env: HandsfreeEnv, scope: TripScope): Promise<n
   return total;
 }
 
-/** AC22: refuse a go whose estimated size does not fit the machine's disk; name a bigger --machine. */
-async function diskFit(env: HandsfreeEnv, scope: TripScope, machine: string): Promise<void> {
+/** AC22: refuse a go whose estimated size does not fit the machine's disk; name a bigger --machine. Returns the estimate. */
+async function diskFit(env: HandsfreeEnv, scope: TripScope, machine: string): Promise<number> {
+  const estimate = await estimateTripBytes(env, scope);
   const types = await env.provider.machineTypes();
   const cur = types.find((t) => t.name === machine);
-  if (!cur || !cur.storageBytes) return;
-  const need = Math.ceil((await estimateTripBytes(env, scope)) * 1.3);
+  if (!cur || !cur.storageBytes) return estimate;
+  const need = Math.ceil(estimate * 1.3);
   const free = cur.storageBytes - IMAGE_OVERHEAD_BYTES;
-  if (need <= free) return;
+  if (need <= free) return estimate;
   const bigger = types.find((t) => t.storageBytes - IMAGE_OVERHEAD_BYTES >= need);
   throw new HandsfreeError('disk', `this trip needs about ${(need / 2 ** 30).toFixed(1)} GB but ${machine} has about ${(free / 2 ** 30).toFixed(1)} GB free.${bigger ? ` Re-create the machine bigger: \`dreamcontext handsfree teardown\` then \`dreamcontext handsfree setup --machine ${bigger.name}\`.` : ' No machine type is big enough: exclude large folders first.'}`, { needBytes: need, freeBytes: free, biggerMachine: bigger?.name ?? null });
+}
+
+/** How many times a go re-walks and re-packs a root whose file changed mid-pack. */
+const PACK_ATTEMPTS = 4;
+
+/** Above this a go warns before it uploads (a home uplink moves ~1 GB in 5-15 minutes). */
+export const LARGE_TRIP_BYTES = 1024 ** 3;
+
+export function largeTripWarning(bytes: number): string | null {
+  if (bytes < LARGE_TRIP_BYTES) return null;
+  const gb = bytes / 1024 ** 3;
+  return `this trip uploads about ${gb.toFixed(1)} GB (git history included); at 10-30 Mbit/s up that is roughly ${Math.max(1, Math.round((bytes * 8) / 30e6 / 60))}-${Math.round((bytes * 8) / 10e6 / 60)} minutes. If it fails midway, \`dreamcontext handsfree resume\` sends the rest.`;
+}
+
+/** A failed upload/receive as the owner reads it: what broke and what to do next (not the consume symptom). */
+function receiveFailure(err: unknown, what: string, bytes: number): unknown {
+  if (!(err instanceof CloudError) || (err.code !== 'upload_not_committed' && err.code !== 'no_upload' && err.code !== 'upload_mismatch')) return err;
+  const size = bytes ? ` (${(bytes / 1024 ** 2).toFixed(0)} MB)` : '';
+  return new HandsfreeError('upload', `the cloud machine lost the upload of ${what}${size} before it could use it (${err.code}: it was interrupted, used up by an earlier attempt, or the machine restarted). Nothing on this laptop changed and nothing was activated: run \`dreamcontext handsfree resume\` to send it again.`, { cause: err.code, what });
 }
 
 /** Wait for (or cut) running work in the roots; idle chats are cut without asking. */
@@ -778,8 +798,15 @@ async function settleTurns(env: HandsfreeEnv, roots: string[], cutRunning: boole
   const deadline = nowOf(env) + (env.waitTimeoutMs ?? 2 * 60 * 60_000);
   let cut = 0;
   for (;;) {
-    const work = await env.turns.list(roots);
-    if (work.some((w) => !w.busy)) cut += await env.turns.cut(roots, { all: false });
+    let work = await env.turns.list(roots);
+    const idle = work.filter((w) => !w.busy);
+    if (idle.length) {
+      cut += await env.turns.cut(roots, { all: false });
+      // An idle chat that survived its cut (or started a turn meanwhile) is running work now:
+      // it would write after the snapshot. List again and count every survivor as busy.
+      const idleIds = new Set(idle.map((w) => `${w.kind}:${w.id}`));
+      work = (await env.turns.list(roots)).map((w) => (idleIds.has(`${w.kind}:${w.id}`) ? { ...w, busy: true } : w));
+    }
     const busy = work.filter((w) => w.busy);
     if (busy.length === 0) return cut;
     if (cutRunning || shouldCut?.()) {
@@ -788,10 +815,16 @@ async function settleTurns(env: HandsfreeEnv, roots: string[], cutRunning: boole
       cut += await env.turns.cut(roots, { all: true });
       continue;
     }
-    if (nowOf(env) > deadline) throw new HandsfreeError('turns_running', `${busy.length} turn(s) are still running in the project; wait for them or use Cut (--cut-running)`, { running: busy });
+    if (nowOf(env) > deadline) throw new HandsfreeError('turns_running', `${busy.length} turn(s) are still running in the project; wait for them or use Cut (--cut-running):\n  ${busy.map(describeWork).join('\n  ')}`, { running: busy });
     onProgress?.({ step: 'waiting', detail: `${busy.length} running`, running: busy });
     await sleepOf(env)(2000);
   }
+}
+
+/** One running item as a line: pid, what it is, where. */
+export function describeWork(w: RunningWork): string {
+  const what = w.command ?? (w.kind === 'chat' ? `chat ${w.id}` : w.kind);
+  return `${w.pid ? `pid ${w.pid} ` : ''}${what}${w.cwd ? ` (in ${w.cwd})` : ''}${w.members && w.members > 1 ? ` + ${w.members - 1} child process(es)` : ''}`;
 }
 
 /** Checkout ids are the root ids of their (laptop) realpaths. */
@@ -921,8 +954,14 @@ function goHandlers(env: HandsfreeEnv, client: CloudClient, go: GoManifest): OpH
       apply: async (op) => {
         const p = op.params as P;
         const snap = readJson<RepoSnapshot>(p.snapshotPath);
-        const uploadId = p.bundlePath && existsSync(p.bundlePath) ? await client.uploadFile(p.bundlePath) : undefined;
-        const r = await client.gitReceive({ tripId: go.tripId, rootId: p.rootId, ...(uploadId ? { uploadId } : {}), snapshot: snap, info: p.info ?? {}, remotes: p.remotes ?? [] });
+        const hasBundle = !!p.bundlePath && existsSync(p.bundlePath);
+        let r: { snapshotId: string };
+        try {
+          const uploadId = hasBundle ? await client.uploadFile(p.bundlePath) : undefined;
+          r = await client.gitReceive({ tripId: go.tripId, rootId: p.rootId, ...(uploadId ? { uploadId } : {}), snapshot: snap, info: p.info ?? {}, remotes: p.remotes ?? [] });
+        } catch (err) {
+          throw receiveFailure(err, `the git history of ${snap.repoPath}`, hasBundle ? fileSize(p.bundlePath) : 0);
+        }
         if (r.snapshotId !== p.expectedId) {
           throw new HandsfreeError('equality', `the cloud's copy of ${snap.repoPath} does not equal the laptop's after go (AC2); nothing was activated`, { rootId: p.rootId });
         }
@@ -938,8 +977,12 @@ function goHandlers(env: HandsfreeEnv, client: CloudClient, go: GoManifest): OpH
         const p = op.params as P;
         const expected = readJson<{ manifest: ManifestEntry[] }>(p.manifestPath).manifest;
         const send = async (packPath: string) => {
-          const uploadId = await client.uploadFile(packPath);
-          return client.filesReceive({ tripId: go.tripId, rootId: p.rootId, uploadId, expected });
+          try {
+            const uploadId = await client.uploadFile(packPath);
+            return await client.filesReceive({ tripId: go.tripId, rootId: p.rootId, uploadId, expected });
+          } catch (err) {
+            throw receiveFailure(err, `the files of ${p.root}`, fileSize(packPath));
+          }
         };
         const want = (refused: Array<{ path: string }>) => manifestDigest(expected.filter((e) => !refused.some((r) => r.path === e.path)));
         let r = await send(p.packPath);
@@ -956,7 +999,11 @@ function goHandlers(env: HandsfreeEnv, client: CloudClient, go: GoManifest): OpH
     'go.global': {
       apply: async (op) => {
         const p = op.params as P;
-        await client.global(await client.uploadFile(p.packPath));
+        try {
+          await client.global(await client.uploadFile(p.packPath));
+        } catch (err) {
+          throw receiveFailure(err, 'the global settings', fileSize(p.packPath));
+        }
       },
     },
     'go.activate': {
@@ -965,9 +1012,90 @@ function goHandlers(env: HandsfreeEnv, client: CloudClient, go: GoManifest): OpH
   };
 }
 
+/** What the owner can do about a trip that is not home, by phase (never "Return" for a go). */
+export function notHomeMessage(phase: TripState['phase'], tripId: string | null): string {
+  const t = tripId ? ` (${tripId})` : '';
+  if (phase === 'going') return `a go is still in progress or was interrupted${t}: \`dreamcontext handsfree resume\` finishes it, \`dreamcontext handsfree abandon\` unlocks this laptop`;
+  if (phase === 'returning') return `a return is in progress or was interrupted${t}: \`dreamcontext handsfree resume\` finishes it`;
+  return `the project is away on the cloud machine${t}: \`dreamcontext handsfree return\` brings it home (or \`abandon\`)`;
+}
+
+/**
+ * A go interrupted before its journal existed (Ctrl+C while it waited for running work) sent
+ * nothing: the laptop is only locked. A new go adopts it (back home, then on) instead of
+ * refusing; a go still running for it holds the run lock and is refused as busy.
+ */
+export function isInterruptedGo(env: HandsfreeEnv, st: TripState): boolean {
+  return st.phase === 'going' && !!st.tripId && !st.unreadable && !existsSync(journalPath(tripDirFor(env, st.tripId), 'go'));
+}
+
+async function adoptInterruptedGo(env: HandsfreeEnv, st: TripState): Promise<TripState> {
+  if (!isInterruptedGo(env, st)) return st;
+  const dir = tripDirFor(env, st.tripId!);
+  mkdirSync(dir, { recursive: true });
+  const lock = acquireTripRunLock(dir);
+  if (!lock) throw new HandsfreeError('busy', `a go is running for trip ${st.tripId}; wait for it, or stop it first`);
+  try {
+    // Decide again under the lock: the state read before it may be stale.
+    const now = requireState(env);
+    if (now.tripId !== st.tripId || !isInterruptedGo(env, now)) {
+      if (now.phase === 'home') return now;
+      throw new HandsfreeError('busy', `trip ${now.tripId} is ${now.phase}; it is not an interrupted go`);
+    }
+    await transition(env, st.tripId!, 'home');
+  } finally {
+    lock.release();
+  }
+  return requireState(env);
+}
+
+/**
+ * Disk hygiene (#8): a trip's `go/` folder (bundles, packs, the staged global set; GBs for a big
+ * project) is read only by its go journal, so it goes once the trip is not the current one. A
+ * trip dir that never got a go journal sent nothing and holds nothing to recover: removed whole.
+ * Everything else (receipts, backups for Roll back, orphaned/ recovery) stays.
+ */
+/** What a go writes into its trip folder before the go journal exists (nothing sent yet). */
+const DISPOSABLE_TRIP_ENTRIES = new Set(['run.lock', 'start', 'agreed', 'go', 'go-manifest.json', 'scope.json']);
+
+export function sweepTrips(env: HandsfreeEnv, keep: string | null): { removed: string[]; freedBytes: number } {
+  const root = join(handsfreeDir(env.home), 'trips');
+  const removed: string[] = [];
+  let freedBytes = 0;
+  let names: string[] = [];
+  try { names = readdirSync(root); } catch { return { removed, freedBytes }; }
+  for (const name of names) {
+    if (name === keep || !/^t-\d{8}-[0-9a-f]{8}$/.test(name)) continue;
+    const dir = join(root, name);
+    let entries: string[];
+    try {
+      if (!lstatSync(dir).isDirectory()) continue;
+      entries = readdirSync(dir);
+    } catch { continue; }
+    // A delete is never inferred from absence: the whole folder goes only when EVERY entry is
+    // one a go writes before it sends anything. Anything else (a journal, receipts, backups,
+    // conflicts, orphaned/ or a file a later version adds) keeps the folder; only go/ may go.
+    const neverSent = entries.every((e) => DISPOSABLE_TRIP_ENTRIES.has(e));
+    const target = neverSent ? dir : join(dir, 'go');
+    if (!neverSent && !entries.includes('go')) continue;
+    const lock = acquireTripRunLock(dir);
+    if (!lock) continue;
+    const bytes = dirBytes(target);
+    try {
+      rmSync(target, { recursive: true, force: true });
+      freedBytes += bytes;
+      removed.push(neverSent ? name : `${name}/go`);
+    } catch { /* kept: the next go tries again */ } finally {
+      try { lock.release(); } catch { /* the whole dir went */ }
+    }
+  }
+  return { removed, freedBytes };
+}
+
 export async function go(env: HandsfreeEnv, o: GoOpts): Promise<GoResult> {
-  const st = requireState(env);
-  if (st.phase !== 'home') throw new HandsfreeError('not_home', `a trip is already ${st.phase} (${st.tripId}); return, resume or abandon it first`);
+  const st = await adoptInterruptedGo(env, requireState(env));
+  if (st.phase !== 'home') throw new HandsfreeError('not_home', notHomeMessage(st.phase, st.tripId));
+  sweepTrips(env, null);
   const cfg = requireConfig(env);
   if (cfg.cloudCompromised) throw new HandsfreeError('cloud_compromised', CLOUD_COMPROMISED_MESSAGE);
   const scope = await computeScope({ run: env.run, home: env.home, contextRoot: o.contextRoot, claudeProjectsDir: projectsDir(env) });
@@ -975,20 +1103,29 @@ export async function go(env: HandsfreeEnv, o: GoOpts): Promise<GoResult> {
   o.onProgress?.({ step: 'preflight' });
   const problems = await preflightAll(env, scope);
   if (problems.length) throw preflightError(problems);
-  await diskFit(env, scope, cfg.codespace.machine);
+  const tripBytes = await diskFit(env, scope, cfg.codespace.machine);
+  const sizeWarning = largeTripWarning(tripBytes);
+  if (sizeWarning) o.onProgress?.({ step: 'size', detail: sizeWarning });
   // D25: this exact version on npm (refused before anything is written or locked), the AC19
   // check, then the version pin in the repo (after the check: a tampered repo is reported,
   // never overwritten). It touches no local folder.
   const pin = await lookupPin(env, 'go');
   await checkTemplateRepo(env, cfg);
   await ensurePin(env, pin, o.onProgress);
-  // Step 2: LOCK FIRST.
+  // Step 2: LOCK FIRST. The trip's run lock is held BEFORE the laptop says `going`, so another
+  // go can never see this trip as "interrupted" (going, no journal) and adopt it while it runs.
   const tripId = newTripId(nowOf(env));
-  await beginGoing(tripId, scope.roots.filter((r) => r.kind !== 'transcripts').map((r) => ({ rootId: r.rootId, path: r.absPath })), env.home);
   const dir = tripDirFor(env, tripId);
   mkdirSync(dir, { recursive: true });
   const lock = acquireTripRunLock(dir);
   if (!lock) throw new HandsfreeError('busy', 'another go or return is running for this trip');
+  try {
+    await beginGoing(tripId, scope.roots.filter((r) => r.kind !== 'transcripts').map((r) => ({ rootId: r.rootId, path: r.absPath })), env.home);
+  } catch (err) {
+    lock.release();
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
   let up: Running | null = null;
   try {
     return await goAfterLock(env, o, scope, tripId, dir, pin, (r) => { up = r; });
@@ -1194,21 +1331,43 @@ async function goAfterLock(env: HandsfreeEnv, o: GoOpts, scope: TripScope, tripI
     ops.push({ id: `git:${repo.rootId}`, kind: 'go.git', writes: false, params: { rootId: repo.rootId, snapshotPath, bundlePath: b.created ? bundlePath : null, expectedId: snapshotId(s), info, remotes } });
   }
   const staysHome: GoResult['staysHome'] = [];
+  for (const r of scope.roots.filter((x) => x.kind === 'repo' || x.kind === 'worktree')) {
+    for (const l of await untrackedLinksStayingHome(env.run, r.absPath)) {
+      staysHome.push({ rootId: r.rootId, path: l.path, reason: `untracked symlink to ${l.target}, which cannot travel` });
+    }
+  }
   for (const root of scope.roots) {
     const agreedPrev = readManifestFile(agreedGlobalPath(env, root.rootId));
-    const { manifest, refused } = await laptopManifest(env, root, scope.include, agreedPrev ?? undefined);
-    for (const r of refused) staysHome.push({ rootId: root.rootId, path: r.path, reason: r.reason });
-    const manifestPath = join(dir, 'start', `${root.rootId}.files.json`);
-    writeJson(manifestPath, { manifest: manifestToJSON(manifest), refused });
-    writeJson(join(dir, 'agreed', `${root.rootId}.files.json`), { manifest: manifestToJSON(manifest), refused });
-    copySessionState(root.absPath, join(dir, 'start', 'session', root.rootId));
     // Delta against what the cloud holds: its own manifest for a files root, the last agreed one otherwise.
     const state = await client.state(root.rootId).catch(() => null);
     const cloudHas: Manifest | null = state?.kind === 'files' ? manifestFromJSON(state.manifest) : agreedPrev;
-    const entries = [...manifest.values()].filter((e) => !cloudHas || !sameContent(cloudHas.get(e.path), e));
-    const deletions = cloudHas ? [...cloudHas.keys()].filter((p) => !manifest.has(p)) : [];
     const packPath = join(dir, 'go', `${root.rootId}.pack`);
-    await packFile(packPath, root.absPath, entries, deletions);
+    const manifestPath = join(dir, 'start', `${root.rootId}.files.json`);
+    // A file rewritten while it is packed (an app's own state file: the ClickUp member cache,
+    // a sync ledger) makes the pack disagree with its manifest. Last write wins: walk the root
+    // again and re-pack, a few times, before giving up with the file's name (#6).
+    let refused: Array<{ path: string; reason: string }> = [];
+    for (let attempt = 1; ; attempt++) {
+      const m = await laptopManifest(env, root, scope.include, agreedPrev ?? undefined);
+      refused = m.refused;
+      const entries = [...m.manifest.values()].filter((e) => !cloudHas || !sameContent(cloudHas.get(e.path), e));
+      const deletions = cloudHas ? [...cloudHas.keys()].filter((p) => !m.manifest.has(p)) : [];
+      try {
+        await packFile(packPath, root.absPath, entries, deletions);
+      } catch (err) {
+        if (!(err instanceof PackSourceChangedError)) throw err;
+        if (attempt >= PACK_ATTEMPTS) {
+          throw new HandsfreeError('preflight', `${join(root.absPath, err.path)} kept changing while it was packed (${PACK_ATTEMPTS} tries): something is still writing into the project. Close the program that writes it (for the desktop app: leave its Tasks page, or quit the app), then run go again. Nothing was sent.`, { path: err.path });
+        }
+        o.onProgress?.({ step: 'snapshot', detail: `${err.path} changed while it was packed; packing again` });
+        continue;
+      }
+      writeJson(manifestPath, { manifest: manifestToJSON(m.manifest), refused });
+      writeJson(join(dir, 'agreed', `${root.rootId}.files.json`), { manifest: manifestToJSON(m.manifest), refused });
+      break;
+    }
+    for (const r of refused) staysHome.push({ rootId: root.rootId, path: r.path, reason: r.reason });
+    copySessionState(root.absPath, join(dir, 'start', 'session', root.rootId));
     ops.push({ id: `files:${root.rootId}`, kind: 'go.files', writes: false, params: { rootId: root.rootId, root: root.absPath, packPath, manifestPath } });
   }
   // Step 6: the one-way global set. AC3 first: the cloud opens the trip's chat by the project's
@@ -1239,6 +1398,11 @@ async function finishGo(
   await transition(env, goM.tripId, 'away');
   await updateConfig(env.home, (c) => ({ ...c, lastTrip: { tripId: goM.tripId, status: 'away', at: new Date(nowOf(env)).toISOString() } }));
   writeJson(join(dir, 'go-result.json'), { url: up.info.url, staysHome: extra.staysHome, cloudRefused, signedOutAccounts: extra.signedOutAccounts });
+  // The bundles and packs (GBs for a big project) were read only by the go journal, which is
+  // complete (#8); the small staged global set stays until the next go sweeps the folder.
+  let goFiles: string[] = [];
+  try { goFiles = readdirSync(join(dir, 'go')); } catch { /* none */ }
+  for (const f of goFiles) if (f.endsWith('.bundle') || f.endsWith('.pack')) rmSync(join(dir, 'go', f), { force: true });
   return { tripId: goM.tripId, url: up.info.url, webUrl: up.info.webUrl, recreated: up.recreated, cloudRefused, ...extra };
 }
 
@@ -2411,7 +2575,7 @@ async function resumeLocked(env: HandsfreeEnv, o: { cutRunning?: boolean; should
     if (st.phase === 'going') {
       if (!existsSync(journalPath(dir, 'go'))) {
         await transition(env, trip, 'home');
-        return { tripId: trip, outcome: 'cancelled', receipt: null, message: 'the go was interrupted before anything was sent; the laptop is home again, run go again' };
+        return { tripId: trip, outcome: 'cancelled', receipt: null, message: 'the go was interrupted before anything was sent; the laptop is home again: run `dreamcontext handsfree go` again (add --cut-running to stop running work instead of waiting)' };
       }
       const up = await ensureRunning(env, { allowCreate: false, onProgress: o.onProgress });
       const goM = readJson<GoManifest>(join(dir, 'go-manifest.json'));
@@ -2657,7 +2821,7 @@ export async function status(env: HandsfreeEnv, o: { probe?: boolean } = {}): Pr
   if (!cfg?.codespace) offers.push('setup');
   else if (st.unreadable) { /* repair first */ } else if (st.phase === 'home') offers.push('go', 'teardown');
   else if (st.phase === 'away') offers.push('return', 'abandon');
-  else if (st.phase === 'going') offers.push('resume', 'abandon');
+  else if (st.phase === 'going') offers.push(...(journal ? ['resume', 'abandon'] as const : ['go', 'resume', 'abandon'] as const));
   else if (st.phase === 'returning') {
     if (journal?.direction === 'return' && journal.writeStarted) offers.push('resume', 'rollback');
     else offers.push('resume', 'abandon');

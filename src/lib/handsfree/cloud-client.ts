@@ -268,27 +268,38 @@ export class HttpCloudClient implements CloudClient {
    * One logical request with retries. `auth` = false for the public health call. Returns the
    * successful Response (2xx); throws CloudError / PortPrivateError / CloudUnreachableError.
    */
-  private async send(method: string, target: string, o: { auth: boolean; body?: Buffer; contentType?: string; timeoutMs?: number }): Promise<Response> {
+  private async send(method: string, target: string, o: { auth: boolean; body?: Buffer; contentType?: string; timeoutMs?: number; retryUntil?: number }): Promise<Response> {
     let lastErr = 'no attempt';
     let lastCode: string | null = null;
-    for (let i = 0; i < this.attempts; i++) {
+    // `retryUntil` extends the attempts only while the cloud is demonstrably there: its health
+    // answered and then the request itself timed out or got a gateway error (a long receive
+    // still running). A machine that does not even answer health fails after the usual attempts.
+    let reached = false;
+    let healthFails = 0;
+    let stage: 'health' | 'request' = 'request';
+    const extended = () => o.retryUntil !== undefined && reached && healthFails < this.attempts && this.now() < o.retryUntil;
+    for (let i = 0; i < this.attempts || extended(); i++) {
       if (i > 0) await this.sleep(BACKOFF_MS[Math.min(i - 1, BACKOFF_MS.length - 1)]);
       try {
         const headers: Record<string, string> = { Accept: 'application/json' };
         if (o.auth) {
+          stage = 'health';
           const h = await this.fetchOnce(this.origin + '/api/health', { method: 'GET', headers: { Accept: 'application/json' } }, REQUEST_TIMEOUT_MS);
           const rv = this.redirectVerdict(h);
           if (rv === 'private') throw new PortPrivateError(this.origin);
-          if (rv === 'retry' || [502, 503, 504].includes(h.status)) { lastErr = `health ${h.status}`; await h.body?.cancel().catch(() => {}); continue; }
+          if (rv === 'retry' || [502, 503, 504].includes(h.status)) { lastErr = `health ${h.status}`; healthFails++; await h.body?.cancel().catch(() => {}); continue; }
           const nonce = h.headers.get(NONCE_HEADER);
           await h.body?.cancel().catch(() => {});
           if (!nonce) {
             lastErr = `health ${h.status} without a nonce`;
             if (h.status >= 200 && h.status < 300) throw new CloudError(h.status, 'no_nonce', 'the cloud did not hand out a transfer nonce (is it a dreamcontext cloud server?)');
+            healthFails++;
             continue;
           }
           headers.Authorization = transferAuthorization(this.key, nonce, method, target);
+          healthFails = 0;
         }
+        stage = 'request';
         if (method !== 'GET') headers.Origin = this.origin;
         if (o.body) headers['Content-Type'] = o.contentType ?? 'application/json';
         const res = await this.fetchOnce(this.origin + target, { method, headers, ...(o.body ? { body: new Uint8Array(o.body) } : {}) }, o.timeoutMs ?? REQUEST_TIMEOUT_MS);
@@ -296,6 +307,7 @@ export class HttpCloudClient implements CloudClient {
         if (rv === 'private') throw new PortPrivateError(this.origin);
         if (rv === 'retry' || [502, 503, 504].includes(res.status)) {
           lastErr = `${res.status}`;
+          if (rv !== 'retry') reached = true;
           const text = await res.text().catch(() => '');
           try { const b = JSON.parse(text) as { error?: unknown }; lastCode = typeof b.error === 'string' ? b.error : null; } catch { lastCode = null; }
           continue;
@@ -310,18 +322,20 @@ export class HttpCloudClient implements CloudClient {
       } catch (err) {
         if (err instanceof CloudError || err instanceof PortPrivateError) throw err;
         lastErr = (err as Error).name || 'network error';
+        if (stage === 'health') healthFails++;
+        else if (o.auth) reached = true; // health answered; the request itself timed out or dropped
       }
     }
     throw new CloudUnreachableError(`the cloud machine did not answer ${method} ${target.split('?')[0]} (${lastErr}${lastCode ? ` ${lastCode}` : ''})`, lastCode);
   }
 
-  private async json(method: string, target: string, body?: unknown, timeoutMs?: number): Promise<unknown> {
+  private async json(method: string, target: string, body?: unknown, timeoutMs?: number, retryUntil?: number): Promise<unknown> {
     let buf: Buffer | undefined;
     if (body !== undefined) {
       buf = Buffer.from(JSON.stringify(body));
       if (buf.length > CHUNK_BYTES) throw new CloudError(0, 'body_too_large', `request body for ${target} is ${buf.length} bytes (> 8 MiB)`);
     }
-    const res = await this.send(method, target, { auth: true, body: buf, timeoutMs });
+    const res = await this.send(method, target, { auth: true, body: buf, timeoutMs, retryUntil });
     const text = await res.text();
     if (!text) return null;
     try { return JSON.parse(text); } catch { throw bad(`${target} is not JSON`); }
@@ -421,14 +435,28 @@ export class HttpCloudClient implements CloudClient {
     throw bad('state');
   }
 
+  /**
+   * A receive of a big upload can outlast GitHub's forwarder and this client's own timeout. The
+   * cloud runs one receive per upload id and answers a retry with that same receive's result
+   * (`oncePerUpload`), so a receive keeps retrying until the cloud's own limit has passed.
+   */
+  private receiveDeadline(): number {
+    return this.now() + SNAPSHOT_TIMEOUT_MS;
+  }
+
+  /** One id per logical receive, the same on every retry: the cloud runs that receive once. */
+  private requestId(): string {
+    return `rq-${randomBytes(12).toString('hex')}`;
+  }
+
   async gitReceive(body: GitReceiveBody): Promise<{ snapshotId: string }> {
-    const r = await this.json('POST', '/api/handsfree/cloud/git/receive', body, CHUNK_TIMEOUT_MS);
+    const r = await this.json('POST', '/api/handsfree/cloud/git/receive', { ...body, requestId: this.requestId() }, CHUNK_TIMEOUT_MS, this.receiveDeadline());
     if (!isObj(r) || r.ok !== true || typeof r.snapshotId !== 'string' || !HEX64.test(r.snapshotId)) throw bad('git/receive');
     return { snapshotId: r.snapshotId };
   }
 
   async filesReceive(body: { tripId: string; rootId: string; uploadId?: string; expected: ManifestEntry[] }) {
-    const r = await this.json('POST', '/api/handsfree/cloud/files/receive', body, CHUNK_TIMEOUT_MS);
+    const r = await this.json('POST', '/api/handsfree/cloud/files/receive', { ...body, requestId: this.requestId() }, CHUNK_TIMEOUT_MS, this.receiveDeadline());
     if (!isObj(r) || r.ok !== true || typeof r.digest !== 'string' || !HEX64.test(r.digest)) throw bad('files/receive');
     const refused = Array.isArray(r.refused) ? r.refused : [];
     if (!refused.every((x) => isObj(x) && typeof x.path === 'string')) throw bad('files/receive refused');
@@ -436,7 +464,7 @@ export class HttpCloudClient implements CloudClient {
   }
 
   async global(uploadId: string): Promise<void> {
-    await this.json('POST', '/api/handsfree/cloud/global', { uploadId }, CHUNK_TIMEOUT_MS);
+    await this.json('POST', '/api/handsfree/cloud/global', { uploadId, requestId: this.requestId() }, CHUNK_TIMEOUT_MS, this.receiveDeadline());
   }
 
   async activate(tripId: string): Promise<void> {

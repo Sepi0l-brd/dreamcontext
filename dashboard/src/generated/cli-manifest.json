@@ -1437,7 +1437,7 @@
     },
     {
       "path": "handsfree account-login",
-      "desc": "Sign a Claude account in INSIDE the cloud machine (opens `gh codespace ssh`; nothing is captured or stored)",
+      "desc": "Sign a Claude account in INSIDE the cloud machine, after the first go (opens `gh codespace ssh`; nothing is captured or stored). One account is enough.",
       "args": [
         "[id]"
       ]

@@ -197,9 +197,10 @@ describe('D22: running work by the process tree', () => {
   }) as never;
 
   it('finds every process in scope, the dashboard\'s own descendants and hook children included; never itself, its own group or its ancestor; any command name', async () => {
-    const scan = processTurnControl(run, { self: 10, kill: () => {} });
+    const scan = processTurnControl(run, { self: 10, kill: () => {}, liveChats: () => new Map() });
     const work = await scan.list(['/home/u/app']);
-    expect(work.map((w) => [w.id, w.fromSelf])).toEqual([['100', false], ['200', true], ['210', true]]);
+    // The hook child 210 is listed under the process that owns it (200), not on its own.
+    expect(work.map((w) => [w.id, w.fromSelf, w.members])).toEqual([['100', false, 1], ['200', true, 2]]);
     // Every command, not only `claude` (a hook is `sh`/`node`).
     expect(calls.find((c) => c[0] === 'lsof')).toEqual(['lsof', '-a', '-d', 'cwd', '-F', 'pn']);
   });
@@ -214,8 +215,8 @@ describe('D22: running work by the process tree', () => {
       if (sig === 'SIGTERM') { live.delete(100); live.delete(200); }
       if (sig === 'SIGKILL' && pid === -210) live.delete(210);
     };
-    const scan = processTurnControl(run, { self: 10, kill, sleep: async () => {}, graceMs: 300 });
-    expect(await scan.cut(['/home/u/app'], { all: true })).toBe(3);
+    const scan = processTurnControl(run, { self: 10, kill, sleep: async () => {}, graceMs: 300, liveChats: () => new Map() });
+    expect(await scan.cut(['/home/u/app'], { all: true })).toBe(2);
     expect(sent).toEqual([
       [-100, 'SIGTERM'], [-200, 'SIGTERM'], [-210, 'SIGTERM'],
       [-100, 'SIGKILL'], [-200, 'SIGKILL'], [-210, 'SIGKILL'],
@@ -228,9 +229,9 @@ describe('D22: running work by the process tree', () => {
   it('the dashboard: the scan decides, the registries label (a busy registry entry covers its own child tree; a detached run is named once)', async () => {
     laneF.ptys = [];
     laneF.runs = [{ pid: 100, cwd: '/home/u/app' }];
-    const turns = makeServerTurns(processTurnControl(run, { self: 10, kill: () => {} }));
-    // No running registry entry: the draining chat (200) and its hook (210) are running work.
-    expect((await turns.list(['/home/u/app'])).map((w) => `${w.kind}:${w.id}`)).toEqual(['detached:100', 'process:200', 'process:210']);
+    const turns = makeServerTurns(processTurnControl(run, { self: 10, kill: () => {}, liveChats: () => new Map() }));
+    // No running registry entry: the draining chat (200), with its hook (210), is running work.
+    expect((await turns.list(['/home/u/app'])).map((w) => `${w.kind}:${w.id}`)).toEqual(['detached:100', 'process:200']);
     laneF.ptys = [{ id: 'pty-1', cwd: '/home/u/app' }];
     expect((await turns.list(['/home/u/app'])).map((w) => `${w.kind}:${w.id}`)).toEqual(['pty:pty-1', 'detached:100']);
   });

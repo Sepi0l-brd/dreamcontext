@@ -102,7 +102,7 @@ async function go(L: string): Promise<{ C: string; start: RepoSnapshot }> {
 
 /** Return: cloud snapshot → bundle → laptop fetch + verify → S_now → plan → journal. */
 async function prepareReturn(L: string, C: string, start: RepoSnapshot, wrap?: (h: OpHandlers) => OpHandlers) {
-  const cs = await snap(C);
+  const cs = await snap(C, { side: 'cloud' }); // as the cloud worker snapshots it
   const bundle = join(home, 'return.bundle');
   await createBundle(run, C, { refs: snapshotBundleRefs(cs), knownTips: Object.values(start.refs), out: bundle });
   const fetched = await fetchBundle(run, L, bundle, { trip: 't1' });
@@ -372,6 +372,28 @@ describe('receiving-side refusals (AC9)', () => {
     await j.run();
     expect((() => { try { lstatSync(join(L, 'evil')); return true; } catch { return false; } })()).toBe(false);
     expect(lstatSync(join(L, 'good')).isSymbolicLink()).toBe(true);
+  });
+
+  it('an untracked link that stayed home is never written through or replaced at Return: the cloud content there goes to conflicts', async () => {
+    const L = laptopRepo();
+    const outside = join(laptopHome, 'elsewhere', 'paraglide');
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, 'keep.js'), 'laptop\n');
+    mkdirSync(join(L, 'src', 'lib'), { recursive: true });
+    execFileSync('ln', ['-s', outside, join(L, 'src', 'lib', 'paraglide')]); // untracked, absolute: stays home
+    put(L, 'src/lib/real.ts', 'r\n');
+    const { C, start } = await go(L);
+    expect(existsSync(join(C, 'src', 'lib', 'paraglide'))).toBe(false);
+    // On the phone a build generates the folder for real, and an agent adds a file next to it.
+    put(C, 'src/lib/paraglide/messages.js', 'cloud\n');
+    put(C, 'src/lib/paraglide.ts', 'cloud sibling\n');
+    const { j } = await prepareReturn(L, C, start);
+    await j.run();
+    expect(readlinkSync(join(L, 'src', 'lib', 'paraglide'))).toBe(outside);
+    expect(readdirSync(outside)).toEqual(['keep.js']); // nothing was written through the link
+    expect(read(L, 'src/lib/paraglide.ts')).toBe('cloud sibling\n'); // ordinary cloud work still lands
+    const conflicts = join(tripDir(join(laptopHome, '.dreamcontext', 'handsfree'), 't1'), 'conflicts');
+    expect(execFileSync('find', [conflicts, '-name', 'messages.js'], { encoding: 'utf8' })).toContain('messages.js');
   });
 
   it('a ./x link travels and round-trips (D19)', async () => {

@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import {
   BundlePrerequisiteError, HandsfreeRefusal, createBundle, createSpawnRunner, fetchBundle, gitPreflight, incomingRefFor,
   lsTree, parseRepoSnapshot, snapIndexRef, snapStashRef, snapWorktreeRef, snapshotBundleRefs, snapshotId, snapshotRepo,
-  type ProcessRunner, type RepoSnapshot,
+  untrackedLinksStayingHome, type ProcessRunner, type RepoSnapshot,
 } from '../../src/lib/handsfree/git-snapshot.js';
 import { rootIdFor } from '../../src/lib/handsfree/manifest.js';
 
@@ -292,10 +292,31 @@ describe('D19: links that cannot travel', () => {
 
     execFileSync('ln', ['-s', '/usr/bin/python3', join(r, 'py')]);
     sh(r, 'add', 'py');
-    execFileSync('ln', ['-s', 'sub/../a.txt', join(r, 'alias')]); // untracked, in the worktree
+    execFileSync('ln', ['-s', 'sub/../a.txt', join(r, 'alias')]); // untracked, in the worktree: stays home, never refused
     const problems = await gitPreflight(run, r);
-    expect(problems.filter((p) => p.kind === 'bad_link').map((p) => p.path).sort()).toEqual(['alias', 'py']);
+    expect(problems.filter((p) => p.kind === 'bad_link').map((p) => p.path).sort()).toEqual(['py']);
+    expect(await untrackedLinksStayingHome(run, r)).toEqual([{ path: 'alias', target: 'sub/../a.txt' }]);
     expect(problems.find((p) => p.path === 'py')!.detail).toMatch(/rewrite it as a relative link or ignore it/);
+    await expect(snap(r)).rejects.toMatchObject({ kind: 'bad_link' });
+  });
+});
+
+describe('#3: an untracked link that cannot travel stays on the laptop', () => {
+  it('is not a preflight problem, is left out of the worktree snapshot, and a tracked one is still refused', async () => {
+    const r = makeRepo();
+    mkdirSync(join(home, 'elsewhere', 'paraglide'), { recursive: true });
+    mkdirSync(join(r, 'src', 'lib'), { recursive: true });
+    execFileSync('ln', ['-s', join(home, 'elsewhere', 'paraglide'), join(r, 'src', 'lib', 'paraglide')]);
+    put(r, 'new.txt', 'n\n'); // ordinary untracked work still travels
+    expect(await gitPreflight(run, r)).toEqual([]);
+    expect(await untrackedLinksStayingHome(run, r)).toEqual([{ path: 'src/lib/paraglide', target: join(home, 'elsewhere', 'paraglide') }]);
+    const s = await snap(r);
+    const wt = await lsTree(run, r, s.checkouts[0].worktreeTree);
+    expect(wt.map((e) => e.path)).toContain('new.txt');
+    expect(wt.map((e) => e.path)).not.toContain('src/lib/paraglide');
+    // The same link once tracked is the owner's work: refused, as before.
+    sh(r, 'add', 'src/lib/paraglide');
+    expect((await gitPreflight(run, r)).map((p) => p.path)).toEqual(['src/lib/paraglide']);
     await expect(snap(r)).rejects.toMatchObject({ kind: 'bad_link' });
   });
 });

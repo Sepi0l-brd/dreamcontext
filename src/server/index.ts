@@ -203,6 +203,8 @@ import { handleAgentTaskProgress, handleAgentSessionFacts } from './routes/agent
 import { handleAgentTeammates, handleAgentTeammateHistory } from './routes/agent-teammates.js';
 import { attachAgentChat, handleAgentChatHistory, handleAgentSlashCommands, handleAgentFile, handleAgentBoardAssets, handleAgentReveal, handleAgentGrant, handleAgentBackgroundOutput } from './routes/agent-chat.js';
 import { handleAgentChatSessions } from './routes/agent-chat-sessions.js';
+import { setLiveChatMirror } from './routes/agent-chat-live.js';
+import { liveChatMirrorDir } from '../lib/handsfree/turns.js';
 import { handleAgentDrop } from './routes/agent-drop.js';
 import { handleNotificationsGet, handleNotifyPost } from './routes/notifications.js';
 import { handleAgentSecret } from './routes/agent-secret.js';
@@ -1199,6 +1201,7 @@ export function startDashboardServer(options: ServerOptions): Promise<void> {
         // when this server exits — SIGKILL from the parent would skip this, but a
         // graceful SIGTERM or the parent-death watchdog both route through here.
         killTrackedChildren();
+        setLiveChatMirror(null);
         // Nothing the owner has not approved is sent: pending Assistant proposals are declined.
         declineAllProposals();
         server.close(() => process.exit(0));
@@ -1225,6 +1228,8 @@ export function startDashboardServer(options: ServerOptions): Promise<void> {
       // the app onto the new version. Self-gates to DREAMCONTEXT_DESKTOP=1.
       startUpgradeReadyWatch(dreamcontextVersion(), readDreamcontextVersionFromDisk);
       startOrphanSweep();
+      // Hands-free: mirror the live chats (idle or in a turn) for the CLI's go/return (#4).
+      if (!isCloud() && !process.env.VITEST) setLiveChatMirror(join(liveChatMirrorDir(), `${process.pid}.json`));
       // Headless claude spawns never run the CLI's TUI-only updater; this does. Self-gates to desktop.
       stopClaudeUpdate = startClaudeUpdateJob();
     };

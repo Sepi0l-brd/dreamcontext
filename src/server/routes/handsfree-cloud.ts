@@ -11,7 +11,7 @@ import {
 import { handsfreeAuth, type VerifierPush } from '../handsfree-auth.js';
 import { CloudStateStore } from '../cloud-state.js';
 import { CloudIdle, cloudIdle } from '../cloud-idle.js';
-import { CHUNK_MAX, TransferError, TransferStore, readRawBody } from '../cloud-transfers.js';
+import { CHUNK_MAX, TRANSFER_ID_RE, TransferError, TransferStore, readRawBody } from '../cloud-transfers.js';
 import { WorkerOpError, parseGitDirSpec, runWorkerOp } from '../cloud-worker.js';
 import { checkRelPath } from '../../lib/handsfree/paths.js';
 import { isVersionPin } from '../../lib/handsfree/npm-pin.js';
@@ -61,6 +61,7 @@ export function cloudServices(): CloudServices {
 /** Tests (and only tests) swap the services for ones over a scratch dir. */
 export function setCloudServicesForTests(next: CloudServices | null): void {
   services = next;
+  receipts.clear();
 }
 
 /** The phase the cloud gate reads (cloud serve passes this to setCloudPhaseSource). */
@@ -331,6 +332,8 @@ function queryOf(req: IncomingMessage): URLSearchParams {
 
 const putChunk: Handler = async (req, res, p) => {
   const body = await readRawBody(req, CHUNK_MAX);
+  // A new upload under an id starts a new receive: the old receipt belonged to the old bytes.
+  if (p.n === '0') forgetReceipts(p.uploadId);
   sendJson(res, 200, { ok: true, ...cloudServices().transfers.putChunk(p.uploadId, p.n, body) });
 };
 
@@ -396,6 +399,7 @@ const postTrip: Handler = async (req, res) => {
       ? 'The cloud holds a live trip; it must be sealed first.'
       : 'A live trip on this cloud belongs to another laptop.');
   }
+  receipts.clear(); // an accepted new trip never answers from an older trip's receive
   writeOrchestrationGitConfig(go);
   writePrivateJson(join(goManifestDir(tripId), 'includes.json'), includes);
   adoptMirrorHome(go);
@@ -420,6 +424,50 @@ function optionalUpload(v: unknown): { path: string } | null {
   return cloudServices().transfers.consume(v);
 }
 
+/**
+ * One receive per upload. A receive of a large bundle (634 MB unbundled on a 2-core machine)
+ * can outlast GitHub's forwarder or the laptop's own request timeout, and the laptop then
+ * retries the SAME request with the SAME upload id. `consume` had already moved that upload
+ * away, so the retry answered `upload_not_committed` while the first request was still
+ * working, and the go failed on a symptom. Now a retry joins the first request's work and
+ * answers with its result, or with its real error. Kept for an hour, in memory: a restarted
+ * server has neither the upload nor the receipt, and says so.
+ */
+const RECEIPT_TTL_MS = 60 * 60_000;
+/** A bound on the receipts kept (one go sends a few dozen receives; the oldest go first). */
+const RECEIPTS_MAX = 256;
+const receipts = new Map<string, { at: number; uploadId: string | null; work: Promise<Record<string, unknown>> }>();
+
+function forgetReceipts(uploadId: string): void {
+  for (const [k, v] of receipts) if (v.uploadId === uploadId) receipts.delete(k);
+}
+
+const validId = (v: unknown): string | null => (typeof v === 'string' && TRANSFER_ID_RE.test(v) ? v : null);
+
+/**
+ * Run `work` once per logical receive. The id is the laptop's `requestId` (one per call, the
+ * same on every retry, also for a git receive that has no upload), or the upload id from an
+ * older laptop. A request with neither runs on its own. A failure is kept too, so a retry
+ * gets the real error instead of the consumed upload's `upload_not_committed`.
+ */
+export function oncePerUpload(
+  key: string[], ids: { requestId?: unknown; uploadId?: unknown }, work: () => Promise<Record<string, unknown>>, now = Date.now(),
+): Promise<Record<string, unknown>> {
+  const requestId = validId(ids.requestId);
+  const uploadId = validId(ids.uploadId);
+  const dedupe = requestId ?? uploadId;
+  if (!dedupe) return work();
+  for (const [k, v] of receipts) if (now - v.at > RECEIPT_TTL_MS) receipts.delete(k);
+  const id = [...key, requestId ? `rq:${requestId}` : `up:${uploadId}`].join('\0');
+  const hit = receipts.get(id);
+  if (hit) return hit.work;
+  while (receipts.size >= RECEIPTS_MAX) receipts.delete(receipts.keys().next().value as string);
+  const p = work();
+  receipts.set(id, { at: now, uploadId, work: p });
+  p.catch(() => { /* the joining request rethrows it */ });
+  return p;
+}
+
 const postGitReceive: Handler = async (req, res) => {
   const body = await readJson(req);
   const { go, tripId } = currentTrip(tripIdOf(body.tripId));
@@ -430,18 +478,21 @@ const postGitReceive: Handler = async (req, res) => {
   const gitSpec = { info: body.info, remotes: body.remotes };
   try { parseGitDirSpec(gitSpec); } catch (err) { throw new RouteError(400, 'bad_request', (err as Error).message); }
   writePrivateJson(join(goManifestDir(tripId), `git-${spec.rootId}.json`), gitSpec);
-  const up = optionalUpload(body.uploadId);
-  try {
-    const r = await runWorkerOp<{ snapshotId: string }>({
-      op: 'git-receive',
-      params: { ...workerBase(), trip: tripId, repoRoot: local, home: homeLocal(go), go, snapshot: body.snapshot as RepoSnapshot, hasBundle: !!up, ...gitSpec },
-      inputFile: up?.path,
-      timeoutMs: SNAPSHOT_TIMEOUT_MS,
-    });
-    sendJson(res, 200, { ok: true, snapshotId: r.snapshotId });
-  } finally {
-    if (up) rmSync(up.path, { force: true });
-  }
+  const reply = await oncePerUpload(['git', tripId, spec.rootId], { requestId: body.requestId, uploadId: body.uploadId }, async () => {
+    const up = optionalUpload(body.uploadId);
+    try {
+      const r = await runWorkerOp<{ snapshotId: string }>({
+        op: 'git-receive',
+        params: { ...workerBase(), trip: tripId, repoRoot: local, home: homeLocal(go), go, snapshot: body.snapshot as RepoSnapshot, hasBundle: !!up, ...gitSpec },
+        inputFile: up?.path,
+        timeoutMs: SNAPSHOT_TIMEOUT_MS,
+      });
+      return { ok: true, snapshotId: r.snapshotId };
+    } finally {
+      if (up) rmSync(up.path, { force: true });
+    }
+  });
+  sendJson(res, 200, reply);
 };
 
 const postFilesReceive: Handler = async (req, res) => {
@@ -450,42 +501,48 @@ const postFilesReceive: Handler = async (req, res) => {
   const { spec, local } = rootOf(go, body.rootId);
   if (!Array.isArray(body.expected)) throw new RouteError(400, 'bad_manifest', 'expected must be a manifest array.');
   const expected = body.expected as ManifestEntry[];
-  const up = optionalUpload(body.uploadId);
-  try {
-    const r = await runWorkerOp<{ refused: Array<{ path: string; reason: string }>; digest: string }>({
-      op: 'files-receive',
-      params: {
-        ...workerBase(), trip: tripId, rootId: spec.rootId, root: local, rootKind: spec.kind,
-        expected, include: includesFor(tripId, spec.rootId, expected), maxBytes: PACK_MAX_BYTES, hasPack: !!up,
-      },
-      inputFile: up?.path,
-      timeoutMs: SNAPSHOT_TIMEOUT_MS,
-    });
-    // What the cloud recorded at go (the return pack is the delta against it).
-    const refused = new Set(r.refused.map((x) => x.path));
-    writePrivateJson(join(goManifestDir(tripId), `go-${spec.rootId}.json`), expected.filter((e) => !refused.has(e.path)));
-    sendJson(res, 200, { ok: true, refused: r.refused, digest: r.digest });
-  } finally {
-    if (up) rmSync(up.path, { force: true });
-  }
+  const reply = await oncePerUpload(['files', tripId, spec.rootId], { requestId: body.requestId, uploadId: body.uploadId }, async () => {
+    const up = optionalUpload(body.uploadId);
+    try {
+      const r = await runWorkerOp<{ refused: Array<{ path: string; reason: string }>; digest: string }>({
+        op: 'files-receive',
+        params: {
+          ...workerBase(), trip: tripId, rootId: spec.rootId, root: local, rootKind: spec.kind,
+          expected, include: includesFor(tripId, spec.rootId, expected), maxBytes: PACK_MAX_BYTES, hasPack: !!up,
+        },
+        inputFile: up?.path,
+        timeoutMs: SNAPSHOT_TIMEOUT_MS,
+      });
+      // What the cloud recorded at go (the return pack is the delta against it).
+      const refused = new Set(r.refused.map((x) => x.path));
+      writePrivateJson(join(goManifestDir(tripId), `go-${spec.rootId}.json`), expected.filter((e) => !refused.has(e.path)));
+      return { ok: true, refused: r.refused, digest: r.digest };
+    } finally {
+      if (up) rmSync(up.path, { force: true });
+    }
+  });
+  sendJson(res, 200, reply);
 };
 
 const postGlobal: Handler = async (req, res) => {
   const body = await readJson(req);
-  const { go } = currentTrip();
-  const up = cloudServices().transfers.consume(body.uploadId);
-  try {
-    const r = await runWorkerOp<{ written: number; refused: unknown[] }>({
-      op: 'global',
-      // AC3: the trip's project (the go manifest's first root) is registered on the cloud too.
-      params: { ...workerBase(), home: homeLocal(go), maxBytes: PACK_MAX_BYTES, tripVault: go.roots.find((r) => r.kind !== 'worktree' && r.kind !== 'transcripts')?.absPath },
-      inputFile: up.path,
-      timeoutMs: SNAPSHOT_TIMEOUT_MS,
-    });
-    sendJson(res, 200, { ok: true, written: r.written, refused: r.refused });
-  } finally {
-    rmSync(up.path, { force: true });
-  }
+  const { go, tripId } = currentTrip();
+  const reply = await oncePerUpload(['global', tripId], { requestId: body.requestId, uploadId: body.uploadId }, async () => {
+    const up = cloudServices().transfers.consume(body.uploadId);
+    try {
+      const r = await runWorkerOp<{ written: number; refused: unknown[] }>({
+        op: 'global',
+        // AC3: the trip's project (the go manifest's first root) is registered on the cloud too.
+        params: { ...workerBase(), home: homeLocal(go), maxBytes: PACK_MAX_BYTES, tripVault: go.roots.find((r) => r.kind !== 'worktree' && r.kind !== 'transcripts')?.absPath },
+        inputFile: up.path,
+        timeoutMs: SNAPSHOT_TIMEOUT_MS,
+      });
+      return { ok: true, written: r.written, refused: r.refused };
+    } finally {
+      rmSync(up.path, { force: true });
+    }
+  });
+  sendJson(res, 200, reply);
 };
 
 const INSTALL_COMMANDS: Record<string, string> = {
