@@ -562,7 +562,11 @@ Freshness is automatic (lazy per-query refresh + an eager re-check at `sleep don
 dreamcontext recall cloud status          # tier, consent, key source, spend, index coverage (never the key)
 dreamcontext recall cloud enable cloud-index   # shows what leaves this machine, then asks for your consent
 dreamcontext recall cloud disable         # revoke consent; recall falls back to local
+dreamcontext recall cloud warm            # one query + rerank now, so the next prompt meets a warm provider
+dreamcontext memory recall "<q>" --raw    # force plain BM25 (memory recall otherwise uses the vault's tier)
 ```
+
+A slow reranker never takes the cloud away: the cloud vector order serves and the header says the rerank was skipped. A failing cloud query pauses cloud calls briefly (30 s, growing to 5 minutes only if it keeps failing), and a session start warms the provider in the background.
 
 **Hook injection is ON by default**: top hits are auto-surfaced to the agent on every non-trivial prompt via the UserPromptSubmit hook (`DREAMCONTEXT_MEMORY_HOOK=0` to opt out). The snapshot's recent-CHANGELOG block is tiered — top 3 detailed, next 10 titles-only — and everything older stays reachable via `memory recall --types changelog`.
 
