@@ -18,6 +18,7 @@ import {
   type RerankModel,
 } from '../../lib/recall-cloud-config.js';
 import { renderDisclosure, type CloudIndexPlan } from '../../lib/recall-cloud-disclosure.js';
+import { warmCloudRecall } from '../../lib/recall-cloud-warmup.js';
 import { DEFAULT_RERANK_MODEL } from '../../lib/embeddings/fusion-config.js';
 import { CLOUD_DISCLOSURE_VERSION } from '../../lib/embeddings/egress-rules.js';
 import { CloudRecallError } from '../../lib/embeddings/openrouter.js';
@@ -117,6 +118,8 @@ export interface RecallCloudRouteDeps {
   loadCorpus: (root: string) => CorpusDoc[];
   build: typeof buildCloudIndex;
   setHybrid: (root: string) => void;
+  /** Warm the provider in the background after a grant or a finished build (gated inside; never awaited). */
+  warm?: (root: string, home: string) => void;
 }
 
 const defaultDeps = (): RecallCloudRouteDeps => ({
@@ -127,6 +130,8 @@ const defaultDeps = (): RecallCloudRouteDeps => ({
     state.recall_mode = 'hybrid';
     writeSleepState(root, state);
   },
+  // The server lives on, so the warm-up runs in-process; it never throws.
+  warm: (root, home) => { void warmCloudRecall(root, { home }); },
 });
 
 /** What a log line may say about a failure: its class and system code, never its message. */
@@ -283,6 +288,8 @@ export function createRecallCloudRoutes(overrides: Partial<RecallCloudRouteDeps>
       // grantVaultConsent writes the audit line itself, with the surface it is given.
       grantVaultConsent(root, { tier, rerankModel, surface: 'dashboard' }, homeOf());
       deps().setHybrid(root);
+      // An index that is already built makes the tier live now: warm the provider before the first prompt.
+      if (tier === 'cloud') deps().warm?.(root, homeOf());
     } catch (err) {
       console.error(`[recall-cloud] enable failed: ${describeFailure(err)}`);
       sendError(res, 500, 'enable_failed', 'Could not enable cloud recall.');
@@ -328,6 +335,7 @@ export function createRecallCloudRoutes(overrides: Partial<RecallCloudRouteDeps>
           run.spentUsd = result.spentUsd;
           run.state = result.aborted === null ? 'ready' : 'error';
           run.error = result.aborted;
+          if (result.aborted === null) d.warm?.(root, homeOf());
         } catch (err) {
           console.error(`[recall-cloud] index build failed: ${describeFailure(err)}`);
           run.state = 'error';

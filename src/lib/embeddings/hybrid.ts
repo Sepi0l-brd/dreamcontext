@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CHANGELOG_RANK_FACTOR, bm25Search, docKey, docRankPrior, type Bm25Options, type CorpusDoc, type RecallHit } from '../recall.js';
@@ -17,6 +17,7 @@ import { applyRerank, pickBestChunkLexical } from './egress-rules.js';
 import { buildEgressPayload, effectiveTier, isUnderEvalFrozenDir, rerankScoresByKey, type EgressPayload } from './egress.js';
 import { FUSION_BY_TIER, type DenseGate, type FusionParams } from './fusion-config.js';
 import { isNanoDownloaded, nanoEmbedQuery } from './nano.js';
+import { detectTextLang, type TextLang } from '../text-lang.js';
 import { CloudRecallError, openRouterEmbed, openRouterRerank, type CloudCallOpts, type CloudFailureKind } from './openrouter.js';
 import { refreshEmbeddings, embeddingCacheUsable, type DenseIndex } from './store.js';
 import { cloudIndexReady, loadVectorIndex } from './vector-store.js';
@@ -339,13 +340,86 @@ export function fuseCandidates(
   return out;
 }
 
+/** A doc's language, computed once per doc object (a corpus is rebuilt when its files change). */
+const DOC_LANG = new WeakMap<CorpusDoc, TextLang>();
+function docLang(doc: CorpusDoc): TextLang {
+  let lang = DOC_LANG.get(doc);
+  if (lang === undefined) {
+    lang = detectTextLang(`${doc.title}\n${doc.description ?? ''}\n${doc.body}`);
+    DOC_LANG.set(doc, lang);
+  }
+  return lang;
+}
+
+/**
+ * Move up to `quota.slots` dense hits into the last places of the top `topK` (see FusionParams.denseQuota).
+ * A candidate is one of the dense channel's first `quota.window` hits that fusion ranked below `topK`; with
+ * `crossLangOnly`, one of its first `quota.window` hits IN THE OTHER LANGUAGE (query and doc each clearly
+ * Turkish or English, and different).
+ * Everything else keeps its fused order. Returns the new key order.
+ */
+export function applyDenseQuota(
+  order: string[],
+  dense: DenseHit[],
+  topK: number,
+  quota: FusionParams['denseQuota'],
+  ctx: { byKey: Map<string, CorpusDoc>; query: string },
+): string[] {
+  if (quota === null || quota.slots <= 0) return order;
+  // The guarantee holds for the window the hook injects, even when the caller asks for more hits.
+  topK = Math.min(topK, quota.topN);
+  if (order.length <= topK) return order;
+  const qLang = quota.crossLangOnly ? detectTextLang(ctx.query) : 'unknown';
+  if (quota.crossLangOnly && qLang !== 'tr' && qLang !== 'en') return order;
+  const top = new Set(order.slice(0, topK));
+  const picked: string[] = [];
+  // With crossLangOnly, `window` counts other-language docs: e5-small ranks same-language docs first
+  // (measured: a cross-language target sits at dense rank 3-54 behind same-language noise, yet is the
+  // best OTHER-language hit 7 times in 10), so a window over the raw dense list would never reach it.
+  let seen = 0;
+  for (const h of quota.crossLangOnly ? dense : dense.slice(0, quota.window)) {
+    if (picked.length >= Math.min(quota.slots, topK)) break;
+    const doc = ctx.byKey.get(h.docKey);
+    if (!doc) continue;
+    if (quota.crossLangOnly) {
+      const dl = docLang(doc);
+      if ((dl !== 'tr' && dl !== 'en') || dl === qLang) continue;
+      if (++seen > quota.window) break;
+    }
+    if (top.has(h.docKey)) continue;
+    picked.push(h.docKey);
+  }
+  if (picked.length === 0) return order;
+  const promoted = new Set(picked);
+  const rest = order.filter((k) => !promoted.has(k));
+  const keep = topK - picked.length;
+  return [...rest.slice(0, keep), ...picked, ...rest.slice(keep)];
+}
+
 // ── cloud tiers ──────────────────────────────────────────────────────────────
 
 export const CLOUD_QUERY_TIMEOUT_MS = 1500;
 export const RERANK_TIMEOUT_MS = 1800;
 export const CLOUD_STAGE_BUDGET_MS = 3500;
+/** The longest a query failure pauses cloud calls (the last step of BREAKER_STEPS_MS). */
 export const BREAKER_PAUSE_MS = 300_000;
+/**
+ * Query breaker pauses by consecutive failure: one blip (a cold provider, a dropped connection) costs
+ * 30 s of local recall, not five minutes; only a provider that keeps failing reaches the full pause.
+ */
+export const BREAKER_STEPS_MS: readonly number[] = [30_000, 60_000, 120_000, BREAKER_PAUSE_MS];
+/**
+ * Rerank backoff by consecutive failure. The FIRST failure pauses nothing: a cold reranker that misses
+ * its budget once must not cost the next prompt its rerank. A reranker that keeps failing is skipped
+ * for a while, so it does not add its timeout to every prompt.
+ */
+export const RERANK_BACKOFF_STEPS_MS: readonly number[] = [0, 30_000, 60_000, BREAKER_PAUSE_MS];
+/** Failures further apart than this are not consecutive: the strike count starts over. */
+export const STRIKE_WINDOW_MS = 600_000;
 export const HOOK_MAX_INLINE_EMBED = 8;
+/** Off-prompt warm-up budgets: nobody waits on a warm-up, so it may take what a cold provider needs. */
+export const WARMUP_QUERY_TIMEOUT_MS = 8000;
+export const WARMUP_RERANK_TIMEOUT_MS = 8000;
 
 /** Env override of the cloud call timeouts. Honoured ONLY for an eval run on a frozen root; production stays fixed. */
 export const EVAL_CLOUD_TIMEOUT_ENV = 'DREAMCONTEXT_EVAL_CLOUD_TIMEOUT_MS';
@@ -355,7 +429,8 @@ export const EVAL_CLOUD_TIMEOUT_MAX_MS = 20_000;
 interface CloudBudget { queryMs: number; rerankMs: number; stageMs: number }
 
 /** The cloud call budgets: fixed constants, unless an eval-minted call carries a valid env override (integer ms, clamped). */
-function cloudBudget(evalMinted: boolean): CloudBudget {
+function cloudBudget(evalMinted: boolean, warmup = false): CloudBudget {
+  if (warmup) return { queryMs: WARMUP_QUERY_TIMEOUT_MS, rerankMs: WARMUP_RERANK_TIMEOUT_MS, stageMs: WARMUP_QUERY_TIMEOUT_MS + WARMUP_RERANK_TIMEOUT_MS };
   const fixed: CloudBudget = { queryMs: CLOUD_QUERY_TIMEOUT_MS, rerankMs: RERANK_TIMEOUT_MS, stageMs: CLOUD_STAGE_BUDGET_MS };
   if (!evalMinted) return fixed;
   const raw = process.env[EVAL_CLOUD_TIMEOUT_ENV];
@@ -367,7 +442,9 @@ function cloudBudget(evalMinted: boolean): CloudBudget {
 export type FallbackReason =
   | CloudFailureKind
   | 'none' | 'breaker_open' | 'withheld' | 'not_consented' | 'spawned_session'
-  | 'daily_cap' | 'no_index' | 'no_local_model' | 'rerank_not_consented';
+  | 'daily_cap' | 'no_index' | 'no_local_model' | 'rerank_not_consented'
+  // The cloud vector query answered; only the rerank was skipped, so the cloud fused order served.
+  | 'rerank_timeout' | 'rerank_failed' | 'rerank_backoff';
 
 export interface RecallTiming {
   /** The EFFECTIVE tier (never above what the vault consented to). */
@@ -381,15 +458,43 @@ export interface RecallTiming {
   rerankMs?: number;
 }
 
-// Circuit breaker: `~/.dreamcontext/recall-cloud-health.json` (0600) = { until, kind, keyFp }.
-// A cloud failure pauses cloud calls for BREAKER_PAUSE_MS. An auth failure pauses until the stored
-// key changes. `keyFp` is a sha256 prefix of the key's set-time marker (this module may not read the
-// key itself; only openrouter.ts does), so it changes when `key set` runs.
+/**
+ * The header label of a hybrid prompt, from the EFFECTIVE query source. A cloud tier that answered
+ * (`api`, or the cloud-index tier's local nano query) is `Hybrid · cloud`; one that fell back says where it
+ * went and why: `Hybrid · cloud → local: breaker open`, or `→ BM25` when no local model could serve either.
+ * A cloud answer whose rerank was skipped says so too: `Hybrid · cloud · rerank skipped: timeout`. Every
+ * fallback is named; the one exception is `rerank_not_consented`, which is the vault's own choice of no
+ * reranker, not something that went wrong.
+ */
+export function hybridHeaderLabel(timing: RecallTiming): string {
+  const base = `Hybrid · ${timing.tier}`;
+  const fellBack = timing.querySource === 'none' || (timing.tier !== 'local' && timing.querySource === 'e5');
+  const why = timing.fallback.replace(/_/g, ' ');
+  if (fellBack && timing.fallback !== 'none') return `${base} → ${timing.querySource === 'e5' ? 'local' : 'BM25'}: ${why}`;
+  if (fellBack) return timing.tier === 'local' ? base : `${base} → BM25`;
+  if (timing.fallback === 'none' || timing.fallback === 'rerank_not_consented') return base;
+  if (timing.fallback.startsWith('rerank_')) return `${base} · rerank skipped: ${why.slice('rerank '.length)}`;
+  return `${base} · ${why}`;
+}
 
-interface BreakerFile { until: number; kind: CloudFailureKind; keyFp: string }
+// Circuit breaker: `~/.dreamcontext/recall-cloud-health.json` (0600) = { until, kind, keyFp, strikes, at }.
+// Only a failed VECTOR QUERY trips it (a rerank failure has its own backoff below and never stops the
+// cloud query). The pause grows with consecutive failures (BREAKER_STEPS_MS), and a successful query
+// clears it. An auth failure pauses until the stored key changes. `keyFp` is a sha256 prefix of the
+// key's set-time marker (this module may not read the key itself; only openrouter.ts does), so it
+// changes when `key set` runs.
+//
+// Rerank backoff: `~/.dreamcontext/recall-cloud-rerank-health.json` (0600) = { until, strikes, at }.
+
+interface BreakerFile { until: number; kind: CloudFailureKind; keyFp: string; strikes?: number; at?: number }
+interface BackoffFile { until: number; strikes: number; at: number }
 
 function breakerPath(home: string): string {
   return join(home, '.dreamcontext', 'recall-cloud-health.json');
+}
+
+function rerankBackoffPath(home: string): string {
+  return join(home, '.dreamcontext', 'recall-cloud-rerank-health.json');
 }
 
 function keyMarker(home: string): string {
@@ -398,13 +503,40 @@ function keyMarker(home: string): string {
   return createHash('sha256').update(mark).digest('hex').slice(0, 12);
 }
 
-function readBreaker(home: string): BreakerFile | null {
+function readJson<T>(path: string, valid: (v: Partial<T>) => boolean): T | null {
   try {
-    const b = JSON.parse(readFileSync(breakerPath(home), 'utf-8')) as Partial<BreakerFile>;
-    return typeof b.until === 'number' && typeof b.kind === 'string' && typeof b.keyFp === 'string' ? (b as BreakerFile) : null;
+    const v = JSON.parse(readFileSync(path, 'utf-8')) as Partial<T>;
+    return v !== null && typeof v === 'object' && valid(v) ? (v as T) : null;
   } catch {
     return null;
   }
+}
+
+function readBreaker(home: string): BreakerFile | null {
+  return readJson<BreakerFile>(breakerPath(home), (b) => typeof b.until === 'number' && typeof b.kind === 'string' && typeof b.keyFp === 'string');
+}
+
+/** Atomic 0600 write. A state file that cannot be written degrades to "try again next prompt"; recall must not fail on it. */
+function writeState(path: string, body: unknown): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(body), { mode: 0o600 });
+    renameSync(tmp, path);
+    chmodSync(path, 0o600);
+  } catch {
+    /* see above */
+  }
+}
+
+/** The strike count after one more failure: consecutive when the previous one was recent, else a fresh 1. */
+function nextStrike(prev: { strikes?: number; at?: number } | null, now: number): number {
+  if (prev === null || typeof prev.at !== 'number' || now - prev.at > STRIKE_WINDOW_MS) return 1;
+  return (typeof prev.strikes === 'number' && prev.strikes > 0 ? prev.strikes : 1) + 1;
+}
+
+function step(steps: readonly number[], strikes: number): number {
+  return steps[Math.min(strikes, steps.length) - 1];
 }
 
 /** True while cloud calls are paused for this machine. */
@@ -414,20 +546,54 @@ export function breakerOpen(home: string = homedir(), now: number = Date.now()):
   return b.kind === 'auth' ? b.keyFp === keyMarker(home) : true;
 }
 
-/** Pause cloud calls after a failure. Caller bugs and spend ceilings (`forged_payload`, `eval_cap`, `no_key`) never trip it. */
+/**
+ * Pause cloud calls after a failed vector query, for BREAKER_STEPS_MS[consecutive failures - 1].
+ * Caller bugs and spend ceilings (`forged_payload`, `eval_cap`, `no_key`) never trip it.
+ */
 export function tripBreaker(kind: CloudFailureKind, home: string = homedir(), now: number = Date.now()): void {
   if (kind === 'forged_payload' || kind === 'eval_cap' || kind === 'no_key') return;
-  const body: BreakerFile = { until: kind === 'auth' ? Number.MAX_SAFE_INTEGER : now + BREAKER_PAUSE_MS, kind, keyFp: keyMarker(home) };
-  try {
-    const path = breakerPath(home);
-    mkdirSync(dirname(path), { recursive: true });
-    const tmp = `${path}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(body), { mode: 0o600 });
-    renameSync(tmp, path);
-    chmodSync(path, 0o600);
-  } catch {
-    // A breaker that cannot be written degrades to "try again next prompt"; recall must not fail on it.
-  }
+  const strikes = nextStrike(readBreaker(home), now);
+  const until = kind === 'auth' ? Number.MAX_SAFE_INTEGER : now + step(BREAKER_STEPS_MS, strikes);
+  writeState(breakerPath(home), { until, kind, keyFp: keyMarker(home), strikes, at: now } satisfies BreakerFile);
+}
+
+/** A cloud query succeeded: forget past failures, so the next one starts at the shortest pause. */
+export function clearBreaker(home: string = homedir()): void {
+  try { rmSync(breakerPath(home), { force: true }); } catch { /* best effort */ }
+}
+
+function readRerankBackoff(home: string): BackoffFile | null {
+  return readJson<BackoffFile>(rerankBackoffPath(home), (b) => typeof b.until === 'number' && typeof b.strikes === 'number' && typeof b.at === 'number');
+}
+
+/** True while rerank is being skipped after repeated failures. */
+export function rerankBackoffOpen(home: string = homedir(), now: number = Date.now()): boolean {
+  const b = readRerankBackoff(home);
+  return b !== null && b.until > now;
+}
+
+/** Record a failed rerank (timeout, network, provider error): the pause is RERANK_BACKOFF_STEPS_MS[strikes - 1]. */
+export function tripRerankBackoff(home: string = homedir(), now: number = Date.now()): void {
+  const strikes = nextStrike(readRerankBackoff(home), now);
+  writeState(rerankBackoffPath(home), { until: now + step(RERANK_BACKOFF_STEPS_MS, strikes), strikes, at: now } satisfies BackoffFile);
+}
+
+function warmPath(home: string): string {
+  return join(home, '.dreamcontext', 'recall-cloud-warm.json');
+}
+
+/** When a cloud query last succeeded (or a warm-up claimed the slot), ms since epoch; null when never. */
+export function cloudWarmAt(home: string = homedir()): number | null {
+  return readJson<{ at: number }>(warmPath(home), (v) => typeof v.at === 'number')?.at ?? null;
+}
+
+/** Record that the provider is warm now (see recall-cloud-warmup.ts). */
+export function markCloudWarm(home: string = homedir(), now: number = Date.now()): void {
+  writeState(warmPath(home), { at: now });
+}
+
+function clearRerankBackoff(home: string): void {
+  try { rmSync(rerankBackoffPath(home), { force: true }); } catch { /* best effort */ }
 }
 
 export interface HybridOptions extends Bm25Options {
@@ -465,6 +631,11 @@ export interface HybridOptions extends Bm25Options {
   timing?: RecallTiming;
   /** The query's language, for `langWeights` (ranking feature; never a gold label). */
   queryLang?: 'tr' | 'en' | 'mixed';
+  /**
+   * A warm-up call (`warmCloudRecall`): nobody waits on it, so it gets the WARMUP_* budgets and its failures
+   * never touch the breaker or the rerank backoff (a warm-up that fails says nothing a real prompt would not).
+   */
+  warmup?: boolean;
 }
 
 function fallbackFor(rule: string): FallbackReason {
@@ -543,9 +714,12 @@ async function cloudSearch(
   home: string,
 ): Promise<RecallHit[] | null> {
   const evalMinted = opts.evalConsent === true && isUnderEvalFrozenDir(contextRoot, home);
+  // Eval runs and warm-ups never write the shared health state.
+  const recordHealth = !evalMinted && opts.warmup !== true;
   const params = opts.fusionParams ?? FUSION_BY_TIER[eff];
-  const budget = cloudBudget(evalMinted);
-  if (shouldSkipDense(bm25Hits, params.denseGate)) {
+  const budget = cloudBudget(evalMinted, opts.warmup === true);
+  // A warm-up must reach the provider even when BM25 alone would be sure of its query.
+  if (opts.warmup !== true && shouldSkipDense(bm25Hits, params.denseGate)) {
     timing.fallback = 'none';
     return bm25Hits.slice(0, topK);
   }
@@ -567,9 +741,10 @@ async function cloudSearch(
       const res = await openRouterEmbed(minted.payload, { timeoutMs: budget.queryMs });
       qv = res.vectors[0] ?? null;
       timing.querySource = 'api';
+      if (recordHealth) { clearBreaker(home); markCloudWarm(home); }
     } catch (err) {
       const kind = err instanceof CloudRecallError ? err.kind : 'network';
-      if (!evalMinted) tripBreaker(kind, home);
+      if (recordHealth) tripBreaker(kind, home);
       timing.fallback = kind;
       return null;
     }
@@ -594,19 +769,30 @@ async function cloudSearch(
   timing.fallback = 'none';
 
   let order = fused.map((e) => e.key);
+  let reranked = false;
   const rr = params.rerank;
   if (rr !== null && eff === 'cloud') {
     const model = evalMinted ? opts.rerankModel ?? null : readVaultConsent(contextRoot, home)?.rerankModel ?? null;
     if (model === null) {
       timing.fallback = 'rerank_not_consented';
+    } else if (recordHealth && rerankBackoffOpen(home)) {
+      timing.fallback = 'rerank_backoff';
     } else {
       const remaining = budget.stageMs - (performance.now() - stageStart);
       const window = rerankWindow(fused, bm25Hits, dense, rr);
-      if (remaining > 0 && window.length > 0) {
-        order = await rerankOrder({ query, qv, index, window, fused, model, rr, byKey, contextRoot, evalMinted, home, opts, timing, timeoutMs: Math.min(budget.rerankMs, remaining) }) ?? order;
+      if (remaining <= 0) {
+        // The query used the whole stage budget: the cloud fused order serves, rerank is skipped.
+        timing.fallback = 'rerank_timeout';
+      } else if (window.length > 0) {
+        const r = await rerankOrder({ query, qv, index, window, fused, model, rr, byKey, contextRoot, recordHealth, home, opts, timing, timeoutMs: Math.min(budget.rerankMs, remaining) });
+        if (r !== null) { order = r; reranked = true; }
       }
     }
   }
+  // Without a rerank (skipped, failed, or none consented) the fused order alone decides, and rank fusion
+  // lets five same-language lexical matches bury a cross-language doc the dense channel ranked first.
+  // The rerank would have caught it; the dense slot does instead. A reranked order is never touched.
+  if (!reranked) order = applyDenseQuota(order, dense, topK, params.denseQuota ?? null, { byKey, query });
   // Keep rankScore monotone with the final order: the fused scores, re-dealt best-first.
   const sorted = fused.map((e) => e.fused).sort((a, b) => b - a);
   return buildHits(order, sorted, bm25ByKey, byKey).slice(0, topK);
@@ -616,7 +802,7 @@ interface RerankArgs {
   query: string; qv: Float32Array; index: DenseIndex;
   window: Array<{ key: string; fused: number }>; fused: Array<{ key: string; fused: number }>;
   model: RerankModel; rr: NonNullable<FusionParams['rerank']>; byKey: Map<string, CorpusDoc>;
-  contextRoot: string; evalMinted: boolean; home: string; opts: HybridOptions; timing: RecallTiming; timeoutMs: number;
+  contextRoot: string; recordHealth: boolean; home: string; opts: HybridOptions; timing: RecallTiming; timeoutMs: number;
 }
 
 /** The reranked key order, or null when rerank could not run (the caller keeps the fused order). */
@@ -646,6 +832,7 @@ async function rerankOrder(a: RerankArgs): Promise<string[] | null> {
     const call = a.opts.rerankImpl ?? openRouterRerank;
     const res = await call(minted.payload, { timeoutMs: a.timeoutMs });
     a.timing.rerankMs = Math.round(performance.now() - t0);
+    if (a.recordHealth) clearRerankBackoff(a.home);
     const scores = rerankScoresByKey(minted.payload, res.scores);
     if ((a.rr.pool ?? 'fused-top') === 'fused-top') {
       return applyRerank(a.fused, scores, a.rr.blendAlpha, a.rr.candidates);
@@ -655,9 +842,14 @@ async function rerankOrder(a: RerankArgs): Promise<string[] | null> {
     const inUnion = new Set(reranked);
     return [...reranked, ...a.fused.map((e) => e.key).filter((k) => !inUnion.has(k))];
   } catch (err) {
+    // A failed rerank is NOT a failed cloud prompt: the vector query already answered, so the caller keeps
+    // the cloud fused order. Only an auth failure (the same key the query uses) trips the query breaker.
     const kind = err instanceof CloudRecallError ? err.kind : 'network';
-    if (!a.evalMinted) tripBreaker(kind, a.home);
-    a.timing.fallback = kind;
+    if (a.recordHealth) {
+      if (kind === 'auth') tripBreaker(kind, a.home);
+      else if (kind !== 'forged_payload' && kind !== 'eval_cap' && kind !== 'no_key') tripRerankBackoff(a.home);
+    }
+    a.timing.fallback = kind === 'timeout' ? 'rerank_timeout' : 'rerank_failed';
     return null;
   }
 }
@@ -753,6 +945,9 @@ async function localSearch(
     const params = opts.fusionParams ?? { ...local, pinMargin: opts.pinMargin ?? local.pinMargin };
     if (shouldSkipDense(bm25Hits, params.denseGate)) return bm25Hits.slice(0, topK);
     fused = fuseCandidates(bm25Hits, denseHits, params, { byKey, now: opts.now ?? new Date(), queryLang: opts.queryLang });
+    // Cross-language dense slots; rankScore stays monotone with the final order (scores re-dealt best-first).
+    const order = applyDenseQuota(fused.map((e) => e.key), denseHits, topK, params.denseQuota ?? null, { byKey, query });
+    return buildHits(order, fused.map((e) => e.fused).sort((a, b) => b - a), bm25ByKey, byKey).slice(0, topK);
   }
   return buildHits(fused.map((e) => e.key), fused.map((e) => e.fused), bm25ByKey, byKey).slice(0, topK);
 }

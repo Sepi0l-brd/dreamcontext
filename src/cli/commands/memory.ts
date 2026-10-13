@@ -10,11 +10,13 @@ import {
   buildCorpus,
   bm25Search,
   docLevel,
+  isFederated,
   CORPUS_TYPES,
+  type CorpusDoc,
   type CorpusType,
   type RecallHit,
 } from '../../lib/recall.js';
-import { hybridSearch, hybridReady, type RecallTiming } from '../../lib/embeddings/hybrid.js';
+import { hybridHeaderLabel, hybridSearch, hybridReady, type RecallTiming } from '../../lib/embeddings/hybrid.js';
 import { recallCloudStatus, resolvePromptTier, type RecallTier } from '../../lib/recall-cloud-config.js';
 import { cloudIndexReady } from '../../lib/embeddings/vector-store.js';
 import { isNanoDownloaded } from '../../lib/embeddings/nano.js';
@@ -80,6 +82,44 @@ export function parseTypes(value: string | undefined): CorpusType[] | undefined 
   return filtered.length > 0 ? filtered : undefined;
 }
 
+/** What served the current vault's hits: the header label, the hybrid timing (null on BM25), the hits. */
+export interface ServedBy {
+  label: string;
+  timing: RecallTiming | null;
+  currentHits?: RecallHit[];
+}
+
+/**
+ * The current vault's search, on the SAME tier the per-prompt hook uses: hybrid on the vault's resolved
+ * tier (local / cloud-index / cloud) when hybrid mode is selected and warm, else BM25. `raw` forces BM25.
+ * A cloud search here counts toward the daily query cap exactly like a prompt.
+ */
+export async function searchCurrentVault(
+  root: string,
+  query: string,
+  corpus: CorpusDoc[],
+  topK: number,
+  o: { raw?: boolean; aliasGroups?: string[][]; home?: string; env?: NodeJS.ProcessEnv } = {},
+): Promise<ServedBy & { hits: RecallHit[] }> {
+  const bm25 = (): RecallHit[] => bm25Search(query, corpus, topK, { aliasGroups: o.aliasGroups });
+  if (o.raw) return { label: 'BM25 · raw', timing: null, hits: bm25() };
+  const mode = resolveRecallMode(root);
+  // The tier comes from the vault's own consent (spawned sessions and the daily cap downgrade it);
+  // hybridSearch re-derives it, so this can only ever ask for less than consent allows.
+  const resolved = resolvePromptTier(root, o.env ?? process.env, o.home);
+  if (!hybridReady(root, mode, resolved.tier, o.home)) {
+    // Hybrid selected but not warm yet → BM25. Nudge (on stderr, so --json / --plain stdout stays clean).
+    if (mode === 'hybrid') console.error(chalk.dim(`  (${hybridNotReadyNote(root, resolved, o.home)})`));
+    return { label: 'BM25', timing: null, hits: bm25() };
+  }
+  const timing: RecallTiming = { tier: 'local', querySource: 'none', fallback: 'none' };
+  const hits = await hybridSearch(query, corpus, root, topK, { aliasGroups: o.aliasGroups, tier: resolved.tier, timing, home: o.home });
+  const note = cloudFallbackNote(timing);
+  if (note) console.error(chalk.dim(`  (${note})`));
+  if (process.env.DREAMCONTEXT_RECALL_TIMING === '1') console.error(JSON.stringify(timing));
+  return { label: hybridHeaderLabel(timing), timing, hits };
+}
+
 /**
  * Cross-vault recall output (P1.2/P1.3). Builds the target vault set from the
  * flags — current vault always included — then renders vault-tagged hits in
@@ -94,6 +134,7 @@ function recallFederated(
   types: CorpusType[] | undefined,
   minLevel: number | undefined,
   opts: { json?: boolean; plain?: boolean; vault?: string[]; connected?: boolean; allVaults?: boolean },
+  served: ServedBy = { label: 'BM25', timing: null },
 ): void {
   const projectRoot = dirname(contextRoot);
   const { target: currentTarget } = currentVaultTarget(projectRoot);
@@ -115,6 +156,7 @@ function recallFederated(
     topK,
     types,
     minLevel,
+    ...(served.currentHits ? { currentHits: served.currentHits } : {}),
   });
 
   if (opts.json) {
@@ -137,6 +179,8 @@ function recallFederated(
     }));
     console.log(JSON.stringify({
       query,
+      served: served.label,
+      timing: served.timing,
       hits: payload,
       skipped: skipped.map((s) => ({ vault: s.vault, reason: s.reason })),
     }, null, 2));
@@ -148,6 +192,8 @@ function recallFederated(
     : '';
 
   if (opts.plain) {
+    // --plain stays byte-stable for scripts: the served line is part of the timing diagnostic only.
+    if (process.env.DREAMCONTEXT_RECALL_TIMING === '1') console.error(`served: ${served.label} (current vault; peers BM25)`);
     if (hits.length === 0) {
       console.log(`No hits for "${query}".`);
     }
@@ -164,7 +210,7 @@ function recallFederated(
     return;
   }
 
-  console.log(header(`Federated recall: "${query}"`));
+  console.log(header(`Federated recall: "${query}"  ${chalk.dim(`(${served.label} on this vault · peers BM25)`)}`));
   if (hits.length === 0) {
     info(`No hits for "${query}".`);
   }
@@ -244,6 +290,7 @@ export function registerMemoryCommand(program: Command): void {
     .option('--vault <name>', 'Also search this vault (repeatable; registered name or path)', collectVault, [])
     .option('--connected', 'Span the current vault + its out/both connections')
     .option('--all-vaults', 'Span the current vault + every registered vault')
+    .option('--raw', 'Force plain BM25: skip the hybrid and cloud tiers (no network call)')
     .action(
       async (
         queryParts: string[],
@@ -256,6 +303,7 @@ export function registerMemoryCommand(program: Command): void {
           vault?: string[];
           connected?: boolean;
           allVaults?: boolean;
+          raw?: boolean;
         },
       ) => {
         const root = ensureContextRoot();
@@ -264,64 +312,44 @@ export function registerMemoryCommand(program: Command): void {
         const types = parseTypes(opts.types);
         const minLevel = parseLevel(opts.level);
 
+        const vocab = loadProjectVocabulary(root);
+        const groups = aliasGroups(vocab);
+        const corpus = buildCorpusCached(root, {
+          ...(types ? { types } : {}),
+          ...(minLevel ? { minLevel } : {}),
+        });
+
         // ── Federation branch (P1.2/P1.3) ──────────────────────────────────────
         // ANY of --vault / --connected / --all-vaults routes through cross-vault
         // recall.
-        const explicitVaults = opts.vault ?? [];
-        if (explicitVaults.length > 0 || opts.connected || opts.allVaults) {
-          recallFederated(root, query, topK, types, minLevel, opts);
-          return;
-        }
-
+        //
         // ── DEFAULT-SPAN (cross-project read by default) ───────────────────────
         // With NO federation flag, the interactive `memory recall` CLI spans the
         // current vault's eligible peers BY DEFAULT — same target set as
         // `--connected` (out/both, non-stale peers). This is the
         // explicit agent/Explore path; the always-on hook does NOT come through
-        // here (it calls bm25Search on a local-only corpus directly), so the
-        // SessionStart/generateSnapshot hot-path stays local-only (P1.6 LOCKED).
+        // here, so the SessionStart/generateSnapshot hot-path stays local-only (P1.6 LOCKED).
         //
         // GATE: only span when at least one eligible peer exists. With no
         // eligible connections `resolveConnectedVaults` returns just the current
-        // vault, and we fall through to the byte-identical legacy local-only
-        // recall below (regression-guarded). Provenance stays visible because
-        // recallFederated namespaces every hit `<vault>::<type>/<slug>`.
+        // vault, and we fall through to the single-vault recall below. Provenance
+        // stays visible because recallFederated namespaces every hit `<vault>::<type>/<slug>`.
+        //
+        // Either way the CURRENT vault is searched on its own recall tier (hybrid, cloud when
+        // consented), exactly like the hook; peers are read with BM25 (their consent is theirs).
+        const explicitVaults = opts.vault ?? [];
         const projectRoot = dirname(root);
-        const { target: currentTarget } = currentVaultTarget(projectRoot);
-        const connectedTargets = resolveConnectedVaults(currentTarget, root);
-        if (connectedTargets.length > 1) {
-          recallFederated(root, query, topK, types, minLevel, { ...opts, connected: true });
+        const federate = explicitVaults.length > 0 || opts.connected || opts.allVaults
+          || resolveConnectedVaults(currentVaultTarget(projectRoot).target, root).length > 1;
+        if (federate) {
+          // Ingested-from-peer docs are never served across a vault boundary (same filter crossVaultRecall applies).
+          const own = await searchCurrentVault(root, query, corpus.filter((d) => !isFederated(d)), topK, { raw: opts.raw, aliasGroups: groups });
+          const fedOpts = explicitVaults.length > 0 || opts.connected || opts.allVaults ? opts : { ...opts, connected: true };
+          recallFederated(root, query, topK, types, minLevel, fedOpts, { label: own.label, timing: own.timing, currentHits: own.hits });
           return;
         }
 
-        const corpus = buildCorpusCached(root, {
-          ...(types ? { types } : {}),
-          ...(minLevel ? { minLevel } : {}),
-        });
-        const vocab = loadProjectVocabulary(root);
-        // Honour the vault's recall mode (the SAME source of truth the hook and
-        // the dashboard read): hybrid BM25+dense fusion when it's selected AND
-        // already warm, else plain BM25. `hybridReady` guarantees the explicit
-        // `memory recall` never blocks on a first-time download or index build.
-        const mode = resolveRecallMode(root);
-        // The tier comes from the vault's own consent (spawned sessions and the daily cap downgrade it);
-        // hybridSearch re-derives it, so this can only ever ask for less than consent allows.
-        const resolved = resolvePromptTier(root);
-        const useHybrid = hybridReady(root, mode, resolved.tier);
-        // Hybrid selected but not warm yet → we searched with BM25. Nudge (on
-        // stderr, so --json / --plain stdout stays clean) toward the missing prerequisite.
-        if (mode === 'hybrid' && !useHybrid) {
-          console.error(chalk.dim(`  (${hybridNotReadyNote(root, resolved)})`));
-        }
-        const timing: RecallTiming = { tier: 'local', querySource: 'none', fallback: 'none' };
-        const hits = useHybrid
-          ? await hybridSearch(query, corpus, root, topK, { aliasGroups: aliasGroups(vocab), tier: resolved.tier, timing })
-          : bm25Search(query, corpus, topK, { aliasGroups: aliasGroups(vocab) });
-        if (useHybrid) {
-          const note = cloudFallbackNote(timing);
-          if (note) console.error(chalk.dim(`  (${note})`));
-          if (process.env.DREAMCONTEXT_RECALL_TIMING === '1') console.error(JSON.stringify(timing));
-        }
+        const { hits, label: servedLabel, timing } = await searchCurrentVault(root, query, corpus, topK, { raw: opts.raw, aliasGroups: groups });
 
         if (opts.json) {
           const payload = hits.map((h) => ({
@@ -338,7 +366,7 @@ export function registerMemoryCommand(program: Command): void {
             score: Number(h.score.toFixed(4)),
             snippet: h.snippet,
           }));
-          console.log(JSON.stringify({ query, corpusSize: corpus.length, hits: payload }, null, 2));
+          console.log(JSON.stringify({ query, corpusSize: corpus.length, served: servedLabel, timing, hits: payload }, null, 2));
           return;
         }
 
@@ -350,6 +378,7 @@ export function registerMemoryCommand(program: Command): void {
         }
 
         if (opts.plain) {
+          if (process.env.DREAMCONTEXT_RECALL_TIMING === '1') console.error(`served: ${servedLabel}`);
           for (const h of hits) {
             console.log(`[${TYPE_LABELS[h.doc.type]}] ${levelBadge(docLevel(h.doc))} ${h.doc.slug}  (score ${h.score.toFixed(3)})`);
             console.log(`  ${h.doc.relPath}`);
@@ -363,7 +392,7 @@ export function registerMemoryCommand(program: Command): void {
         }
 
         const scope = minLevel ? chalk.dim(` · level >= ${minLevel}`) : '';
-        console.log(header(`Recall: "${query}"  ${chalk.dim(`(${corpus.length} docs scanned)`)}${scope}`));
+        console.log(header(`Recall: "${query}"  ${chalk.dim(`(${servedLabel} · ${corpus.length} docs scanned)`)}${scope}`));
         for (const h of hits) {
           const typeBadge = chalk.cyan(`[${TYPE_LABELS[h.doc.type]}]`);
           const slug = chalk.magentaBright(h.doc.slug);

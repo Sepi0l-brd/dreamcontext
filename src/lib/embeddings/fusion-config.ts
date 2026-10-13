@@ -26,6 +26,14 @@ export interface FusionParams {
    * = BM25 top N/2 ∪ dense top N/2, ordered by fused score (G1 option (a)).
    */
   rerank: { candidates: number; blendAlpha: number; pool?: 'fused-top' | 'bm25-dense-union' } | null;
+  /**
+   * Guaranteed dense slots in the top K (`applyDenseQuota`; on `cloud` only when no rerank ran): up to `slots` of the dense channel's first
+   * `window` hits that fusion left outside the top min(K, `topN`) are moved into its last places. With `crossLangOnly`
+   * the window counts only docs whose language differs from the query's: BM25 cannot match across languages,
+   * and a small multilingual model ranks same-language docs first, so the best other-language hit is the one
+   * fusion must not lose.
+   */
+  denseQuota: { slots: number; window: number; topN: number; crossLangOnly: boolean } | null;
 }
 
 /**
@@ -46,7 +54,11 @@ const PRODUCTION: FusionParams = {
   denseGate: null,
   langWeights: null,
   rerank: null,
+  denseQuota: null,
 };
+
+/** The local tier's cross-language dense slot (see FusionParams.denseQuota). */
+export const LOCAL_DENSE_QUOTA: NonNullable<FusionParams['denseQuota']> = { slots: 1, window: 1, topN: 5, crossLangOnly: true };
 
 /** What the G1 spike measured (TS/E0): production constants, and for `cloud` rerank N=20, alpha=1.0, fused-top. Pinned by a test, never tuned. */
 export const SPIKE_FUSION: Record<RecallTier, FusionParams> = {
@@ -72,10 +84,16 @@ const VOYAGE_CORE: FusionParams = {
 export const FUSION_BY_TIER: Record<RecallTier, FusionParams> = {
   // Local e5: train tuning (eval/runs/2026-10-11-tune-train-local.json) found no axis or dense gate that beats
   // the adaptive constants (worst-language train r@5 stays 50; every gate lost hits), so they stay. localSearch reads this entry.
-  local: { ...PRODUCTION },
+  // One slot in the top 5 for the best other-language dense hit (2026-10-12). Gold (train): overall r@5 67.8 -> 68.9,
+  // EN unchanged, TR 50.0 -> 50.0, mixed 66.7 -> 70.0; legacy split unchanged. End to end on a synthetic TR/EN vault
+  // with the real e5 model: 1/10 -> 7/10 targets in the top 5 (a raw dense top-3 window reached 1/10: e5 ranks
+  // same-language noise first). A language-blind slot lost a TR hit; two slots gained nothing.
+  local: { ...PRODUCTION, denseQuota: LOCAL_DENSE_QUOTA },
   'cloud-index': { ...VOYAGE_CORE },
   // Rerank: voyage rerank-2.5-lite over the BM25-top-20 + dense-top-20 union (<= 40), blended 0.7 rerank / 0.3 fused.
-  cloud: { ...VOYAGE_CORE, rerank: { candidates: 40, blendAlpha: 0.7, pool: 'bm25-dense-union' } },
+  // The dense slot applies ONLY when the rerank did not run (cold provider, failure, backoff, none consented):
+  // a reranked order, which is what the eval measured, is never touched by it.
+  cloud: { ...VOYAGE_CORE, rerank: { candidates: 40, blendAlpha: 0.7, pool: 'bm25-dense-union' }, denseQuota: LOCAL_DENSE_QUOTA },
 };
 
 /** The reranker `enable` defaults to. */

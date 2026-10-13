@@ -2694,6 +2694,11 @@
       "args": []
     },
     {
+      "path": "recall cloud warm",
+      "desc": "Send one query and rerank so the next prompt meets a warm provider (cloud tier only; counts as one query)",
+      "args": []
+    },
+    {
       "path": "recall hybrid",
       "desc": "EXPERIMENTAL: BM25 + local dense embeddings fused via RRF (no LLM call)",
       "args": []

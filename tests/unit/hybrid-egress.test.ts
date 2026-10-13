@@ -165,14 +165,22 @@ describe('zero fetches', () => {
 });
 
 describe('a rerank failure', () => {
-  it('keeps the fused order, trips the breaker, and reports why', async () => {
+  it('keeps the cloud fused order, never trips the query breaker, and reports why', async () => {
     vi.stubGlobal('fetch', fakeOpenRouter().fetch);
     const unreranked = await hybridSearch('zzw3', corpus, env.root, 10, { tier: 'cloud', home: env.home, fusionParams: { ...FUSION_BY_TIER.cloud, rerank: null } });
     vi.stubGlobal('fetch', fakeOpenRouter({ rerankStatus: 429 }).fetch);
     const t = timing();
     const reranked = await hybridSearch('zzw3', corpus, env.root, 10, { tier: 'cloud', home: env.home, timing: t, fusionParams: params() });
-    expect(t.fallback).toBe('rate_limit');
-    expect(breakerOpen(env.home)).toBe(true);
+    expect(t).toMatchObject({ querySource: 'api', fallback: 'rerank_failed' });
+    expect(breakerOpen(env.home)).toBe(false);
     expect(reranked.map((h) => docKey(h.doc))).toEqual(unreranked.map((h) => docKey(h.doc)));
+  });
+
+  it('an auth failure on rerank does trip the query breaker (it is the same key)', async () => {
+    vi.stubGlobal('fetch', fakeOpenRouter({ rerankStatus: 401 }).fetch);
+    const t = timing();
+    await hybridSearch('zzw3', corpus, env.root, 10, { tier: 'cloud', home: env.home, timing: t, fusionParams: params() });
+    expect(t.fallback).toBe('rerank_failed');
+    expect(breakerOpen(env.home)).toBe(true);
   });
 });

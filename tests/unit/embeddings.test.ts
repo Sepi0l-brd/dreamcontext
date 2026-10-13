@@ -606,7 +606,7 @@ describe('fusion v3 helpers', () => {
   const byKey = new Map([a, b, c].map((d) => [`${d.type}/${d.slug}`, d]));
   const base = {
     rawCutoff: 18, rrfK: 60, rrfBm25Weight: 0.6, relativeLambda: 0.1, pinMargin: 1.35, aggregation: 'max' as const,
-    secondWeight: 0, priorGamma: 0, changelogFactor: 0.85, denseGate: null, langWeights: null, rerank: null,
+    secondWeight: 0, priorGamma: 0, changelogFactor: 0.85, denseGate: null, langWeights: null, rerank: null, denseQuota: null,
   };
 
   it('fuseCandidates matches the legacy adaptive switch: a decisive BM25 top-1 is pinned below the cutoff', async () => {

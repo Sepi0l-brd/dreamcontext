@@ -278,11 +278,13 @@ describe('registration', () => {
     const recall = new Command('recall');
     registerRecallCloudCommands(recall, makeDeps());
     const cloud = recall.commands.find((c) => c.name() === 'cloud')!;
-    expect(cloud.commands.map((c) => c.name()).sort()).toEqual(['disable', 'enable', 'index', 'key', 'status']);
+    expect(cloud.commands.map((c) => c.name()).sort()).toEqual(['disable', 'enable', 'index', 'key', 'status', 'warm']);
     const key = cloud.commands.find((c) => c.name() === 'key')!;
     expect(key.commands.map((c) => c.name()).sort()).toEqual(['clear', 'copy-voice', 'set']);
     const auto = cloud.commands.find((c) => c.name() === 'index')!.options.find((o) => o.long === '--auto')!;
     expect(auto.hidden).toBe(true);
+    const warmAuto = cloud.commands.find((c) => c.name() === 'warm')!.options.find((o) => o.long === '--auto')!;
+    expect(warmAuto.hidden).toBe(true);
   });
 });
 

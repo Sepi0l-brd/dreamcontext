@@ -3,7 +3,7 @@ import { CHANGELOG_RANK_FACTOR } from '../../src/lib/recall.js';
 import {
   ADAPTIVE_PIN_MARGIN, ADAPTIVE_RAW_CUTOFF, ADAPTIVE_RELATIVE_LAMBDA, ADAPTIVE_RRF_BM25_WEIGHT, RRF_K,
 } from '../../src/lib/embeddings/hybrid.js';
-import { DEFAULT_RERANK_MODEL, FUSION_BY_TIER, SPIKE_FUSION, SPIKE_RERANK_MODEL } from '../../src/lib/embeddings/fusion-config.js';
+import { DEFAULT_RERANK_MODEL, FUSION_BY_TIER, LOCAL_DENSE_QUOTA, SPIKE_FUSION, SPIKE_RERANK_MODEL } from '../../src/lib/embeddings/fusion-config.js';
 import { RERANK_MODELS } from '../../src/lib/recall-cloud-config.js';
 import { LOCAL_E5_PROFILE, VOYAGE_4_PROFILE, profileForTier } from '../../src/lib/embeddings/profiles.js';
 import { EMBED_DIMS, EMBED_MODEL } from '../../src/lib/embeddings/embedder.js';
@@ -22,6 +22,7 @@ describe('the SPIKE fusion constants ARE today\'s production constants (nothing 
     changelogFactor: CHANGELOG_RANK_FACTOR,
     denseGate: null,
     langWeights: null,
+    denseQuota: null,
   };
 
   it('matches local and cloud-index exactly, with no rerank', () => {
@@ -37,7 +38,14 @@ describe('the SPIKE fusion constants ARE today\'s production constants (nothing 
 
 describe('the tuned FUSION_BY_TIER (T6b) keeps the tier contract', () => {
   it('keeps the local tier on the adaptive constants (e5 train tuning moved no axis; localSearch reads this entry)', () => {
-    expect(FUSION_BY_TIER.local).toEqual(SPIKE_FUSION.local);
+    // The one local change is the cross-language dense slot (2026-10-12); every fusion constant is the spike's.
+    expect(FUSION_BY_TIER.local).toEqual({ ...SPIKE_FUSION.local, denseQuota: LOCAL_DENSE_QUOTA });
+    expect(LOCAL_DENSE_QUOTA).toEqual({ slots: 1, window: 1, topN: 5, crossLangOnly: true });
+  });
+
+  it('gives the dense slot to local and to an unreranked cloud answer, never to cloud-index', () => {
+    expect(FUSION_BY_TIER['cloud-index'].denseQuota).toBeNull();
+    expect(FUSION_BY_TIER.cloud.denseQuota).toEqual(LOCAL_DENSE_QUOTA);
   });
 
   it('reranks only on cloud, within the 40-candidate budget, with an explicit pool', () => {

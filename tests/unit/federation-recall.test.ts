@@ -13,6 +13,7 @@ import {
   type CrossVaultTarget,
 } from '../../src/lib/federation-recall.js';
 import { addConnection, markStale } from '../../src/lib/connections.js';
+import { buildCorpus, docKey } from '../../src/lib/recall.js';
 
 function makeHome(): string {
   const dir = join(tmpdir(), `dc-fedrecall-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -95,6 +96,56 @@ describe('crossVaultRecall (federation P1.2/P1.3)', () => {
     expect(keys).toContain(namespacedKey('peer', 'knowledge', 'auth-design'));
     // Two hits, two distinct keys — no collision.
     expect(new Set(keys).size).toBe(2);
+  });
+
+  it('takes the current vault\'s hits from the caller (its own tier), merging on the BM25 scale', () => {
+    const cur = makeVault(base, 'cur', { home });
+    const peer = makeVault(base, 'peer', { home });
+    writeKnowledge(cur, 'lexical', 'gateway caching strategy notes');
+    writeKnowledge(cur, 'cross-lingual', 'ağ geçidi önbellek stratejisi notları');
+    writeKnowledge(peer, 'peer-doc', 'gateway caching strategy notes');
+    const docs = buildCorpus(join(cur, '_dream_context'));
+    const byKey = new Map(docs.map((d) => [docKey(d), d]));
+    // what a hybrid search would return: the dense-only Turkish doc first, then the lexical one
+    const currentHits = ['knowledge/cross-lingual', 'knowledge/lexical'].map((k) => ({ doc: byKey.get(k)!, score: 0, rankScore: 0.02, snippet: '' }));
+
+    const { hits } = crossVaultRecall('gateway caching strategy', {
+      vaults: [{ name: 'cur', current: true }, { name: 'peer' }],
+      home,
+      topK: 10,
+      currentHits,
+    });
+    const order = hits.map((h) => h.key);
+    expect(order.filter((k) => k.startsWith('cur::'))).toEqual([
+      namespacedKey('cur', 'knowledge', 'cross-lingual'),
+      namespacedKey('cur', 'knowledge', 'lexical'),
+    ]);
+    // the current vault's first hit wins the tie with the equally-matching peer doc
+    expect(order[0]).toBe(namespacedKey('cur', 'knowledge', 'cross-lingual'));
+    expect(order).toContain(namespacedKey('peer', 'knowledge', 'peer-doc'));
+  });
+
+  it('keeps caller-ranked current hits when BM25 finds nothing in the current vault', () => {
+    const cur = makeVault(base, 'cur', { home });
+    const peer = makeVault(base, 'peer', { home });
+    writeKnowledge(cur, 'tr-a', 'ağ geçidi önbellek stratejisi');
+    writeKnowledge(cur, 'tr-b', 'önbellek süresi ayarları');
+    for (let i = 0; i < 12; i++) writeKnowledge(peer, `peer-${i}`, `gateway caching strategy notes ${'filler '.repeat(i)}`);
+    const docs = buildCorpus(join(cur, '_dream_context'));
+    const byKey = new Map(docs.map((d) => [docKey(d), d]));
+    const currentHits = ['knowledge/tr-a', 'knowledge/tr-b'].map((k) => ({ doc: byKey.get(k)!, score: 0, rankScore: 0.02, snippet: '' }));
+
+    const { hits } = crossVaultRecall('gateway caching strategy', {
+      vaults: [{ name: 'cur', current: true }, { name: 'peer' }],
+      home,
+      topK: 10,
+      currentHits,
+    });
+    const order = hits.map((h) => h.key);
+    // anchored on the best peer score: the caller's top hit leads (current wins the tie), its tail stays in the top K
+    expect(order[0]).toBe(namespacedKey('cur', 'knowledge', 'tr-a'));
+    expect(order).toContain(namespacedKey('cur', 'knowledge', 'tr-b'));
+    expect(order.indexOf(namespacedKey('cur', 'knowledge', 'tr-b'))).toBeGreaterThan(0);
   });
 
   it('reads every targeted peer — there is no second opt-in to withhold one', () => {

@@ -316,9 +316,24 @@ describe('hybridHeaderLabel', () => {
     expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'rerank_not_consented' })).toBe('Hybrid · cloud');
     expect(hybridHeaderLabel({ tier: 'cloud-index', querySource: 'nano', fallback: 'none' })).toBe('Hybrid · cloud-index');
     expect(hybridHeaderLabel({ tier: 'local', querySource: 'e5', fallback: 'none' })).toBe('Hybrid · local');
-    expect(hybridHeaderLabel({ tier: 'local', querySource: 'none', fallback: 'no_local_model' })).toBe('Hybrid · local');
+    expect(hybridHeaderLabel({ tier: 'local', querySource: 'none', fallback: 'no_local_model' })).toBe('Hybrid · local → BM25: no local model');
     expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'e5', fallback: 'breaker_open' })).toBe('Hybrid · cloud → local: breaker open');
     expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'none', fallback: 'no_index' })).toBe('Hybrid · cloud → BM25: no index');
+  });
+
+  it('names a skipped rerank on a cloud answer (the query still served)', () => {
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'rerank_timeout' })).toBe('Hybrid · cloud · rerank skipped: timeout');
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'rerank_failed' })).toBe('Hybrid · cloud · rerank skipped: failed');
+    expect(hybridHeaderLabel({ tier: 'cloud', querySource: 'api', fallback: 'rerank_backoff' })).toBe('Hybrid · cloud · rerank skipped: backoff');
+  });
+
+  it('never prints a comma or a parenthesis (scripts/hook-latency.ts parses the header)', () => {
+    const fallbacks = ['none', 'timeout', 'breaker_open', 'rerank_timeout', 'rerank_failed', 'rerank_backoff', 'no_index', 'daily_cap'] as const;
+    for (const fallback of fallbacks) {
+      for (const querySource of ['api', 'nano', 'e5', 'none'] as const) {
+        expect(hybridHeaderLabel({ tier: 'cloud', querySource, fallback })).not.toMatch(/[,()]/);
+      }
+    }
   });
 });
 

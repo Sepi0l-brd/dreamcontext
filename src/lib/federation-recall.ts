@@ -51,6 +51,14 @@ export interface CrossVaultRecallOptions {
   minLevel?: number;
   /** Reference time for the recency multiplier (determinism in tests). */
   now?: Date;
+  /**
+   * The CURRENT vault's hits, already ranked by the caller (the hybrid/cloud tier `memory recall` runs on
+   * the vault it is in). They replace the current vault's BM25 list. Their own rankScores are not
+   * comparable with a peer's BM25 scores, so for the merge the i-th of them takes the current vault's
+   * i-th BM25 rankScore: the interleaving with peers keeps BM25's scale, the current vault's order and
+   * membership come from the caller.
+   */
+  currentHits?: RecallHit[];
 }
 
 /**
@@ -88,6 +96,9 @@ export function namespacedKey(vault: string, type: string, slug: string): string
  * Hits are merged, sorted by `rankScore` descending, and sliced to `topK`. Ties
  * are broken current-vault-first (stable), so the local vault leads on a draw.
  */
+/** Each caller-ranked hit past the end of the BM25 list scores this fraction of the one before it. */
+const TAIL_DECAY = 0.9;
+
 export function crossVaultRecall(
   query: string,
   opts: CrossVaultRecallOptions,
@@ -96,7 +107,8 @@ export function crossVaultRecall(
   const topK = opts.topK ?? 10;
   const now = opts.now ?? new Date();
 
-  const hits: Array<{ hit: FederatedHit; current: boolean; order: number }> = [];
+  const hits: Array<{ hit: FederatedHit; current: boolean; callerRanked: boolean; order: number }> = [];
+  let currentBm25: RecallHit[] = [];
   const skipped: SkippedVault[] = [];
   let order = 0;
 
@@ -140,7 +152,10 @@ export function crossVaultRecall(
       .filter((doc) => isCurrent || (doc.type !== 'automation' && doc.type !== 'agent'));
 
     const label = target.label ?? target.name;
-    const vaultHits = bm25Search(query, corpus, topK, { now });
+    const bm25Hits = bm25Search(query, corpus, topK, { now });
+    const callerRanked = isCurrent && opts.currentHits !== undefined;
+    if (callerRanked) currentBm25 = bm25Hits;
+    const vaultHits = callerRanked ? opts.currentHits!.slice(0, topK) : bm25Hits;
     for (const h of vaultHits) {
       hits.push({
         hit: {
@@ -149,9 +164,25 @@ export function crossVaultRecall(
           key: namespacedKey(label, h.doc.type, h.doc.slug),
         },
         current: isCurrent,
+        callerRanked,
         order: order++,
       });
     }
+  }
+
+  // Caller-ranked current hits take the BM25 scale: the i-th gets the current vault's i-th BM25 rankScore.
+  // Past the end of that list (a cross-language hit BM25 never found, or no BM25 match at all) the score
+  // keeps falling below the last one instead of dropping to 0, anchored on the best peer score when BM25
+  // matched nothing here. So the caller's order survives and its tail is not buried under peer noise.
+  const callerHits = hits.filter((h) => h.callerRanked);
+  if (callerHits.length > 0) {
+    const peerTop = Math.max(0, ...hits.filter((h) => !h.current).map((h) => h.hit.rankScore));
+    const last = currentBm25.length > 0 ? currentBm25[currentBm25.length - 1].rankScore : (peerTop > 0 ? peerTop : 1);
+    callerHits.forEach((h, i) => {
+      h.hit.rankScore = i < currentBm25.length
+        ? currentBm25[i].rankScore
+        : last * TAIL_DECAY ** (i - currentBm25.length + (currentBm25.length > 0 ? 1 : 0));
+    });
   }
 
   // Merge sort: rankScore desc, current-vault-first on ties, then stable input

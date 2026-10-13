@@ -44,8 +44,9 @@ import { buildCorpusCached } from '../../lib/recall-corpus-cache.js';
 import {
   loadPatternsReporting, matchPatterns, selectForInjection, syncPatternShimsIfStale,
 } from '../../lib/patterns.js';
-import { hybridSearch, hybridReady, HOOK_MAX_INLINE_EMBED, type RecallTiming } from '../../lib/embeddings/hybrid.js';
+import { hybridHeaderLabel, hybridSearch, hybridReady, HOOK_MAX_INLINE_EMBED, type RecallTiming } from '../../lib/embeddings/hybrid.js';
 import { resolvePromptTier } from '../../lib/recall-cloud-config.js';
+import { spawnCloudWarmup } from '../../lib/recall-cloud-warmup.js';
 import {
   crossVaultRecall,
   resolveConnectedVaults,
@@ -336,19 +337,8 @@ export function recallTimingLine(timing: RecallTiming | null, env: NodeJS.Proces
   return timing !== null && env.DREAMCONTEXT_RECALL_TIMING === '1' ? JSON.stringify(timing) : null;
 }
 
-/**
- * The header label of a hybrid prompt, from the EFFECTIVE query source. A cloud tier that answered
- * (`api`, or the cloud-index tier's local nano query) is `Hybrid · cloud`; one that fell back says where it
- * went and why: `Hybrid · cloud → local: breaker open`, or `→ BM25` when no local model could serve either.
- */
-export function hybridHeaderLabel(timing: RecallTiming): string {
-  const base = `Hybrid · ${timing.tier}`;
-  const fellBack = timing.tier !== 'local' && (timing.querySource === 'e5' || timing.querySource === 'none');
-  if (!fellBack) return base;
-  const served = timing.querySource === 'e5' ? 'local' : 'BM25';
-  const why = timing.fallback === 'none' ? '' : `: ${timing.fallback.replace(/_/g, ' ')}`;
-  return `${base} → ${served}${why}`;
-}
+// Lives with the timing it reads (hybrid.ts); re-exported because the hook is where it is printed.
+export { hybridHeaderLabel };
 
 export interface PromptRecallDeps {
   env?: NodeJS.ProcessEnv;
@@ -2065,6 +2055,13 @@ export function registerHookCommand(program: Command): void {
       // screen, not the conversation frozen at the last rotation.
       const sid = input && typeof input.session_id === 'string' ? input.session_id : '';
       if (sid) recordTabSessionFromHook(root, sid);
+
+      // Cloud recall warm-up: a session's first prompt should not meet a cold provider. Detached and
+      // never awaited; every gate (tier, spawned session, cap, breaker, index, already warm) runs first,
+      // so a vault without the cloud tier pays a few file reads and no process.
+      try {
+        if (process.env.DREAMCONTEXT_MEMORY_HOOK !== '0') spawnCloudWarmup(root, resolveRecallMode(root));
+      } catch { /* a warm-up must never break the hook */ }
 
       // Keep the per-pattern "/" entries in step with the vault, WITHOUT anybody
       // running a command. A pattern added, renamed, or retired since the last

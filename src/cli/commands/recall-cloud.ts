@@ -22,6 +22,7 @@ import {
   type RerankModel,
 } from '../../lib/recall-cloud-config.js';
 import { renderDisclosure } from '../../lib/recall-cloud-disclosure.js';
+import { spawnCloudWarmup, warmCloudRecall } from '../../lib/recall-cloud-warmup.js';
 import { DEFAULT_RERANK_MODEL } from '../../lib/embeddings/fusion-config.js';
 import { CloudRecallError } from '../../lib/embeddings/openrouter.js';
 import {
@@ -53,6 +54,8 @@ export interface CloudCliDeps {
   loadCorpus: (root: string) => CorpusDoc[];
   setHybrid: (root: string) => void | Promise<void>;
   build: typeof buildCloudIndex;
+  /** Fire-and-forget warm-up after a grant (absent ⇒ none; tests leave it out). */
+  warm?: (root: string) => void;
 }
 
 const defaultDeps = (): CloudCliDeps => ({
@@ -71,6 +74,7 @@ const defaultDeps = (): CloudCliDeps => ({
     writeSleepState(root, state);
   },
   build: buildCloudIndex,
+  warm: (root) => { spawnCloudWarmup(root, 'hybrid', { env: process.env }); },
 });
 
 const VOYAGE = 'voyage-4' as const;
@@ -197,7 +201,11 @@ export async function cloudEnable(deps: CloudCliDeps, tierArg: string, opts: Ena
 
     const result = await deps.build(root, VOYAGE, corpus, { trigger: 'explicit', home: deps.home, maxUsd });
     deps.print(describeBuild(result));
-    if (result.aborted === null) deps.print(note(`Run \`dreamcontext recall cloud status\` to check the index.`));
+    if (result.aborted === null) {
+      deps.print(note(`Run \`dreamcontext recall cloud status\` to check the index.`));
+      // The first prompt should not meet a cold provider: warm it now, detached (cloud tier only; gated inside).
+      if (tier === 'cloud') deps.warm?.(root);
+    }
     return 0;
   } catch (err) {
     deps.printErr(bad(`Enable failed: ${describeError(err)}`));
@@ -303,6 +311,29 @@ export async function cloudIndex(deps: CloudCliDeps, opts: { maxUsd?: string; au
   }
 }
 
+// ── warm ─────────────────────────────────────────────────────────────────────
+
+/**
+ * One query + rerank against the provider, off any prompt (recall-cloud-warmup.ts). `--auto` is the
+ * detached child the SessionStart hook and `enable` launch: quiet, exit 0 whatever happens.
+ */
+export async function cloudWarm(deps: CloudCliDeps, opts: { auto?: boolean } = {}): Promise<number> {
+  const root = deps.root();
+  const { resolveRecallMode } = await import('./sleep.js');
+  const r = await warmCloudRecall(root, { mode: resolveRecallMode(root), env: deps.env, home: deps.home });
+  if (opts.auto) return 0;
+  if (r.skipped !== null) {
+    deps.print(note(`No warm-up: ${r.skipped.replace(/_/g, ' ')}.`));
+    return 0;
+  }
+  const t = r.timing;
+  if (t === null) { deps.printErr(bad('Warm-up failed.')); return 1; }
+  const parts = [t.queryMs !== undefined ? `query ${t.queryMs} ms` : null, t.rerankMs !== undefined ? `rerank ${t.rerankMs} ms` : null].filter(Boolean);
+  const outcome = t.querySource === 'api' ? (t.fallback === 'none' ? 'warm' : `warm, ${t.fallback.replace(/_/g, ' ')}`) : `failed: ${t.fallback.replace(/_/g, ' ')}`;
+  deps.print(`${t.querySource === 'api' ? ok('Cloud recall') : bad('Cloud recall')} ${outcome}${parts.length ? ` (${parts.join(', ')})` : ''}.`);
+  return t.querySource === 'api' ? 0 : 1;
+}
+
 // ── registration ─────────────────────────────────────────────────────────────
 
 export function registerRecallCloudCommands(recall: Command, overrides: Partial<CloudCliDeps> = {}): void {
@@ -343,6 +374,12 @@ export function registerRecallCloudCommands(recall: Command, overrides: Partial<
     .command('clear')
     .description('Remove the stored recall key')
     .action(() => { process.exitCode = cloudKeyClear(deps()); });
+
+  cloud
+    .command('warm')
+    .addOption(new Option('--auto', 'Detached warm-up (SessionStart, enable); quiet').hideHelp())
+    .description('Send one query and rerank so the next prompt meets a warm provider (cloud tier only; counts as one query)')
+    .action(async (opts: { auto?: boolean }) => { process.exitCode = await cloudWarm(deps(), opts); });
 
   cloud
     .command('index')

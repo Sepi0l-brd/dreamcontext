@@ -31,7 +31,7 @@ import { buildEgressPayload, isUnderEvalFrozenDir, rerankScoresByKey, type Egres
 import {
   DEFAULT_RERANK_MODEL, FUSION_BY_TIER, SPIKE_FUSION, type DenseGate, type FusionParams,
 } from '../src/lib/embeddings/fusion-config.js';
-import { denseRankAgg, fuseCandidates, hybridSearch, shouldSkipDense, type DenseHit } from '../src/lib/embeddings/hybrid.js';
+import { applyDenseQuota, denseRankAgg, fuseCandidates, hybridSearch, shouldSkipDense, type DenseHit } from '../src/lib/embeddings/hybrid.js';
 import { nanoEmbedQuery } from '../src/lib/embeddings/nano.js';
 import { CloudRecallError, openRouterEmbed, openRouterRerank, type CloudCallOpts } from '../src/lib/embeddings/openrouter.js';
 import { VOYAGE_4_PROFILE } from '../src/lib/embeddings/profiles.js';
@@ -252,9 +252,15 @@ function fuse(ctx: Ctx, ds: DenseSet, g: GoldQuery, p: FusionParams): Fusion {
   return { fused: fuseCandidates(bm25, dense, p, { byKey: ctx.byKey, now: ctx.now }), bm25, dense, skipped: false };
 }
 
+/** The unreranked order production serves: fused, plus the cross-language dense slot (hybrid.ts applyDenseQuota). */
+function servedKeys(ctx: Ctx, f: Fusion, g: GoldQuery, p: FusionParams): string[] {
+  const keys = f.fused.map((e) => e.key);
+  return f.skipped ? keys : applyDenseQuota(keys, f.dense, 10, p.denseQuota ?? null, { byKey: ctx.byKey, query: g.query });
+}
+
 function rankAll(ctx: Ctx, ds: DenseSet, items: GoldQuery[], p: FusionParams): Scored {
   const keys = new Map<string, string[]>();
-  for (const g of items) keys.set(g.query, fuse(ctx, ds, g, p).fused.map((e) => e.key));
+  for (const g of items) keys.set(g.query, servedKeys(ctx, fuse(ctx, ds, g, p), g, p));
   return score(items, keys);
 }
 
@@ -627,9 +633,10 @@ async function rerankedKeys(ctx: Ctx, ds: DenseSet, model: RerankModel, salt: st
   const f = fuse(ctx, ds, g, p);
   const rr = p.rerank;
   const base = f.fused.map((e) => e.key);
-  if (rr === null || f.skipped) return base;
+  // No rerank ran: production serves the fused order plus the cross-language dense slot.
+  if (rr === null || f.skipped) return servedKeys(ctx, f, g, p);
   const window = rerankWindow(f, rr);
-  if (window.length === 0) return base;
+  if (window.length === 0) return servedKeys(ctx, f, g, p);
   const scores = await windowScores(ctx, ds, model, salt, g, window);
   if ((rr.pool ?? 'fused-top') === 'fused-top') return applyRerank(f.fused, scores, rr.blendAlpha, rr.candidates);
   const reranked = applyRerank(window, scores, rr.blendAlpha, window.length);
@@ -872,7 +879,7 @@ async function cmdVerify(ctx: Ctx, args: Args): Promise<void> {
     const hits = await hybridSearch(g.query, ctx.corpus, ctx.root, 10, opts);
     fallbacks[timing.fallback] = (fallbacks[timing.fallback] ?? 0) + 1;
     keysReal.set(g.query, hits.map((h) => docKey(h.doc)));
-    const fast = tier === 'cloud' ? await rerankedKeys(ctx, ds, model, salt, g, p) : fuse(ctx, ds, g, p).fused.map((e) => e.key);
+    const fast = tier === 'cloud' ? await rerankedKeys(ctx, ds, model, salt, g, p) : servedKeys(ctx, fuse(ctx, ds, g, p), g, p);
     keysFast.set(g.query, fast);
     const a = JSON.stringify(keysReal.get(g.query)?.slice(0, 10));
     const b = JSON.stringify(fast.slice(0, 10));
