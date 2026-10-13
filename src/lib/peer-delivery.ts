@@ -203,7 +203,22 @@ export function handsfreeSpawnRefusal(cwd: string, home?: string): string | null
   const lock = handsfreeLockFor(cwd, home);
   if (!lock) return null;
   if (lock.error) return `hands-free state is unreadable, so every project stays locked: ${lock.error}`;
-  return `this project is in hands-free mode on the cloud machine (trip ${lock.tripId}, ${lock.phase}); Return first (dreamcontext handsfree return)`;
+  const next = lock.phase === 'going'
+    ? 'a go is in progress or was interrupted: `dreamcontext handsfree resume` finishes it, `abandon` unlocks this laptop'
+    : lock.phase === 'returning'
+      ? 'a return is in progress or was interrupted: `dreamcontext handsfree resume` finishes it'
+      : 'Return first (dreamcontext handsfree return)';
+  return `this project is in hands-free mode on the cloud machine (trip ${lock.tripId}, ${lock.phase}); ${next}`;
+}
+
+/**
+ * A run-card command that manages hands-free itself (`dreamcontext handsfree resume`, `abandon`,
+ * `go --cut-running`, …) may run in a locked project: it is the only way out of the lock, and
+ * refusing it left a `going` laptop with no exit from the Chat (#5). Exactly one plain command,
+ * no shell operators, so nothing else can ride along.
+ */
+export function isHandsfreeCommand(command: string): boolean {
+  return /^(?:npx\s+)?dreamcontext\s+handsfree(?:\s+[A-Za-z0-9][A-Za-z0-9-]*)?(?:\s+--?[A-Za-z0-9][A-Za-z0-9-]*)*\s*$/.test(command.trim());
 }
 
 // ─── The live run ────────────────────────────────────────────────────────────

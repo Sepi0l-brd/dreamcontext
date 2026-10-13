@@ -40,9 +40,36 @@ export function appendTail(current: string, chunk: string): string {
   return next.split('\n').slice(-TAIL_MAX_LINES * 2).join('\n');
 }
 
-/** The tail as it goes into the report: blank edges dropped, capped both ways. */
+const REDACTED = '[redacted by the run card]';
+
+/**
+ * A secret label right before its separator: `GITHUB_TOKEN: …`, `passphrase=…`, `"password": …`,
+ * `Phone passphrase (shown ONCE): …`. Nothing before the key may hold a `:` or `=`, so an error
+ * that merely mentions one ("invalid token: expected 40 chars") keeps its cause. `[ \t]` and
+ * never `\s`: the value is on the same line, and the next line is never touched.
+ */
+const SECRET_LABEL = /^([^:=\n]*?(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*(?:passphrase|password|passwd|token|secret|api[_-]?key)(?:[ \t]*\([^)\n]*\))?["']?[ \t]*[:=][ \t]*)\S.*$/gim;
+/** `Authorization: Bearer …` and a bare `Bearer …` credential. */
+const BEARER = /\b((?:Bearer|Basic)[ \t]+)[A-Za-z0-9._~+/=-]{8,}/g;
+/** Token shapes that identify themselves wherever they appear (GitHub, OpenAI/Anthropic-style, Slack). */
+const KNOWN_TOKENS = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,})/g;
+
+/**
+ * A secret a command printed must never reach the conversation (the transcript is saved and
+ * may sync). The hands-free CLI no longer prints its passphrase into a run card at all; this is
+ * the second line: a labelled value keeps its label and loses the value, and a bearer
+ * credential or a self-identifying token is replaced wherever it stands.
+ */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(SECRET_LABEL, `$1${REDACTED}`)
+    .replace(BEARER, `$1${REDACTED}`)
+    .replace(KNOWN_TOKENS, REDACTED);
+}
+
+/** The tail as it goes into the report: secrets redacted, blank edges dropped, capped both ways. */
 export function finishTail(raw: string): string {
-  const lines = raw.split('\n').map((l) => l.trimEnd());
+  const lines = redactSecrets(raw).split('\n').map((l) => l.trimEnd());
   while (lines.length && lines[lines.length - 1] === '') lines.pop();
   while (lines.length && lines[0] === '') lines.shift();
   return lines.slice(-TAIL_MAX_LINES).join('\n').slice(-TAIL_MAX_CHARS);

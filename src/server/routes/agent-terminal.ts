@@ -12,7 +12,7 @@ import { sendJson, sendError } from '../middleware.js';
 import { isAgentHost, isAgentRequest, isDesktop } from '../desktop.js';
 import { isCloud, readFileAsWorker } from '../cloud-mode.js';
 import { findTranscriptBySessionId } from '../../lib/transcript-locate.js';
-import { handsfreeSpawnRefusal } from '../../lib/peer-delivery.js';
+import { handsfreeSpawnRefusal, isHandsfreeCommand } from '../../lib/peer-delivery.js';
 import { cutProcessGroups, pathUnderAny } from '../../lib/automations/runner.js';
 import { liveTranscriptPath } from '../../lib/transcript-locate.js';
 import { contextTokensFromUsage } from '../../lib/context-watch.js';
@@ -1135,7 +1135,7 @@ export function startPtySession(
 ): void {
   const spawnCwd = kind === 'exec' && execCwd ? execCwd : projectRoot;
   // Hands-free: refused before anything is held or spawned; the tab shows why.
-  const refused = handsfreeSpawnRefusal(spawnCwd, opts.home);
+  const refused = kind === 'exec' && isHandsfreeCommand(execCommand) ? null : handsfreeSpawnRefusal(spawnCwd, opts.home);
   if (refused) {
     try { ws.send(`\r\n\x1b[31m[${refused}]\x1b[0m\r\n`); } catch { /* closing */ }
     try { ws.close(); } catch { /* already closed */ }
@@ -1314,7 +1314,9 @@ export function startPtySession(
       // actually installed into, so `exec claude` resolves even when the install's
       // `export PATH` echo never reached the user's rc. Appended, never prepended —
       // a `claude` the rc already resolves keeps winning.
-      env: { ...process.env, PATH: claudeAwarePath(), TERM: 'xterm-256color', COLORFGBG: colorfgbg, ...tabEnv, ...deferredEnv, ...statusEnv } as Record<string, string>,
+      // DREAMCONTEXT_RUN_CARD: this output's tail is posted back into the conversation, so a
+      // command that would print a secret (the hands-free passphrase) must not print it here.
+      env: { ...process.env, PATH: claudeAwarePath(), TERM: 'xterm-256color', COLORFGBG: colorfgbg, ...tabEnv, ...deferredEnv, ...statusEnv, ...(kind === 'exec' ? { DREAMCONTEXT_RUN_CARD: '1' } : {}) } as Record<string, string>,
     }) as unknown as PtyLike;
   } catch (err) {
     // pty.spawn can throw synchronously (documented posix_spawnp failure when the
