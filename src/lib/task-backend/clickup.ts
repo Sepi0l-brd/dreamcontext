@@ -67,6 +67,7 @@ import {
   type TokenStatus,
   type UpdateFieldsOptions,
 } from './types.js';
+import { handsfreeLockFor } from '../handsfree/trip-state.js';
 
 // ─── person:<slug> tags ↔ assignees bridge ──────────────────────────────────
 // dreamcontext leans on person tags for assignment: a task may carry any number
@@ -409,12 +410,16 @@ export class ClickUpTaskBackend extends LocalTaskBackend {
    * returning empty (the assignee picker must keep working offline).
    */
   async listMembers(): Promise<RemoteMember[]> {
-    try {
-      const adapter = this.getAdapter();
-      const listId = this.requireListId();
-      this.membersRefreshed = false;
-      await this.refreshMembers(adapter, listId, true);
-    } catch { /* fall back to the cache below */ }
+    // Hands-free: the project's files belong to the cloud machine, and a forced refresh rewrites
+    // `.tasks-sync.json` (the Tasks page polls this every 15 s), which broke the go's pack.
+    if (!handsfreeLockFor(dirname(this.contextRoot))) {
+      try {
+        const adapter = this.getAdapter();
+        const listId = this.requireListId();
+        this.membersRefreshed = false;
+        await this.refreshMembers(adapter, listId, true);
+      } catch { /* fall back to the cache below */ }
+    }
     return Object.entries(this.ledger.readMembers())
       .map(([slug, m]) => ({ slug, id: m.id, name: m.name, email: m.email }))
       .sort((a, b) => a.slug.localeCompare(b.slug));

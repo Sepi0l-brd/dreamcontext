@@ -272,6 +272,9 @@ export function useTaskMembers() {
     queryFn: () => api.get<{ members: RemoteMember[] }>('/tasks/members'),
     select: (d) => d.members,
     staleTime: 5 * 60 * 1000,
+    // Every fetch forces a remote member refresh (and a ledger write), so it must not ride the
+    // client's default 15 s poll: members change rarely, and staleTime alone never stops it.
+    refetchInterval: false,
   });
 }
 

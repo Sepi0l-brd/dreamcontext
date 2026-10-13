@@ -64,6 +64,7 @@ import {
   type TokenStatus,
   type UpdateFieldsOptions,
 } from './types.js';
+import { handsfreeLockFor } from '../handsfree/trip-state.js';
 
 // ─── person:<slug> tags ↔ assignees bridge ──────────────────────────────────
 // Same shape as the ClickUp backend: a task carries any number of
@@ -401,12 +402,15 @@ export class GitHubTaskBackend extends LocalTaskBackend {
    * unconfigured it falls back to the cache rather than returning empty.
    */
   async listMembers(): Promise<RemoteMember[]> {
-    try {
-      const adapter = this.getAdapter();
-      const { owner, repo } = this.requireRepo();
-      this.membersRefreshed = false;
-      await this.refreshMembers(adapter, owner, repo, true);
-    } catch { /* fall back to the cache below */ }
+    // Hands-free: never rewrite the ledger of a project that is on the cloud machine.
+    if (!handsfreeLockFor(dirname(this.contextRoot))) {
+      try {
+        const adapter = this.getAdapter();
+        const { owner, repo } = this.requireRepo();
+        this.membersRefreshed = false;
+        await this.refreshMembers(adapter, owner, repo, true);
+      } catch { /* fall back to the cache below */ }
+    }
     return Object.entries(this.ledger.readMembers())
       .map(([slug, m]) => ({ slug, id: m.id, name: m.name }))
       .sort((a, b) => a.slug.localeCompare(b.slug));
