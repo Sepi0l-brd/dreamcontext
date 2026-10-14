@@ -263,7 +263,7 @@ describe('the live preset script at sync', () => {
             structuredContent: {
               rows: [{ funnel_id_calc: 'quiz', sum_users: prev ? 800 : 1000, buyers: 40 }],
               columns: [],
-              key_map: { users: 'sum_users' },
+              key_map: { metrics: { users: 'sum_users' } },
               applied_filters: [
                 { field: 'product', op: '=', value: 'Acme', source: 'request' },
                 { field: 'event_date', op: 'between', values: date?.values, source: 'request' },
