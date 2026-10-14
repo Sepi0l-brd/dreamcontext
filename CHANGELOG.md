@@ -11,8 +11,9 @@ wrote by hand (stale as soon as nobody refreshed it), or a raw NeonBI token insi
 the company skill `neonbi-data-api` v2.0 there is one path: the insight's script calls the KB MCP
 tool `kb_chart_query` itself on every sync, signed with the member's own KB script key.
 
-- **The key is a Lab credential.** `dreamcontext lab credentials set KB_MCP_KEY` stores the
-  member's self-minted KB script key; scripts read it as `ctx.credentials.KB_MCP_KEY`. Every call
+- **The key is a Lab credential the agent installs.** The KB MCP tool `kb_script_key` returns one
+  command that writes the member's KB script key into lab credentials as `KB_MCP_KEY` (nobody copies
+  it by hand); scripts read it as `ctx.credentials.KB_MCP_KEY`. Every call
   is audited under that member and can read only what they can read.
 - **`lab create --preset funnel-explorer` scaffolds a live script.** `lab/scripts/<slug>.mjs`
   imports `./lib-kb-mcp.mjs`, takes `VAULT`, `PRODUCTS`, `WINDOW_DAYS = 30` and a `QUERIES`

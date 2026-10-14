@@ -590,13 +590,13 @@ export function funnelExplorerScriptTemplate(slug: string): string {
  * MCP on every sync: no snapshot file, no NeonBI token.
  *
  * Each query is one kb_chart_query through ./lib-kb-mcp.mjs, signed with YOUR
- * KB script key (KB_MCP_KEY). Mint it at KB > Keys, then store it once:
- *
- *   dreamcontext lab credentials set KB_MCP_KEY
+ * KB script key (KB_MCP_KEY). The agent installs it once: it calls the KB MCP
+ * tool kb_script_key and runs the one command that returns, which writes it
+ * into lab/credentials.json without the key ever appearing in the chat.
  *
  * The key reaches this script as ctx.credentials.KB_MCP_KEY. A failed call
  * throws, so the card shows the error and keeps its previous numbers. A 401
- * means the script key died: mint a new one and set it again.
+ * means the script key died: install a new one the same way.
  *
  * Fill VAULT, PRODUCTS and QUERIES, then build(). The field recipe is in the
  * dreamcontext skill (tasks-and-features.md, Funnel explorer). Until then a
@@ -776,7 +776,7 @@ export function funnelExplorerMeaning(title: string, description: string | null,
     '',
     '### Refresh',
     '',
-    `Live: every sync runs the queries in \`lab/scripts/${slug}.mjs\` through the KB MCP (\`kb_chart_query\` via \`lab/scripts/lib-kb-mcp.mjs\`), signed with your own KB script key \`KB_MCP_KEY\` (\`dreamcontext lab credentials set KB_MCP_KEY\`). No snapshot file, no NeonBI token. The default TTL is ${FUNNEL_EXPLORER_TTL_MINUTES} minutes (NeonBI updates daily; funnel charts 60 to 240 minutes, other NeonBI insights 1440): \`dreamcontext lab sync ${slug}\` refreshes a stale cache, \`--force\` refreshes now. A failed pull keeps the previous numbers and shows the error. A 401 means the script key died: mint a new one at KB > Keys and set it again.`,
+    `Live: every sync runs the queries in \`lab/scripts/${slug}.mjs\` through the KB MCP (\`kb_chart_query\` via \`lab/scripts/lib-kb-mcp.mjs\`), signed with your own KB script key \`KB_MCP_KEY\` (installed by the agent through the KB MCP tool \`kb_script_key\`). No snapshot file, no NeonBI token. The default TTL is ${FUNNEL_EXPLORER_TTL_MINUTES} minutes (NeonBI updates daily; funnel charts 60 to 240 minutes, other NeonBI insights 1440): \`dreamcontext lab sync ${slug}\` refreshes a stale cache, \`--force\` refreshes now. A failed pull keeps the previous numbers and shows the error. A 401 means the script key died: ask Claude to install a new one (\`kb_script_key\`).`,
     '',
   ].join('\n');
 }

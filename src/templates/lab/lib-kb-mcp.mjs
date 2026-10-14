@@ -1,14 +1,14 @@
 /**
  * lib-kb-mcp.mjs — KB MCP client for dreamcontext Lab insight scripts.
- * neonbi-data-api v2.0 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
+ * neonbi-data-api v2.1 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
  *
  * The insight script calls the KB's `/mcp` itself, on every sync, with the
- * member's own SCRIPT KEY (minted at KB → Keys). It reads exactly what the
+ * member's own SCRIPT KEY (installed by their agent: kb_script_key). It reads exactly what the
  * member can read, every call is audited under their name, and it can never
  * reach a paid provider tool. No NeonBI token, no snapshot file.
  *
- * Key: `KB_MCP_KEY` — from the Lab context (`ctx.credentials`, what
- * `dreamcontext lab credentials set KB_MCP_KEY` stores), else the
+ * Key: `KB_MCP_KEY` — from the Lab context (`ctx.credentials`, what the
+ * command `kb_script_key` returns writes into lab credentials), else the
  * environment, else `lab/credentials.json` next to this folder. Never in
  * code, never in a manifest, never in a chat.
  *
@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 export const KB_MCP_URL =
   process.env.KB_MCP_URL || "https://nativeminds-kb-backend-561248800637.europe-west1.run.app/mcp";
 const PROTOCOL_VERSION = "2026-07-28";
-const CLIENT = { name: "dreamcontext-lab", version: "2.0" };
+const CLIENT = { name: "dreamcontext-lab", version: "2.1" };
 const CRED_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "credentials.json");
 
 // NeonBI allows 120 requests a minute per data-source token, and that token is
@@ -69,8 +69,8 @@ function requireKey(ctx) {
   const key = keyFrom(ctx);
   if (!key.startsWith("nmk_")) {
     throw new KbMcpError(
-      "KB_MCP_KEY yok. KB panelinde Keys → script key üret, sonra Claude'a " +
-        "\"KB script key'imi kaydet\" de (ya da: dreamcontext lab credentials set KB_MCP_KEY).",
+      "KB_MCP_KEY yok. Claude'a \"KB script key'imi kur\" de: Claude kb_script_key ile " +
+        "key'i kurar ve değeri görmeden lab/credentials.json'a yazar.",
       { kind: "auth" },
     );
   }
@@ -165,7 +165,7 @@ async function postOnce(key, name, args) {
   if (res.status === 401) {
     throw new KbMcpError(
       "KB script key'i reddetti (401): key iptal edilmiş, bağlı olduğu uygulamanın bağlantısı " +
-        "kesilmiş ya da KB üyeliğin kalkmış. KB → Keys'ten yeni bir script key üret ve kaydet.",
+        "kesilmiş ya da KB üyeliğin kalkmış. Claude'a \"KB script key'imi yeniden kur\" de.",
       { status: 401, kind: "auth" },
     );
   }
