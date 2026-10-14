@@ -1,11 +1,12 @@
 /**
  * lib-kb-mcp.mjs — KB MCP client for dreamcontext Lab insight scripts.
- * neonbi-data-api v2.2 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
+ * neonbi-data-api v2.3 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
  *
  * The insight script calls the KB's `/mcp` itself, on every sync, with the
  * member's own SCRIPT KEY (installed by their agent: kb_script_key). It reads exactly what the
- * member can read, every call is audited under their name, and it can never
- * reach a paid provider tool. No NeonBI token, no snapshot file.
+ * member can read, every call is audited under their name, and among the
+ * provider tools it reaches only the read-only ones (NeonBI, Kreatif API) —
+ * never one that spends. No NeonBI token, no snapshot file.
  *
  * Key: `KB_MCP_KEY` — from the Lab context (`ctx.credentials`, what the
  * command `kb_script_key` returns writes into lab credentials), else the
@@ -28,7 +29,7 @@ import { fileURLToPath } from "node:url";
 export const KB_MCP_URL =
   process.env.KB_MCP_URL || "https://nativeminds-kb-backend-561248800637.europe-west1.run.app/mcp";
 const PROTOCOL_VERSION = "2026-07-28";
-const CLIENT = { name: "dreamcontext-lab", version: "2.2" };
+const CLIENT = { name: "dreamcontext-lab", version: "2.3" };
 const CRED_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "credentials.json");
 
 // NeonBI allows 120 requests a minute per data-source token, and that token is
@@ -248,31 +249,37 @@ export const F = {
 };
 
 /**
- * One `kb_chart_query`. Requires a product filter and an explicit date window —
- * a query without either is the wrong number (all products / the dashboard's
- * moving window). Returns the KB's structured answer:
+ * One chart query, through whichever door you hold:
+ *   - vault door:  `{ vault: "kitup", chart, … }`            → kb_chart_query
+ *   - UA door:     `{ product: "kitup", chart, … }` (no vault) → neonbi_chart_query
+ *     (`product` is the KB slug the call is audited under; it is NOT a filter)
+ * Requires a product filter and an explicit date window — a query without either
+ * is the wrong number (all products / the dashboard's moving window). Returns the
+ * KB's structured answer:
  * `{ rows, columns, key_map, applied_filters, dropped_filters, overridden,
  *    data_age: {known, iso, hours, note}, cached, row_count, undocumented }`.
  */
-export async function chartQuery(ctx, { vault, chart, dimensions, metrics, filters = [], sort, limit = 500, offset, granularity, productField = "product" }) {
-  if (!vault || !chart) throw new KbMcpError("chartQuery: `vault` ve `chart` zorunlu", { kind: "tool" });
+export async function chartQuery(ctx, { vault, product, chart, dimensions, metrics, filters = [], sort, limit = 500, offset, granularity, productField = "product" }) {
+  if (!chart) throw new KbMcpError("chartQuery: `chart` zorunlu", { kind: "tool" });
   if (!filters.some((f) => f.field === productField)) {
     throw new KbMcpError(`chartQuery(${chart}): ürün filtresi yok (${productField}) — sayı birden fazla ürünün toplamı olurdu`, { kind: "tool" });
   }
   if (!filters.some((f) => f.op === "between" || f.op === ">=" || f.op === "in")) {
     throw new KbMcpError(`chartQuery(${chart}): açık tarih penceresi yok — dashboard'un kayan penceresi sessizce uygulanır`, { kind: "tool" });
   }
-  const args = { vault_slug: vault, chart_id: chart, filters, limit };
+  const tool = vault ? "kb_chart_query" : "neonbi_chart_query";
+  const args = vault ? { vault_slug: vault, chart_id: chart, filters, limit } : { chart_id: chart, filters, limit };
+  if (!vault && product) args.product = product;
   if (dimensions !== undefined) args.dimensions = dimensions; // [] = one total row
   if (metrics?.length) args.metrics = metrics;
   if (sort) args.sort = sort;
   if (offset != null) args.offset = offset;
   if (granularity) args.granularity = granularity;
 
-  const { structured } = await callTool(ctx, "kb_chart_query", args);
+  const { structured } = await callTool(ctx, tool, args);
   if (!structured || !Array.isArray(structured.rows)) {
     throw new KbMcpError(
-      `kb_chart_query(${chart}) yapılandırılmış cevap döndürmedi — KB backend'i script key sürümünden eski`,
+      `${tool}(${chart}) yapılandırılmış cevap döndürmedi — KB backend'i bu helper sürümünden eski`,
       { kind: "protocol" },
     );
   }
