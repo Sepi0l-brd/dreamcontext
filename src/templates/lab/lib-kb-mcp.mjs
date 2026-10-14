@@ -1,6 +1,6 @@
 /**
  * lib-kb-mcp.mjs — KB MCP client for dreamcontext Lab insight scripts.
- * neonbi-data-api v2.1 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
+ * neonbi-data-api v2.2 · copy to `_dream_context/lab/scripts/lib-kb-mcp.mjs`, unchanged.
  *
  * The insight script calls the KB's `/mcp` itself, on every sync, with the
  * member's own SCRIPT KEY (installed by their agent: kb_script_key). It reads exactly what the
@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 export const KB_MCP_URL =
   process.env.KB_MCP_URL || "https://nativeminds-kb-backend-561248800637.europe-west1.run.app/mcp";
 const PROTOCOL_VERSION = "2026-07-28";
-const CLIENT = { name: "dreamcontext-lab", version: "2.1" };
+const CLIENT = { name: "dreamcontext-lab", version: "2.2" };
 const CRED_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "credentials.json");
 
 // NeonBI allows 120 requests a minute per data-source token, and that token is
@@ -279,11 +279,18 @@ export async function chartQuery(ctx, { vault, chart, dimensions, metrics, filte
   return structured;
 }
 
-/** A row's value for the metric you ASKED for — NeonBI may return it under
- *  another key (`purchase` → `sum_purchase`); `key_map` says which. Missing
- *  stays `null`, never 0: a missing number is not a zero. */
+/** The row key for a field you ASKED for. NeonBI's keyMap is nested —
+ *  `{metrics: {purchase: "sum_purchase"}, dimensions: {…}, note}` — and a raw
+ *  column comes back prefixed (`purchase` → `sum_purchase`). */
+export function rowKey(result, name) {
+  const km = result?.key_map ?? {};
+  return km.metrics?.[name] ?? km.dimensions?.[name] ?? name;
+}
+
+/** A row's value for the field you ASKED for (see rowKey). Missing stays
+ *  `null`, never 0: a missing number is not a zero. */
 export function valueOf(result, row, name) {
-  const key = result.key_map?.[name] ?? name;
+  const key = rowKey(result, name);
   const v = row?.[key];
   if (v === undefined || v === null) return null;
   if (typeof v === "object" && "value" in v) return v.value; // BigQuery date wrapper
