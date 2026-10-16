@@ -155,7 +155,7 @@ pub fn run() {
             updater::start(&handle);
             // The opening screen plays while the server boots. A Login Item launch that
             // only seats the notch opens no Launcher, so it gets no splash either.
-            if !notch_only_launch() {
+            if !notch_only_launch() && !background_launch() {
                 splash::open(&handle);
             }
             // Boot OFF the main thread: returning from setup is what starts the run loop,
@@ -838,6 +838,13 @@ fn notch_only_launch() -> bool {
     std::env::args().any(|a| a == "--autostart") && assistant::assistant_enabled()
 }
 
+/// A Login Item launch off macOS (no notch to seat): the Launcher boots straight to the
+/// taskbar, minimized and without the splash, so signing in to Windows starts the app
+/// quietly in the background.
+fn background_launch() -> bool {
+    cfg!(not(target_os = "macos")) && std::env::args().any(|a| a == "--autostart")
+}
+
 /// Build the Launcher window (label `main`, no vault pinned) at the dashboard port.
 ///
 /// Idempotent: a `main` that already exists is left as it is. Startup and a link
@@ -847,9 +854,20 @@ pub(crate) fn open_launcher_window(app: &AppHandle, port: u16) -> Result<(), Str
     if app.get_webview_window("main").is_some() {
         return Ok(());
     }
-    launcher_builder(app, port)?
+    let background = background_launch();
+    let w = launcher_builder(app, port)?
+        .visible(!background)
         .build()
         .map_err(|e| format!("Could not create the window: {e}"))?;
+    if background {
+        // Minimize while still hidden, THEN show: tao re-hides a minimized window that has no
+        // visible flag, and showing first would flash it on screen. `SW_SHOW` keeps the
+        // minimized state (an unfocused builder would use SW_SHOWNOACTIVATE, which restores
+        // it), and the last minimize re-asserts it if anything restored the window anyway.
+        let _ = w.minimize();
+        let _ = w.show();
+        let _ = w.minimize();
+    }
 
     Ok(())
 }
