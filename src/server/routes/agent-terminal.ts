@@ -19,7 +19,7 @@ import { contextTokensFromUsage } from '../../lib/context-watch.js';
 import { gitAvailable } from '../../lib/git-sync/git.js';
 import { trackChild } from '../lifecycle.js';
 import { resolveAgentSession } from '../../lib/agent-session-map.js';
-import { claudeAwarePath, findClaudeBin } from '../../lib/claude-path.js';
+import { claudeAwarePath, claudeDirectCommand, findClaudeBin, whichOnPathWin32 } from '../../lib/claude-path.js';
 import type { FixOutcome } from '../../lib/onboarding/fixes.js';
 import { detectLinuxPackageManager, manualCommand } from '../../lib/onboarding/platform.js';
 import type { FixId } from '../../lib/onboarding/types.js';
@@ -798,7 +798,10 @@ function parseEffortsFromCli(): Promise<string[]> {
     let out = '';
     let settled = false;
     const done = (v: string[]) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
-    const child = spawn(shell, ['-ilc', 'claude --help'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const direct = process.platform === 'win32' ? claudeDirectCommand(['--help']) : null;
+    const child = direct
+      ? spawn(direct.file, direct.args, { stdio: ['ignore', 'pipe', 'ignore'] })
+      : spawn(shell, ['-ilc', 'claude --help'], { stdio: ['ignore', 'pipe', 'ignore'] });
     const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } done([...EFFORT_LEVELS]); }, 8000);
     child.stdout?.on('data', (c: Buffer) => { out += c.toString('utf-8'); });
     child.on('error', () => done([...EFFORT_LEVELS]));
