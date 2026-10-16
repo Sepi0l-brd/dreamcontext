@@ -24,7 +24,12 @@ vi.mock('node:child_process', async (importOriginal) => {
     ...real,
     spawn: vi.fn((file: string, args: string[], opts: Record<string, unknown>) => {
       const child = new FakeChild();
-      spawned.push({ child, file, args, opts: opts as never });
+      // win32 spawns the chat's claude directly (argv starts with -p): present it as the POSIX
+      // login-shell script these tests assert on.
+      const seen = process.platform === 'win32' && args[0] === '-p'
+        ? ['-ilc', `exec claude ${args.map((x) => `"${x}"`).join(' ')}`]
+        : args;
+      spawned.push({ child, file, args: seen, opts: opts as never });
       return child as unknown as import('node:child_process').ChildProcess;
     }),
   };
@@ -215,11 +220,12 @@ describe('laptop lock (AC6)', () => {
     await beginGoing('trip-lock', [{ rootId: 'r-0000000000000001', path: locked }], home);
     open(other);
     expect(chats()).toHaveLength(1);
-    expect(chats()[0].opts.detached).toBe(true);
+    expect(chats()[0].opts.detached).toBe(process.platform !== 'win32'); // win32 chats are deliberately not detached (chatSpawnCommand)
   });
 });
 
-describe('cutLiveChats (AC12)', () => {
+// POSIX process-group semantics (process.kill(-pgid)); win32 tree-kills via taskkill instead (lib/proc.ts).
+describe.skipIf(process.platform === 'win32')('cutLiveChats (AC12)', () => {
   /** process.kill stand-in: the group stays alive until SIGKILL, whatever its leader does. */
   function fakeGroupKill() {
     let groupAlive = true;

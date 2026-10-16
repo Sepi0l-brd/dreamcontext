@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { dirname } from 'node:path';
 import { claudeAwarePath, claudeDirectCommand } from './claude-path.js';
+import { treeKillRealChild } from './proc.js';
 import { SPAWNED_ENV } from './session-origin.js';
 import { listConnections } from './connections.js';
 import { currentVaultTarget } from './federation-recall.js';
@@ -283,6 +284,8 @@ export function runPeerHeadless(
     };
 
     const timer = setTimeout(() => {
+      // The win32 child is not a group leader: take claude's hooks and tools down with it.
+      treeKillRealChild(child, 'SIGKILL');
       try { child.kill('SIGKILL'); } catch { /* already gone */ }
       finish({
         ok: false,

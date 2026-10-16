@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -151,7 +152,7 @@ describe('inspect / install / uninstall (fake Task Scheduler)', () => {
     expect(res).toMatchObject({ wroteWrapper: true, wrotePlist: true, bootstrapped: true, method: 'schtasks' });
     const vbs = windowsDispatcherScriptPath(home);
     const xml = windowsDispatcherXmlPath(home);
-    expect(readFileSync(vbs, 'utf-8')).toContain('automations tick --all');
+    expect(decodeUtf16Bom(readFileSync(vbs))).toContain('automations tick --all');
     expect(decodeUtf16Bom(readFileSync(xml))).toContain('<Hidden>true</Hidden>');
     expect(calls).toContainEqual(['schtasks', '/Create', '/TN', WINDOWS_TASK_NAME, '/XML', xml, '/F']);
     // the re-inspect after writing sees both files as current
@@ -218,5 +219,36 @@ describe('launchd.ts delegates to schtasks on win32', () => {
     // install refuses by name — through the Windows path, so launchctl is never touched.
     await expect(installDispatcher({ home, runner, force: true })).rejects.toThrow(/dreamcontext CLI/);
     expect(calls.every((c) => c[0] === 'schtasks')).toBe(true);
+  });
+});
+
+describe('a non-ASCII profile path (WSH reads a BOM-less .vbs as the ANSI code page)', () => {
+  const turkish = 'C:\\Users\\Öğretmen\\AppData\\Local\\dreamcontext-beta\\dist\\index.js';
+
+  it('the installed VBS is UTF-16LE with a BOM and decodes back to the exact path', async () => {
+    const res = await installWindowsDispatcher({ home, logPath, runningBin: turkish, runner: fakeRunner().runner });
+    expect(res.wroteWrapper).toBe(true);
+    const bytes = readFileSync(windowsDispatcherScriptPath(home));
+    expect([bytes[0], bytes[1]]).toEqual([0xff, 0xfe]);
+    expect(decodeUtf16Bom(bytes)).toContain(turkish);
+    // read back by inspect, with the generatedAt regex still matching
+    expect(res.check.wrapperCurrent).toBe(true);
+  });
+
+  it.runIf(process.platform === 'win32')('real wscript.exe runs it from a directory named with Ö and writes the log', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dc-Özel-'));
+    try {
+      mkdirSync(join(dir, 'dist'));
+      const cli = join(dir, 'dist', 'index.js');
+      writeFileSync(cli, "console.log('TICK ' + process.argv.slice(2).join(' '))");
+      const log = join(dir, 'out.log');
+      const vbs = join(dir, 'x.vbs');
+      writeFileSync(vbs, encodeUtf16Bom(renderWindowsDispatcherScript({ bin: cli, path: '', shell: process.execPath }, log, 't')));
+      const r = spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wscript.exe'), ['//B', '//Nologo', vbs], { timeout: 30_000 });
+      expect({ status: r.status, signal: r.signal, error: r.error?.message }).toEqual({ status: 0, signal: null, error: undefined });
+      expect(readFileSync(log, 'utf-8')).toContain('TICK automations tick --all');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -175,3 +175,27 @@ export function killChildTree(
     child.kill();
   }
 }
+
+/**
+ * Tree-kill `child` on win32, ONLY when it is a real `ChildProcess` with a pid; true when the
+ * tree kill ran without throwing. Everywhere else (any other platform, a test double carrying a
+ * made-up pid, no pid) it does nothing and returns false, so the caller's own `process.kill` /
+ * `child.kill` path stays exactly as it was. The real-child rule exists because `taskkill` acts
+ * on whatever process owns that pid on the machine: a fake `pid = 4242` must never reach it.
+ */
+export function treeKillRealChild(
+  child: { pid?: number },
+  signal: NodeJS.Signals,
+  platform: NodeJS.Platform = process.platform,
+  tree: (pid: number, signal: NodeJS.Signals) => void = killPortable,
+): boolean {
+  if (platform !== 'win32' || !child.pid) return false;
+  const { ChildProcess: Real } = createRequire(import.meta.url)('node:child_process') as CP;
+  if (!(child instanceof Real)) return false;
+  try {
+    tree(-child.pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}

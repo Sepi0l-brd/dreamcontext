@@ -213,7 +213,7 @@ export async function inspectWindowsDispatcher(opts: WinOpts): Promise<InstallCh
   let wrapperCurrent = false;
   if (wrapperPresent) {
     try {
-      const onDisk = readFileSync(scriptPath, 'utf-8');
+      const onDisk = decodeUtf16Bom(readFileSync(scriptPath));
       const generatedAt = GENERATED_AT_RE.exec(onDisk)?.[1] ?? null;
       wrapperCurrent = generatedAt !== null && onDisk === renderWindowsDispatcherScript(resolved, logPath, generatedAt);
     } catch {
@@ -276,7 +276,9 @@ export async function installWindowsDispatcher(opts: WinOpts & { force?: boolean
   const scriptPath = windowsDispatcherScriptPath(home);
   const xmlPath = windowsDispatcherXmlPath(home);
   mkdirSync(dirname(logPath), { recursive: true });
-  atomicWrite(scriptPath, renderWindowsDispatcherScript(check.resolved, logPath, new Date().toISOString()));
+  // UTF-16LE + BOM, like the XML: WSH reads a BOM-less .vbs as the ANSI code page, which would turn
+  // a non-ASCII profile path (C:\Users\Öğretmen) into mojibake inside the Run command.
+  atomicWrite(scriptPath, encodeUtf16Bom(renderWindowsDispatcherScript(check.resolved, logPath, new Date().toISOString())));
   atomicWrite(xmlPath, encodeUtf16Bom(renderWindowsTaskXml(scriptPath)));
 
   const created = await runner('schtasks', ['/Create', '/TN', WINDOWS_TASK_NAME, '/XML', xmlPath, '/F']);

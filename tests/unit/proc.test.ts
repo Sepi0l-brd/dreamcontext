@@ -174,3 +174,30 @@ describe('killChildTree', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
   });
 });
+
+describe('treeKillRealChild', () => {
+  it('never taskkills a plain fake, even on win32 with a pid', async () => {
+    const { treeKillRealChild } = await import('../../src/lib/proc.js');
+    const tree = vi.fn();
+    expect(treeKillRealChild({ pid: 4242 }, 'SIGKILL', 'win32', tree)).toBe(false);
+    expect(tree).not.toHaveBeenCalled();
+  });
+
+  it('tree-kills a real ChildProcess on win32 only', async () => {
+    const { treeKillRealChild } = await import('../../src/lib/proc.js');
+    const { ChildProcess } = await import('node:child_process');
+    const real = Object.assign(new ChildProcess(), { pid: 777 });
+    const tree = vi.fn();
+    expect(treeKillRealChild(real, 'SIGKILL', 'darwin', tree)).toBe(false);
+    expect(tree).not.toHaveBeenCalled();
+    expect(treeKillRealChild(real, 'SIGKILL', 'win32', tree)).toBe(true);
+    expect(tree).toHaveBeenCalledWith(-777, 'SIGKILL');
+  });
+
+  it('reports false when the tree kill throws, so the caller falls back', async () => {
+    const { treeKillRealChild } = await import('../../src/lib/proc.js');
+    const { ChildProcess } = await import('node:child_process');
+    const real = Object.assign(new ChildProcess(), { pid: 777 });
+    expect(treeKillRealChild(real, 'SIGKILL', 'win32', () => { throw new Error('x'); })).toBe(false);
+  });
+});
