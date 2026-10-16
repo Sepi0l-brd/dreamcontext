@@ -35,6 +35,13 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
+// The cloud cuts a chat's process GROUP with process.kill(-pgid), which the cutLiveChats tests assert.
+// On win32 lib/proc.ts would taskkill the fake pids, so hand killPortable back to process.kill.
+vi.mock('../../src/lib/proc.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../src/lib/proc.js')>();
+  return { ...real, killPortable: (pid: number, signal: NodeJS.Signals | 0) => { process.kill(pid, signal); } };
+});
+
 const { startChatSession, handleAgentFile, inlineModeNoteCommand, withoutShellJobControlNoise } = await import('../../src/server/routes/agent-chat.js');
 const { autoModeSettings } = await import('../../src/lib/auto-mode-rules.js');
 const { CHAT_SURFACE_BRIEFING } = await import('../../src/server/chat-surface.js');
@@ -224,8 +231,7 @@ describe('laptop lock (AC6)', () => {
   });
 });
 
-// POSIX process-group semantics (process.kill(-pgid)); win32 tree-kills via taskkill instead (lib/proc.ts).
-describe.skipIf(process.platform === 'win32')('cutLiveChats (AC12)', () => {
+describe('cutLiveChats (AC12)', () => {
   /** process.kill stand-in: the group stays alive until SIGKILL, whatever its leader does. */
   function fakeGroupKill() {
     let groupAlive = true;
